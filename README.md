@@ -1,12 +1,12 @@
 # LISA
 
-Native Windows host for the LISA assistant. This repo currently includes the WPF tray/overlay shell (Host.Win) and placeholder sections for backend components.
+Native Windows host for the LISA assistant. This repo includes the WPF tray/overlay host, a local Python agent worker, and a local MCP tool server.
 
 ## Components
-- `Host.Win`: WPF tray + overlay host that talks to a local Python agent over HTTP.
-- `MCP`: *(placeholder)* describe MCP wiring and port usage here.
-- `Ollama`: *(placeholder)* describe local model setup here.
-- `Assistant Features`: *(placeholder)* outline modes/LLM behaviors here.
+- `Host.Win`: WPF tray + overlay host that talks to the local Python agent over HTTP and starts local services.
+- `Agent.Worker`: FastAPI agent worker (chat + tool calling).
+- `Agent.MCP`: Local MCP tool server (system state, process/app inspection, file/disk tools).
+- `Provider`: Local or hosted LLM backend (Ollama default).
 
 ## Prerequisites
 - Windows 10/11
@@ -26,8 +26,8 @@ On launch, the app lives in the system tray. Use the tray menu or Ctrl+Space (gl
 - Overlay: borderless, rounded, topmost, bottom-right position with subtle show/hide animations.
 - Theme: auto-detect Windows light/dark; in-app toggle overrides for session.
 - Modes: Talk / Chat / Share / Settings segmented control bound to `OverlayViewModel`.
-- Status: live port probe to `127.0.0.1:8123` (configurable) with Ready/Offline dot.
-- IPC: HTTP client for `/health` and `/intent` to the Python agent.
+- Status: live probes for MCP (`<McpHost>:<McpPort>`), Agent (`<AgentHost>:<AgentPort>`), and Provider (`<ProviderHost>:<ProviderPort>`).
+- IPC: HTTP client for `/health`, `/input/text`, and `/input/retry` to the Python agent.
 - Context: active window title/process and screen detection stubs; screen capture reserved for future.
 
 ## Autostart Helper
@@ -36,4 +36,5 @@ On launch, the app lives in the system tray. Use the tray menu or Ctrl+Space (gl
 ## Troubleshooting
 - **SDK missing**: ensure .NET 8 x64 installed.
 - **Hotkey conflict**: another app may own Ctrl+Space; change it in `HotkeyManager`.
-- **Agent offline**: start the Python agent on `127.0.0.1:8123` or adjust `AppSettings.McpPort`.
+- **Agent offline**: ensure `Agent.Worker` is running on `AgentHost:AgentPort` (default `127.0.0.1:5050`).
+- **MCP offline**: ensure `Agent.MCP` is running on `McpHost:McpPort` (default `127.0.0.1:8123`).
