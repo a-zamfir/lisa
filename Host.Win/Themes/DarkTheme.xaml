@@ -1,0 +1,67 @@
+<!-- File: Host.Win/Themes/DarkTheme.xaml -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Color x:Key="OverlayBackgroundColor">#FF2A2A2E</Color>
+    <Color x:Key="OverlayBorderColor">#33FFFFFF</Color>
+    <Color x:Key="OverlayForegroundColor">#FFF5F5F5</Color>
+    <Color x:Key="SubtleTextColor">#FFB7B7B7</Color>
+    <Color x:Key="PanelBackgroundColor">#FF303036</Color>
+    <Color x:Key="ContentBackgroundColor">#FF2B2B31</Color>
+    <Color x:Key="ButtonBackgroundColor">#FF38383E</Color>
+    <Color x:Key="ButtonBorderColor">#33FFFFFF</Color>
+    <Color x:Key="ButtonActiveBackgroundColor">#FF45454D</Color>
+    <Color x:Key="ButtonActiveBorderColor">#55FFFFFF</Color>
+    <Color x:Key="StatusReadyColor">#FF22C55E</Color>
+    <Color x:Key="StatusOfflineColor">#FFEF4444</Color>
+
+    <SolidColorBrush x:Key="OverlayBackground" Color="{StaticResource OverlayBackgroundColor}"/>
+    <SolidColorBrush x:Key="OverlayBorder" Color="{StaticResource OverlayBorderColor}"/>
+    <SolidColorBrush x:Key="OverlayForeground" Color="{StaticResource OverlayForegroundColor}"/>
+    <SolidColorBrush x:Key="SubtleText" Color="{StaticResource SubtleTextColor}"/>
+    <SolidColorBrush x:Key="PanelBackground" Color="{StaticResource PanelBackgroundColor}"/>
+    <SolidColorBrush x:Key="ContentBackground" Color="{StaticResource ContentBackgroundColor}"/>
+    <SolidColorBrush x:Key="ButtonBackground" Color="{StaticResource ButtonBackgroundColor}"/>
+    <SolidColorBrush x:Key="ButtonBorder" Color="{StaticResource ButtonBorderColor}"/>
+    <SolidColorBrush x:Key="ButtonActiveBackground" Color="{StaticResource ButtonActiveBackgroundColor}"/>
+    <SolidColorBrush x:Key="ButtonActiveBorder" Color="{StaticResource ButtonActiveBorderColor}"/>
+    <SolidColorBrush x:Key="ModeButtonActiveForeground" Color="{StaticResource OverlayForegroundColor}"/>
+    <SolidColorBrush x:Key="StatusReadyBrush" Color="{StaticResource StatusReadyColor}"/>
+    <SolidColorBrush x:Key="StatusOfflineBrush" Color="{StaticResource StatusOfflineColor}"/>
+
+    <Style x:Key="ModeButtonStyle" TargetType="Button">
+        <Setter Property="Margin" Value="6 0"/>
+        <Setter Property="Height" Value="40"/>
+        <Setter Property="Background" Value="{StaticResource ButtonBackground}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource ButtonBorder}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Foreground" Value="{StaticResource OverlayForeground}"/>
+        <Setter Property="FontFamily" Value="Segoe UI"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="border"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="12"
+                            Padding="10 6">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource ButtonActiveBorder}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="{StaticResource ButtonActiveBackground}"/>
+                            <Setter Property="Foreground" Value="{StaticResource OverlayForeground}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>
