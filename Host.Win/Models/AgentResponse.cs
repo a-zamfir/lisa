@@ -23,5 +23,11 @@ namespace Host.Win.Models
 
         [JsonPropertyName("tool_calls")]
         public List<string>? ToolCalls { get; set; }
+
+        [JsonPropertyName("reasoning")]
+        public string? Reasoning { get; set; }
+
+        [JsonPropertyName("thinking_ms")]
+        public int? ThinkingMs { get; set; }
     }
 }

@@ -27,8 +27,9 @@ On launch, the app lives in the system tray. Use the tray menu or Ctrl+Space (gl
 - Theme: auto-detect Windows light/dark; in-app toggle overrides for session.
 - Modes: Talk / Chat / Share / Settings segmented control bound to `OverlayViewModel`.
 - Status: live probes for MCP (`<McpHost>:<McpPort>`), Agent (`<AgentHost>:<AgentPort>`), and Provider (`<ProviderHost>:<ProviderPort>`).
-- IPC: HTTP client for `/health`, `/input/text`, and `/input/retry` to the Python agent.
-- Context: active window title/process and screen detection stubs; screen capture reserved for future.
+- Chat UX: streaming assistant replies (content + reasoning), tool-call labels, copy/retry/stop actions per bubble, markdown rendering.
+- IPC: HTTP client for `/health`, `/input/text`, and `/input/retry` to the Python agent; UDP callbacks for thinking/tool/content streaming.
+- Context: active window title/process and screen detection stubs; system prompt includes local metadata (user, time, OS, locale).
 
 ## Autostart Helper
 `Services/AutoStartHelper` adds/removes HKCU Run entry. Call from installer or settings UI as needed.

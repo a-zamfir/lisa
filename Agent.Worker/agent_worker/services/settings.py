@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json
+import orjson
 import os
 from pathlib import Path
 from typing import Optional
@@ -29,7 +29,7 @@ class ProviderConfig(BaseModel):
 def load_settings() -> ProviderConfig:
     if SETTINGS_PATH.exists():
         try:
-            data = json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
+            data = orjson.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
 
             def pick(*keys, default=None):
                 for key in keys:

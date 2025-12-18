@@ -101,9 +101,9 @@
             <Setter Property="Height" Value="44"/>
             <Setter Property="Width" Value="100"/>
             <Setter Property="Padding" Value="12 10"/>
-            <Setter Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}"/>
-            <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
+            <Setter Property="Background" Value="{DynamicResource PrimaryButtonBackground}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource PrimaryButtonBackground}"/>
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryButtonForeground}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -117,14 +117,15 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}"/>
+                                <Setter TargetName="Border" Property="Background" Value="{DynamicResource PrimaryButtonHover}"/>
+                                <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource PrimaryButtonHover}"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Border" Property="Background" Value="{DynamicResource ButtonBackground}"/>
+                                <Setter TargetName="Border" Property="Background" Value="{DynamicResource PrimaryButtonHover}"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Border" Property="Opacity" Value="0.55"/>
-                                <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource PrimaryButtonForeground}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -161,6 +162,26 @@
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="ThoughtToggleStyle" TargetType="ToggleButton">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="{DynamicResource SubtleText}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -493,10 +514,12 @@
                                                     </Style>
                                                 </Grid.Resources>
 
-                                                <Border x:Name="Bubble"
+                                                        <Border x:Name="Bubble"
                                                         Padding="10"
                                                         Margin="0 6 8 6"
                                                         Background="{DynamicResource ButtonBackground}"
+                                                        BorderBrush="Transparent"
+                                                        BorderThickness="0"
                                                         CornerRadius="12"
                                                         HorizontalAlignment="Left"
                                                         MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ScrollViewer}}">
@@ -505,11 +528,13 @@
                                                             <RowDefinition Height="Auto"/>
                                                             <RowDefinition Height="Auto"/>
                                                             <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
                                                         </Grid.RowDefinitions>
                                                         <StackPanel Orientation="Horizontal">
-                                                            <TextBlock Text="{Binding Sender}"
-                                                                       FontWeight="SemiBold"
-                                                                       Foreground="{DynamicResource SubtleText}"/>
+                                                            <TextBlock x:Name="SenderText"
+                                                                       Text="{Binding Sender}"
+                                                                       FontWeight="SemiBold"/>
                                                             <StackPanel x:Name="TypingDotsPanel" Orientation="Horizontal" Visibility="Collapsed" Margin="6 2 0 0">
                                                                 <Ellipse Style="{StaticResource TypingDotStyle}">
                                                                     <Ellipse.Triggers>
@@ -572,20 +597,96 @@
                                                                            Foreground="{DynamicResource SubtleText}"/>
                                                             </Border>
                                                         </StackPanel>
-                                                        <TextBox Grid.Row="1"
-                                                                 Text="{Binding Text}"
-                                                                 TextWrapping="Wrap"
-                                                                 AcceptsReturn="True"
-                                                                 IsReadOnly="True"
-                                                                 BorderThickness="0"
-                                                                 Background="Transparent"
-                                                                 Foreground="{DynamicResource OverlayForeground}"
-                                                                 VerticalScrollBarVisibility="Hidden"
-                                                                 HorizontalScrollBarVisibility="Hidden"
-                                                                 Padding="0"
-                                                                 Margin="0 6 0 0"
-                                                                 MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ScrollViewer}}"/>
-                                                        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0 10 0 0">
+                                                        <ToggleButton Grid.Row="1"
+                                                                      IsChecked="{Binding IsReasoningExpanded}"
+                                                                      Margin="0 6 0 0">
+                                                            <ToggleButton.Style>
+                                                                <Style TargetType="ToggleButton" BasedOn="{StaticResource ThoughtToggleStyle}">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding HasReasoning}" Value="True">
+                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </ToggleButton.Style>
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <TextBlock Text="Thinking..."
+                                                                           FontSize="12">
+                                                                    <TextBlock.Style>
+                                                                        <Style TargetType="TextBlock">
+                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding ThoughtSeconds}" Value="0">
+                                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </TextBlock.Style>
+                                                                </TextBlock>
+                                                                <TextBlock Text="{Binding ThoughtSeconds, StringFormat=Thought for {0:0.0} seconds}"
+                                                                           FontSize="12">
+                                                                    <TextBlock.Style>
+                                                                        <Style TargetType="TextBlock">
+                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding ThoughtSeconds}" Value="0">
+                                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </TextBlock.Style>
+                                                                </TextBlock>
+                                                                <TextBlock Text="&#xE70D;" FontFamily="Segoe MDL2 Assets" FontSize="12" Margin="8 0 0 0">
+                                                                    <TextBlock.RenderTransform>
+                                                                        <RotateTransform Angle="0"/>
+                                                                    </TextBlock.RenderTransform>
+                                                                    <TextBlock.Style>
+                                                                        <Style TargetType="TextBlock">
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding IsReasoningExpanded}" Value="True">
+                                                                                    <Setter Property="RenderTransform">
+                                                                                        <Setter.Value>
+                                                                                            <RotateTransform Angle="180"/>
+                                                                                        </Setter.Value>
+                                                                                    </Setter>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </TextBlock.Style>
+                                                                </TextBlock>
+                                                            </StackPanel>
+                                                        </ToggleButton>
+                                                        <TextBlock Grid.Row="2"
+                                                                   Text="{Binding Reasoning}"
+                                                                   TextWrapping="Wrap"
+                                                                   Foreground="{DynamicResource SubtleText}"
+                                                                   FontSize="12"
+                                                                   Margin="0 6 0 0">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsReasoningExpanded}" Value="True">
+                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                        <RichTextBox x:Name="MessageText"
+                                                                     Grid.Row="3"
+                                                                     IsReadOnly="True"
+                                                                     BorderThickness="0"
+                                                                     Background="Transparent"
+                                                                     VerticalScrollBarVisibility="Hidden"
+                                                                     HorizontalScrollBarVisibility="Hidden"
+                                                                     Padding="0"
+                                                                     Margin="0 10 0 0"
+                                                                     MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ScrollViewer}}"
+                                                                     Focusable="False"
+                                                                     conv:MarkdownText.Text="{Binding Text}"/>
+                                                        <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0 10 0 0">
                                                             <StackPanel.Style>
                                                                 <Style TargetType="StackPanel">
                                                                     <Setter Property="Visibility" Value="Collapsed"/>
@@ -608,19 +709,34 @@
                                                                     IsEnabled="{Binding IsRetryable}">
                                                                 <TextBlock Text="&#xE72C;" FontFamily="Segoe MDL2 Assets"/>
                                                             </Button>
+                                                            <Button Style="{StaticResource ChatActionButtonStyle}"
+                                                                    Command="{Binding DataContext.StopMessageCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                    CommandParameter="{Binding}"
+                                                                    IsEnabled="{Binding IsCancellable}"
+                                                                    Margin="8 0 0 0">
+                                                                <TextBlock Text="&#xE71A;" FontFamily="Segoe MDL2 Assets"/>
+                                                            </Button>
                                                         </StackPanel>
                                                     </Grid>
                                                 </Border>
 
                                             </Grid>
                                                 <DataTemplate.Triggers>
-                                                    <DataTrigger Binding="{Binding IsAssistant}" Value="True">
-                                                        <Setter TargetName="Bubble" Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
+                                                <DataTrigger Binding="{Binding IsAssistant}" Value="True">
+                                                        <Setter TargetName="Bubble" Property="Background" Value="{DynamicResource AssistantBubbleBackground}"/>
+                                                        <Setter TargetName="Bubble" Property="BorderBrush" Value="{DynamicResource AssistantBubbleBorder}"/>
+                                                        <Setter TargetName="Bubble" Property="BorderThickness" Value="1"/>
                                                         <Setter TargetName="Bubble" Property="HorizontalAlignment" Value="Left"/>
-                                                        <Setter TargetName="Bubble" Property="Width" Value="520"/>
+                                                        <Setter TargetName="MessageText" Property="Foreground" Value="{DynamicResource AssistantBubbleForeground}"/>
+                                                        <Setter TargetName="SenderText" Property="Foreground" Value="{DynamicResource SubtleText}"/>
                                                     </DataTrigger>
                                                 <DataTrigger Binding="{Binding IsAssistant}" Value="False">
                                                     <Setter TargetName="Bubble" Property="HorizontalAlignment" Value="Right"/>
+                                                    <Setter TargetName="Bubble" Property="Background" Value="{DynamicResource UserBubbleBackground}"/>
+                                                    <Setter TargetName="Bubble" Property="BorderThickness" Value="0"/>
+                                                    <Setter TargetName="Bubble" Property="BorderBrush" Value="Transparent"/>
+                                                    <Setter TargetName="MessageText" Property="Foreground" Value="{DynamicResource UserBubbleForeground}"/>
+                                                    <Setter TargetName="SenderText" Property="Foreground" Value="{DynamicResource UserBubbleForeground}"/>
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding IsStreaming}" Value="True">
                                                     <Setter TargetName="TypingDotsPanel" Property="Visibility" Value="Visible"/>

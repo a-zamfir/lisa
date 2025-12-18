@@ -4,12 +4,12 @@ Runs locally with MCP stdio server on 127.0.0.1:8123 via HTTP bridge.
 """
 from __future__ import annotations
 
-import json
 import os
 import subprocess
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
+import orjson
 from fastapi import FastAPI
 from mcp.server.fastmcp import FastMCP
 
@@ -36,8 +36,8 @@ def _run_ps_json(command: str) -> Dict[str, Any]:
     if payload["exit_code"] != 0:
         return {"error": payload["stderr"] or "PowerShell error", "raw": payload}
     try:
-        return json.loads(payload["stdout"]) if payload["stdout"] else {}
-    except json.JSONDecodeError as ex:
+        return orjson.loads(payload["stdout"]) if payload["stdout"] else {}
+    except orjson.JSONDecodeError as ex:
         return {"error": f"JSON parse error: {ex}", "raw": payload["stdout"]}
 
 

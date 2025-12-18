@@ -77,6 +77,7 @@ namespace Host.Win
             overlayVm.SendChatCommand = new Commands.AsyncRelayCommand(() => overlayVm.SendChatAsync(), overlayVm.CanSendChat);
             overlayVm.CopyMessageCommand = new Commands.RelayCommand<Models.ChatMessage>(message => overlayVm.CopyMessage(message));
             overlayVm.RetryMessageCommand = new Commands.RelayCommand<Models.ChatMessage>(message => _ = overlayVm.RetryAssistantAsync(message));
+            overlayVm.StopMessageCommand = new Commands.RelayCommand<Models.ChatMessage>(message => overlayVm.StopMessage(message));
 
             overlayVm.SelectedMode = AssistantMode.Chat;
 
@@ -85,7 +86,18 @@ namespace Host.Win
             _agentProcessHost = new AgentProcessHost(Path.GetFullPath(agentScript), port: _hostSettings.AgentPort);
             _agentCallbackServer = new AgentCallbackServer(AgentCallbackPort, callback =>
             {
-                overlayVm.UpdateToolStatus(callback.TurnId, callback.Phase, callback.ToolCalls);
+                if (callback.Phase == "thinking_chunk" || callback.Phase == "thinking_done")
+                {
+                    overlayVm.UpdateThinkingStatus(callback.TurnId, callback.Phase, callback.ThinkingDelta);
+                }
+                else if (callback.Phase == "content_chunk" || callback.Phase == "content_done")
+                {
+                    overlayVm.UpdateContentStatus(callback.TurnId, callback.Phase, callback.ContentDelta);
+                }
+                else
+                {
+                    overlayVm.UpdateToolStatus(callback.TurnId, callback.Phase, callback.ToolCalls);
+                }
             });
             _agentCallbackServer.Start();
             _agentProcessHost.Start();
@@ -158,7 +170,18 @@ namespace Host.Win
                 _agentCallbackServer?.Stop();
                 _agentCallbackServer = new AgentCallbackServer(AgentCallbackPort, callback =>
                 {
-                    overlayVm.UpdateToolStatus(callback.TurnId, callback.Phase, callback.ToolCalls);
+                    if (callback.Phase == "thinking_chunk" || callback.Phase == "thinking_done")
+                    {
+                        overlayVm.UpdateThinkingStatus(callback.TurnId, callback.Phase, callback.ThinkingDelta);
+                    }
+                    else if (callback.Phase == "content_chunk" || callback.Phase == "content_done")
+                    {
+                        overlayVm.UpdateContentStatus(callback.TurnId, callback.Phase, callback.ContentDelta);
+                    }
+                    else
+                    {
+                        overlayVm.UpdateToolStatus(callback.TurnId, callback.Phase, callback.ToolCalls);
+                    }
                 });
                 _agentCallbackServer.Start();
                 _mcpProcessHost?.Dispose();

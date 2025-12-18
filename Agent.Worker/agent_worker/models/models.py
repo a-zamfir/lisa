@@ -31,6 +31,8 @@ class AgentResponse(BaseModel):
     tts_text: Optional[str] = None
     tts_audio_b64: Optional[str] = None
     tool_calls: Optional[List[str]] = None
+    reasoning: Optional[str] = None
+    thinking_ms: Optional[int] = None
 
 
 class RetryInput(BaseModel):

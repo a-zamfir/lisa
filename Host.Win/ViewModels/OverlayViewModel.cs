@@ -33,8 +33,10 @@ namespace Host.Win.ViewModels
         private ICommand? _sendChatCommand;
         private ICommand? _copyMessageCommand;
         private ICommand? _retryMessageCommand;
+        private ICommand? _stopMessageCommand;
         private HostSettings? _settings;
         private ICommand? _saveSettingsCommand;
+        private readonly System.Collections.Generic.Dictionary<string, System.Threading.CancellationTokenSource> _inflightTurns = new();
 
         public string? AppName
         {
@@ -158,6 +160,12 @@ namespace Host.Win.ViewModels
             set => SetProperty(ref _retryMessageCommand, value);
         }
 
+        public ICommand? StopMessageCommand
+        {
+            get => _stopMessageCommand;
+            set => SetProperty(ref _stopMessageCommand, value);
+        }
+
         public HostSettings? Settings
         {
             get => _settings;
@@ -239,6 +247,8 @@ namespace Host.Win.ViewModels
             _isSending = true;
             System.Windows.Input.CommandManager.InvalidateRequerySuggested();
             var turnId = Guid.NewGuid().ToString();
+            var cts = new System.Threading.CancellationTokenSource();
+            _inflightTurns[turnId] = cts;
 
             try
             {
@@ -253,7 +263,8 @@ namespace Host.Win.ViewModels
                     IsAssistant = true,
                     IsStreaming = true,
                     TurnId = turnId,
-                    IsRetryable = false
+                    IsRetryable = false,
+                    IsCancellable = true
                 };
                 SetRetryableMessage(null);
                 ChatMessages.Add(streamingMessage);
@@ -279,17 +290,28 @@ namespace Host.Win.ViewModels
                 AgentResponse? response = null;
                 if (AgentClient != null)
                 {
-                    response = await AgentClient.SendTextAsync(request);
+                    response = await AgentClient.SendTextAsync(request, cts.Token);
                 }
 
                 if (response != null)
                 {
                     ApplyToolLabel(streamingMessage, response.ToolCalls);
+                    ApplyReasoning(streamingMessage, response.Reasoning, response.ThinkingMs);
                     foreach (var msg in response.Messages)
                     {
                         if (msg.Role == "assistant")
                         {
-                            await StreamTextAsync(streamingMessage, msg.Content);
+                            if (streamingMessage.HasContentStream)
+                            {
+                                if (string.IsNullOrEmpty(streamingMessage.Text))
+                                {
+                                    streamingMessage.Text = msg.Content;
+                                }
+                            }
+                            else
+                            {
+                                await StreamTextAsync(streamingMessage, msg.Content, cts.Token);
+                            }
                         }
                     }
                     Logger?.LogEvent("response.text", new
@@ -311,11 +333,13 @@ namespace Host.Win.ViewModels
                 }
 
                 streamingMessage.IsStreaming = false;
+                streamingMessage.IsCancellable = false;
                 SetRetryableMessage(streamingMessage);
                 OnPropertyChanged(nameof(ChatMessages)); // ensure UI hooks update for autoscroll
             }
             finally
             {
+                _inflightTurns.Remove(turnId);
                 _isSending = false;
                 System.Windows.Input.CommandManager.InvalidateRequerySuggested();
             }
@@ -323,14 +347,18 @@ namespace Host.Win.ViewModels
 
         public bool CanSendChat() => !_isSending && !string.IsNullOrWhiteSpace(ChatInput);
 
-        private static async Task StreamTextAsync(ChatMessage target, string content)
+        private static async Task StreamTextAsync(ChatMessage target, string content, System.Threading.CancellationToken cancellationToken)
         {
             var buffer = string.Empty;
             foreach (var ch in content)
             {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
                 buffer += ch;
                 target.Text = buffer;
-                await Task.Delay(12).ConfigureAwait(true);
+                await Task.Delay(12, cancellationToken).ConfigureAwait(true);
             }
             target.IsStreaming = false;
         }
@@ -358,6 +386,7 @@ namespace Host.Win.ViewModels
             message.Text = string.Empty;
             message.ToolLabel = string.Empty;
             message.HasToolLabel = false;
+            message.IsCancellable = true;
             CommandManager.InvalidateRequerySuggested();
 
             var request = new RetryRequest
@@ -366,6 +395,8 @@ namespace Host.Win.ViewModels
                 TurnId = Guid.NewGuid().ToString()
             };
             message.TurnId = request.TurnId;
+            var cts = new System.Threading.CancellationTokenSource();
+            _inflightTurns[request.TurnId] = cts;
 
             Logger?.LogEvent("request.text.retry", new
             {
@@ -374,15 +405,26 @@ namespace Host.Win.ViewModels
                 input_type = "text"
             });
 
-            var response = await AgentClient.SendRetryAsync(request);
+            var response = await AgentClient.SendRetryAsync(request, cts.Token);
             if (response != null)
             {
                 ApplyToolLabel(message, response.ToolCalls);
+                ApplyReasoning(message, response.Reasoning, response.ThinkingMs);
                 foreach (var msg in response.Messages)
                 {
                     if (msg.Role == "assistant")
                     {
-                        await StreamTextAsync(message, msg.Content);
+                        if (message.HasContentStream)
+                        {
+                            if (string.IsNullOrEmpty(message.Text))
+                            {
+                                message.Text = msg.Content;
+                            }
+                        }
+                        else
+                        {
+                            await StreamTextAsync(message, msg.Content, cts.Token);
+                        }
                     }
                 }
                 Logger?.LogEvent("response.text.retry", new
@@ -399,7 +441,9 @@ namespace Host.Win.ViewModels
             }
 
             message.IsStreaming = false;
+            message.IsCancellable = false;
             SetRetryableMessage(message);
+            _inflightTurns.Remove(request.TurnId);
         }
 
         private void SetRetryableMessage(ChatMessage? active)
@@ -430,6 +474,18 @@ namespace Host.Win.ViewModels
             message.HasToolLabel = true;
         }
 
+        private static void ApplyReasoning(ChatMessage message, string? reasoning, int? thinkingMs)
+        {
+            var hasReasoning = !string.IsNullOrWhiteSpace(reasoning);
+            message.Reasoning = reasoning ?? string.Empty;
+            message.HasReasoning = hasReasoning || (thinkingMs.HasValue && thinkingMs.Value > 0);
+            message.IsReasoningExpanded = false;
+            if (thinkingMs.HasValue)
+            {
+                message.ThoughtSeconds = Math.Round(thinkingMs.Value / 1000.0, 1);
+            }
+        }
+
         public void UpdateToolStatus(string turnId, string phase, System.Collections.Generic.List<string> toolCalls)
         {
             foreach (var message in ChatMessages)
@@ -446,6 +502,60 @@ namespace Host.Win.ViewModels
                 message.HasToolLabel = true;
                 break;
             }
+        }
+
+        public void UpdateThinkingStatus(string turnId, string phase, string? delta)
+        {
+            foreach (var message in ChatMessages)
+            {
+                if (!message.IsAssistant || message.TurnId != turnId) continue;
+                if (phase == "thinking_chunk" && !string.IsNullOrEmpty(delta))
+                {
+                    message.Reasoning += delta;
+                    message.HasReasoning = true;
+                    message.IsReasoningExpanded = true;
+                }
+                else if (phase == "thinking_done")
+                {
+                    message.IsReasoningExpanded = false;
+                }
+                break;
+            }
+        }
+
+        public void UpdateContentStatus(string turnId, string phase, string? delta)
+        {
+            foreach (var message in ChatMessages)
+            {
+                if (!message.IsAssistant || message.TurnId != turnId) continue;
+                if (phase == "content_chunk" && !string.IsNullOrEmpty(delta))
+                {
+                    message.HasContentStream = true;
+                    message.IsStreaming = true;
+                    message.Text += delta;
+                }
+                else if (phase == "content_done")
+                {
+                    message.HasContentStream = true;
+                    message.IsStreaming = false;
+                    message.IsCancellable = false;
+                }
+                break;
+            }
+        }
+
+        public void StopMessage(ChatMessage? message)
+        {
+            if (message == null || string.IsNullOrWhiteSpace(message.TurnId)) return;
+            if (_inflightTurns.TryGetValue(message.TurnId, out var cts))
+            {
+                cts.Cancel();
+                _inflightTurns.Remove(message.TurnId);
+            }
+            message.IsStreaming = false;
+            message.IsCancellable = false;
+            message.ToolLabel = "Stopped";
+            message.HasToolLabel = true;
         }
 
         public void ClearChatHistory()

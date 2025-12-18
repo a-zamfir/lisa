@@ -47,4 +47,5 @@ namespace Host.Win.Commands
 
         public void Execute(object? parameter) => _execute((T?)parameter);
     }
+
 }

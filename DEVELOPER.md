@@ -18,8 +18,9 @@
   - `Commands/` - `RelayCommand`, `RelayCommand<T>`, `AsyncRelayCommand`.
 - `Agent.Worker/` - FastAPI agent service (chat + tool calls).
   - `agent_worker/routers/` - text endpoints.
-  - `agent_worker/services/` - provider + MCP clients, settings loader, conversation state.
+  - `agent_worker/services/` - provider + MCP clients, settings loader, conversation state, system context builder.
   - `agent_worker/models/` - request/response models.
+  - `agent_worker/prompts/` - system prompts (e.g., `lisa_assistant.md`) injected per request alongside system metadata (time, user, machine, OS, locale/region, home).
 - `Agent.MCP/` - MCP tool server (system state, process/app, file/disk).
 
 ## Build & Run
@@ -45,14 +46,16 @@
   - UI: bubble list, rounded input, styled send button, slim scrollbar with padding gap.
   - Sending: `AsyncRelayCommand` bound to button/Enter; disables during in-flight send.
   - Request: POST `/input/text` JSON `{ session_id, turn_id, text, input_meta }` via `AgentClient.SendTextAsync` to agent on `AgentHost:AgentPort` (default 127.0.0.1:5050).
-  - Response: streamed into bubble character-by-character with inline typing dots shown while streaming.
+  - Response: streamed content chunks (UDP) into the bubble live; reasoning/thinking streamed separately; inline typing dots while streaming; copy/retry/stop actions per message.
   - Tool calls: agent sends UDP callbacks to `127.0.0.1:5052` with phase updates (`awaiting_tool`, `tool_response`, `tool_complete`). Overlay updates the tool label in the bubble header.
+  - Content streaming: agent emits `content_chunk` / `content_done`; overlay appends to message live. Reasoning panel auto-collapses when done.
   - Autoscroll: message collection change in `OverlayWindow` scrolls to end on new/streamed messages.
 - **Context**: `ContextCollector` exposes active window title/process and primary screen.
 - **Autostart helper**: `AutoStartHelper` sets/removes HKCU Run entry (call from settings/installer).
 - **Logging & Observability**:
   - `LoggingService` writes JSONL to `%LOCALAPPDATA%/LISA/logs/host.log` and Trace. Each entry includes UTC timestamp, `event_type`, and payload.
   - Chat sends log `request.text.send` with `session_id`, `turn_id`, `input_type=text`, `text`, and `input_meta`; responses log `response.text` (or `response.text.missing` on fallback).
+  - Agent emits UDP callbacks for thinking, tool phases, and content streaming; overlay updates reasoning panel and tool labels live.
   - `AgentClient` traces request/response lifecycle; extend similarly for audio/image endpoints when added.
 - **Settings**:
   - Stored at `%LOCALAPPDATA%/LISA/host-settings.json` via `SettingsService` (JSON, pretty printed).
@@ -87,3 +90,10 @@
 - Add real content panes per mode by expanding `OverlayViewModel` and binding DataTemplates.
 - Persist theme override or window state via user settings if needed.
 - Add telemetry/log sinks by extending Trace listeners at startup.
+
+- **Agent Worker**:
+  - FastAPI, endpoints /health, /input/text, /input/retry.
+  - On startup: fetch MCP tools (cached) and start refresh loop (6h cadence; retry every 30s until success). Build system context (LISA prompt + system metadata: time, user/account, machine, OS, locale/region, home) once and prepend to every provider request.
+  - Tool calls: LLM uses tools property; server calls MCP /tools (list) and /call (execute). Tool phases send UDP callbacks.
+  - Streaming: uses Ollama /api/chat streaming; partial content and reasoning forwarded via UDP to Host.Win for live display. 	ool_calls parsed from stream; early exit to call MCP. Content streaming forwarded via content_chunk / content_done callbacks for UI.
+  - Settings: read from %LOCALAPPDATA%/LISA/host-settings.json (agent/provider hosts, ports, provider mode, model, temperature, API key, voice params).
