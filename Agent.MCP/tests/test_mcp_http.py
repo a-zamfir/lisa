@@ -1,20 +1,10 @@
 from fastapi.testclient import TestClient
 
-import importlib.util
-from pathlib import Path
-
-
-def _load_app():
-    path = Path(__file__).resolve().parents[1] / "main.py"
-    spec = importlib.util.spec_from_file_location("agent_mcp_main", path)
-    module = importlib.util.module_from_spec(spec)
-    assert spec and spec.loader
-    spec.loader.exec_module(module)
-    return module.app
+from agent_mcp.app import create_app
 
 
 def test_tools_minimal():
-    app = _load_app()
+    app = create_app()
     client = TestClient(app)
     resp = client.get("/tools")
     assert resp.status_code == 200
@@ -24,9 +14,21 @@ def test_tools_minimal():
 
 
 def test_call_unknown_tool():
-    app = _load_app()
+    app = create_app()
     client = TestClient(app)
     resp = client.post("/call", json={"tool": "does_not_exist", "args": {}})
     assert resp.status_code == 200
     data = resp.json()
     assert "error" in data
+
+
+def test_tools_docs():
+    app = create_app()
+    client = TestClient(app)
+    resp = client.get("/tools/docs")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "tools" in data
+    assert isinstance(data["tools"], list)
+    first = data["tools"][0]
+    assert "name" in first and "description" in first

@@ -78,6 +78,8 @@ namespace Host.Win
             overlayVm.CopyMessageCommand = new Commands.RelayCommand<Models.ChatMessage>(message => overlayVm.CopyMessage(message));
             overlayVm.RetryMessageCommand = new Commands.RelayCommand<Models.ChatMessage>(message => _ = overlayVm.RetryAssistantAsync(message));
             overlayVm.StopMessageCommand = new Commands.RelayCommand<Models.ChatMessage>(message => overlayVm.StopMessage(message));
+            overlayVm.ResetConversationCommand = new Commands.RelayCommand(() => overlayVm.ResetConversation());
+            overlayVm.ToggleShareCommand = new Commands.RelayCommand(() => overlayVm.ToggleShare());
 
             overlayVm.SelectedMode = AssistantMode.Chat;
 

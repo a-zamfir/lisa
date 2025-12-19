@@ -13,6 +13,7 @@ namespace Host.Win.Models
         public string ProviderApiKey { get; set; } = string.Empty;
         public string ProviderModel { get; set; } = "llama3.2";
         public double ProviderTemperature { get; set; } = 0.7;
+        public bool ProviderThink { get; set; } = true;
         public string VoiceType { get; set; } = "default";
         public double VoiceRate { get; set; } = 1.0;
         public double VoiceVolume { get; set; } = 1.0;

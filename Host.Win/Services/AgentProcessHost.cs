@@ -50,7 +50,7 @@ namespace Host.Win.Services
             ProcessStartInfo CreatePsi(string fileName) => new ProcessStartInfo
             {
                 FileName = fileName,
-                Arguments = $"-m uvicorn main:app --host 127.0.0.1 --port {_port}",
+                Arguments = $"-m uvicorn main:app --host 127.0.0.1 --port {_port} --log-level warning --no-access-log",
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 WorkingDirectory = workingDir,
@@ -75,7 +75,7 @@ namespace Host.Win.Services
                 {
                     Trace.TraceWarning("Primary agent launch failed with 'python'. Trying 'py -3'.");
                     psi = CreatePsi("py");
-                    psi.Arguments = $"-3 -m uvicorn main:app --host 127.0.0.1 --port {_port}";
+                    psi.Arguments = $"-3 -m uvicorn main:app --host 127.0.0.1 --port {_port} --log-level warning --no-access-log";
                     psi.Environment["AGENT_PORT"] = _port.ToString();
                     psi.Environment["LISA_SETTINGS_PATH"] = Path.Combine(
                         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -184,8 +184,6 @@ namespace Host.Win.Services
                 Trace.WriteLine("Installing agent requirements...");
                 RunSilently(pythonExe, "-m pip install --upgrade pip", workingDir);
                 RunSilently(pythonExe, "-m pip install -r requirements.txt", workingDir);
-                RunSilently(pythonExe, "-m pip show uvicorn", workingDir);
-                RunSilently(pythonExe, "-m pip list", workingDir);
             }
 
             return pythonExe;

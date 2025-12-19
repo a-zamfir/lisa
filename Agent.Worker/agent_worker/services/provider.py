@@ -181,7 +181,7 @@ async def call_provider(messages: List[dict], tools: Optional[List[Dict[str, Any
             "temperature": provider_cfg.temperature,
         },
         "stream": provider_cfg.stream,
-        "think": True,
+        "think": provider_cfg.think,
     }
     if tools:
         payload["tools"] = tools
@@ -238,7 +238,7 @@ async def call_provider_stream(
             "temperature": provider_cfg.temperature,
         },
         "stream": True,
-        "think": True,
+        "think": provider_cfg.think,
     }
     if tools:
         payload["tools"] = tools

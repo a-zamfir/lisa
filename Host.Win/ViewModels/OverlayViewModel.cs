@@ -34,9 +34,13 @@ namespace Host.Win.ViewModels
         private ICommand? _copyMessageCommand;
         private ICommand? _retryMessageCommand;
         private ICommand? _stopMessageCommand;
+        private ICommand? _resetConversationCommand;
+        private ICommand? _toggleShareCommand;
         private HostSettings? _settings;
         private ICommand? _saveSettingsCommand;
         private readonly System.Collections.Generic.Dictionary<string, System.Threading.CancellationTokenSource> _inflightTurns = new();
+        private string _sessionId = Guid.NewGuid().ToString();
+        private bool _isSharing;
 
         public string? AppName
         {
@@ -166,6 +170,18 @@ namespace Host.Win.ViewModels
             set => SetProperty(ref _stopMessageCommand, value);
         }
 
+        public ICommand? ResetConversationCommand
+        {
+            get => _resetConversationCommand;
+            set => SetProperty(ref _resetConversationCommand, value);
+        }
+
+        public ICommand? ToggleShareCommand
+        {
+            get => _toggleShareCommand;
+            set => SetProperty(ref _toggleShareCommand, value);
+        }
+
         public HostSettings? Settings
         {
             get => _settings;
@@ -180,7 +196,17 @@ namespace Host.Win.ViewModels
 
         public ObservableCollection<ChatMessage> ChatMessages { get; } = new();
 
-        public string SessionId { get; } = Guid.NewGuid().ToString();
+        public string SessionId
+        {
+            get => _sessionId;
+            private set => SetProperty(ref _sessionId, value);
+        }
+
+        public bool IsSharing
+        {
+            get => _isSharing;
+            set => SetProperty(ref _isSharing, value);
+        }
 
         public AgentClient? AgentClient { get; set; }
         public LoggingService? Logger { get; set; }
@@ -561,6 +587,25 @@ namespace Host.Win.ViewModels
         public void ClearChatHistory()
         {
             ChatMessages.Clear();
+        }
+
+        public void ResetConversation()
+        {
+            foreach (var kvp in _inflightTurns)
+            {
+                kvp.Value.Cancel();
+            }
+            _inflightTurns.Clear();
+            ClearChatHistory();
+            SessionId = Guid.NewGuid().ToString();
+            Logger?.LogEvent("conversation.reset", new { sessionId = SessionId });
+            CommandManager.InvalidateRequerySuggested();
+        }
+
+        public void ToggleShare()
+        {
+            IsSharing = !IsSharing;
+            Logger?.LogEvent(IsSharing ? "share.start" : "share.stop", new { sessionId = SessionId });
         }
     }
 }
