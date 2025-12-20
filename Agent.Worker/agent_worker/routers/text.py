@@ -5,14 +5,14 @@ import orjson
 import os
 import socket
 import time
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter
 
 from agent_worker.models import AgentMessage, AgentResponse, RetryInput, TextInput
 from agent_worker.services.conversations import ConversationStore
 from agent_worker.services.mcp_client import McpClient
-from agent_worker.services.provider import call_provider, call_provider_stream
+from agent_worker.services.provider import call_provider, call_provider_stream, warm_provider_client
 from agent_worker.services.settings import load_settings
 from agent_worker.services.system_context import collect_system_context
 
@@ -20,30 +20,44 @@ from agent_worker.services.system_context import collect_system_context
 router = APIRouter()
 _conversations = ConversationStore()
 _mcp_client = McpClient()
-_tool_cache: Optional[Dict[str, Any]] = None
+_tool_context: Optional[str] = None
+_tool_context_version = 0
 _SYSTEM_CONTEXT = collect_system_context()
 
 
-async def init_tool_cache() -> None:
-    global _tool_cache
+async def init_tool_cache() -> bool:
+    global _tool_context, _tool_context_version
     tools_payload = await _mcp_client.list_tools(force_refresh=True)
     if isinstance(tools_payload, dict) and not tools_payload.get("error"):
-        _tool_cache = tools_payload
+        _update_tool_context(tools_payload)
+        return True
+    return False
 
 
-async def _tool_cache_refresh_loop() -> None:
-    global _tool_cache
+async def _retry_tool_cache() -> None:
     while True:
         tools_payload = await _mcp_client.list_tools(force_refresh=True)
         if isinstance(tools_payload, dict) and not tools_payload.get("error"):
-            _tool_cache = tools_payload
-            await asyncio.sleep(21600)
-        else:
-            await asyncio.sleep(30)
+            _update_tool_context(tools_payload)
+            return
+        await asyncio.sleep(10)
 
 
-def start_tool_cache_refresh() -> None:
-    asyncio.create_task(_tool_cache_refresh_loop())
+def start_tool_cache_retry() -> None:
+    asyncio.create_task(_retry_tool_cache())
+
+
+async def warm_services() -> None:
+    await _mcp_client.warm_client()
+    await warm_provider_client()
+
+
+def _update_tool_context(tools_payload: Dict[str, Any]) -> None:
+    global _tool_context, _tool_context_version
+    new_context = f"Available tools:\n{orjson.dumps(tools_payload, option=orjson.OPT_INDENT_2).decode('utf-8')}"
+    if new_context != _tool_context:
+        _tool_context = new_context
+        _tool_context_version += 1
 
 
 def _build_tools_payload(tools_payload: Optional[Dict[str, Any]]) -> Optional[List[Dict[str, Any]]]:
@@ -73,25 +87,10 @@ def _build_tools_payload(tools_payload: Optional[Dict[str, Any]]) -> Optional[Li
 
 
 def _build_provider_messages(
-    session_id: str,
     history: List[dict],
     user_text: Optional[str],
-    tools_payload: Optional[Dict[str, Any]],
 ) -> List[dict]:
     messages: List[dict] = []
-    messages.append(
-        {
-            "role": "system",
-            "content": _SYSTEM_CONTEXT,
-        }
-    )
-    if tools_payload:
-        messages.append(
-            {
-                "role": "system",
-                "content": f"Available tools:\n{orjson.dumps(tools_payload, option=orjson.OPT_INDENT_2).decode('utf-8')}",
-            }
-        )
     messages.extend(history)
     if user_text is not None:
         messages.append({"role": "user", "content": user_text})
@@ -193,6 +192,7 @@ async def handle_text(req: TextInput):
     start_time = time.monotonic()
     text = req.text.strip()
     if text.lower().startswith("/mcp"):
+        # Dev-only escape hatch for inspecting MCP responses.
         parts = text.split(maxsplit=2)
         if len(parts) == 1 or parts[1].lower() == "tools":
             tools = await _mcp_client.list_tools()
@@ -215,14 +215,18 @@ async def handle_text(req: TextInput):
             messages=[AgentMessage(role="assistant", content=orjson.dumps(result, option=orjson.OPT_INDENT_2).decode("utf-8"))],
         )
 
-    history = _conversations.get(req.session_id)
+    history = _conversations.get_history(req.session_id)
 
-    tools_payload = _tool_cache or _mcp_client.get_cached_tools()
+    tools_payload = _mcp_client.get_cached_tools()
     if isinstance(tools_payload, dict) and tools_payload.get("error"):
         tools_payload = None
+    elif isinstance(tools_payload, dict):
+        _update_tool_context(tools_payload)
     provider_tools = _build_tools_payload(tools_payload)
 
-    provider_messages = _build_provider_messages(req.session_id, list(history), req.text, tools_payload)
+    # Tool registry is injected once per session to avoid repeated prompt bloat.
+    _conversations.ensure_system(req.session_id, _SYSTEM_CONTEXT, _tool_context, _tool_context_version)
+    provider_messages = _build_provider_messages(_conversations.get_all(req.session_id), req.text)
 
     streamed_content = {"seen": False}
 
@@ -312,7 +316,7 @@ async def handle_text(req: TextInput):
 @router.post("/input/retry", response_model=AgentResponse)
 async def handle_retry(req: RetryInput):
     start_time = time.monotonic()
-    history = _conversations.get(req.session_id)
+    history = _conversations.get_history(req.session_id)
     if not history:
         return AgentResponse(
             session_id=req.session_id,
@@ -332,9 +336,11 @@ async def handle_retry(req: RetryInput):
             messages=[AgentMessage(role="assistant", content="(no prior message to retry)")],
         )
 
-    tools_payload = _tool_cache or _mcp_client.get_cached_tools()
+    tools_payload = _mcp_client.get_cached_tools()
     if isinstance(tools_payload, dict) and tools_payload.get("error"):
         tools_payload = None
+    elif isinstance(tools_payload, dict):
+        _update_tool_context(tools_payload)
 
     streamed_content = {"seen": False}
 
@@ -342,7 +348,8 @@ async def handle_retry(req: RetryInput):
         streamed_content["seen"] = True
         _send_content_callback(req.session_id, req.turn_id, "content_chunk", chunk)
 
-    provider_messages = _build_provider_messages(req.session_id, list(history), None, tools_payload)
+    _conversations.ensure_system(req.session_id, _SYSTEM_CONTEXT, _tool_context, _tool_context_version)
+    provider_messages = _build_provider_messages(_conversations.get_all(req.session_id), None)
 
     result = await call_provider_stream(
         provider_messages,
@@ -353,7 +360,7 @@ async def handle_retry(req: RetryInput):
     if streamed_content["seen"]:
         _send_content_callback(req.session_id, req.turn_id, "content_done")
     if not result.get("tool_calls") and not result.get("content"):
-        result = await call_provider(list(history))
+        result = await call_provider(provider_messages, tools=_build_tools_payload(tools_payload))
     _send_thinking_callback(req.session_id, req.turn_id, "thinking_done")
     completion = result.get("content") or result.get("error", "")
     used_tools = []

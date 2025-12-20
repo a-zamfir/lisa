@@ -8,6 +8,21 @@ import httpx
 from .settings import ProviderConfig, load_settings
 
 
+_shared_client: Optional[httpx.AsyncClient] = None
+
+
+def _get_client() -> httpx.AsyncClient:
+    global _shared_client
+    if _shared_client is None:
+        limits = httpx.Limits(max_keepalive_connections=10, max_connections=20)
+        _shared_client = httpx.AsyncClient(limits=limits)
+    return _shared_client
+
+
+async def warm_provider_client() -> None:
+    _get_client()
+
+
 def _extract_content(data: object) -> str:
     if isinstance(data, dict):
         if "response" in data and data["response"]:
@@ -191,29 +206,34 @@ async def call_provider(messages: List[dict], tools: Optional[List[Dict[str, Any
     timeout = httpx.Timeout(60.0, connect=10.0)
     for _ in range(attempts):
         try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                url = f"http://{provider_cfg.host}:{provider_cfg.port}/api/chat"
-                headers = {}
-                if provider_cfg.api_key:
-                    headers["X-Provider-Api-Key"] = provider_cfg.api_key
-                resp = await client.post(url, content=orjson.dumps(payload), headers={**headers, "Content-Type": "application/json"})
-                resp.raise_for_status()
-                raw_text = resp.content.decode(resp.encoding or "utf-8", errors="ignore")
-                try:
-                    data = orjson.loads(resp.content)
-                except Exception:
-                    data = raw_text
-                tool_calls = _extract_tool_calls(data)
-                content = _extract_content(data)
-                thinking = _extract_thinking(data)
-                if content or tool_calls or thinking:
-                    return {
-                        "content": content,
-                        "tool_calls": tool_calls,
-                        "thinking": thinking,
-                        "raw": data,
-                    }
-                last_error = f"(provider returned empty) raw={raw_text}"
+            client = _get_client()
+            url = f"http://{provider_cfg.host}:{provider_cfg.port}/api/chat"
+            headers = {}
+            if provider_cfg.api_key:
+                headers["X-Provider-Api-Key"] = provider_cfg.api_key
+            resp = await client.post(
+                url,
+                content=orjson.dumps(payload),
+                headers={**headers, "Content-Type": "application/json"},
+                timeout=timeout,
+            )
+            resp.raise_for_status()
+            raw_text = resp.content.decode(resp.encoding or "utf-8", errors="ignore")
+            try:
+                data = orjson.loads(resp.content)
+            except Exception:
+                data = raw_text
+            tool_calls = _extract_tool_calls(data)
+            content = _extract_content(data)
+            thinking = _extract_thinking(data)
+            if content or tool_calls or thinking:
+                return {
+                    "content": content,
+                    "tool_calls": tool_calls,
+                    "thinking": thinking,
+                    "raw": data,
+                }
+            last_error = f"(provider returned empty) raw={raw_text}"
         except httpx.HTTPError as ex:
             response = getattr(ex, "response", None)
             detail = response.text if response is not None else str(ex)
@@ -254,33 +274,39 @@ async def call_provider_stream(
     tool_calls: List[Dict[str, Any]] = []
     thinking_parts: List[str] = []
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            async with client.stream("POST", url, content=orjson.dumps(payload), headers={**headers, "Content-Type": "application/json"}) as resp:
-                resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    if not line:
-                        continue
-                    try:
-                        data = orjson.loads(line)
-                    except orjson.JSONDecodeError:
-                        continue
-                    chunk = _extract_stream_content(data)
-                    if chunk:
-                        content_parts.append(chunk)
-                        if on_content_chunk is not None:
-                            on_content_chunk(chunk)
-                    thinking_chunk = _extract_stream_thinking(data)
-                    if thinking_chunk:
-                        thinking_parts.append(thinking_chunk)
-                        if on_thinking_chunk is not None:
-                            on_thinking_chunk(thinking_chunk)
-                    incoming = _extract_stream_tool_calls(data)
-                    if incoming:
-                        tool_calls = _merge_tool_calls(tool_calls, incoming)
-                        if _tool_calls_ready(tool_calls):
-                            break
-                    if isinstance(data, dict) and data.get("done") is True:
+        client = _get_client()
+        async with client.stream(
+            "POST",
+            url,
+            content=orjson.dumps(payload),
+            headers={**headers, "Content-Type": "application/json"},
+            timeout=timeout,
+        ) as resp:
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if not line:
+                    continue
+                try:
+                    data = orjson.loads(line)
+                except orjson.JSONDecodeError:
+                    continue
+                chunk = _extract_stream_content(data)
+                if chunk:
+                    content_parts.append(chunk)
+                    if on_content_chunk is not None:
+                        on_content_chunk(chunk)
+                thinking_chunk = _extract_stream_thinking(data)
+                if thinking_chunk:
+                    thinking_parts.append(thinking_chunk)
+                    if on_thinking_chunk is not None:
+                        on_thinking_chunk(thinking_chunk)
+                incoming = _extract_stream_tool_calls(data)
+                if incoming:
+                    tool_calls = _merge_tool_calls(tool_calls, incoming)
+                    if _tool_calls_ready(tool_calls):
                         break
+                if isinstance(data, dict) and data.get("done") is True:
+                    break
     except httpx.HTTPError as ex:
         response = getattr(ex, "response", None)
         detail = response.text if response is not None else str(ex)

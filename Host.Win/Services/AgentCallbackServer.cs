@@ -27,6 +27,7 @@ namespace Host.Win.Services
         public void Start()
         {
             if (_udpClient != null) return;
+            // UDP callbacks are a temporary bridge until streaming HTTP (SSE/WebSocket) is available.
             _cts = new CancellationTokenSource();
             _udpClient = new UdpClient(new IPEndPoint(IPAddress.Loopback, _port));
             _listenerTask = Task.Run(() => ListenAsync(_cts.Token));
@@ -40,6 +41,7 @@ namespace Host.Win.Services
                 try
                 {
                     var result = await _udpClient.ReceiveAsync().ConfigureAwait(false);
+                    // No sender validation yet; add token + size guard when replacing UDP transport.
                     var json = Encoding.UTF8.GetString(result.Buffer);
                     var payload = JsonSerializer.Deserialize<AgentToolCallback>(json);
                     if (payload != null)

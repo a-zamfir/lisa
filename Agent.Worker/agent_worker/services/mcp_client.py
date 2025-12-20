@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import orjson
 import os
-import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -36,34 +35,35 @@ def load_mcp_settings() -> McpConfig:
 
 
 class McpClient:
-    def __init__(self, ttl_seconds: int = 21600) -> None:
-        self._ttl_seconds = ttl_seconds
+    def __init__(self) -> None:
         self._cached_tools: Optional[Dict[str, Any]] = None
-        self._last_fetch: float = 0.0
         self._last_status_ok: Optional[bool] = None
+        self._client: Optional[httpx.AsyncClient] = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None:
+            self._client = httpx.AsyncClient()
+        return self._client
+
+    async def warm_client(self) -> None:
+        self._get_client()
 
     async def list_tools(self, force_refresh: bool = False) -> Dict[str, Any]:
-        now = time.time()
-        if (
-            not force_refresh
-            and self._cached_tools is not None
-            and (now - self._last_fetch) < self._ttl_seconds
-        ):
+        if not force_refresh and self._cached_tools is not None:
             return self._cached_tools
         cfg = load_mcp_settings()
         url = f"http://{cfg.host}:{cfg.port}/tools"
-        async with httpx.AsyncClient(timeout=5) as client:
-            try:
-                resp = await client.get(url)
-                resp.raise_for_status()
-                payload = orjson.loads(resp.content)
-                self._cached_tools = payload
-                self._last_fetch = time.time()
-                self._last_status_ok = True
-                return payload
-            except httpx.HTTPError as ex:
-                self._last_status_ok = False
-                return {"error": f"MCP unavailable: {ex}"}
+        client = self._get_client()
+        try:
+            resp = await client.get(url, timeout=5)
+            resp.raise_for_status()
+            payload = orjson.loads(resp.content)
+            self._cached_tools = payload
+            self._last_status_ok = True
+            return payload
+        except httpx.HTTPError as ex:
+            self._last_status_ok = False
+            return {"error": f"MCP unavailable: {ex}"}
 
     def get_cached_tools(self) -> Optional[Dict[str, Any]]:
         return self._cached_tools
@@ -72,14 +72,19 @@ class McpClient:
         cfg = load_mcp_settings()
         url = f"http://{cfg.host}:{cfg.port}/call"
         payload = {"tool": tool, "args": args or {}}
-        async with httpx.AsyncClient(timeout=15) as client:
-            try:
-                resp = await client.post(url, content=orjson.dumps(payload), headers={"Content-Type": "application/json"})
-                resp.raise_for_status()
-                if self._last_status_ok is False:
-                    await self.list_tools(force_refresh=True)
-                self._last_status_ok = True
-                return orjson.loads(resp.content)
-            except httpx.HTTPError as ex:
-                self._last_status_ok = False
-                return {"error": f"MCP unavailable: {ex}"}
+        client = self._get_client()
+        try:
+            resp = await client.post(
+                url,
+                content=orjson.dumps(payload),
+                headers={"Content-Type": "application/json"},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            if self._last_status_ok is False:
+                await self.list_tools(force_refresh=True)
+            self._last_status_ok = True
+            return orjson.loads(resp.content)
+        except httpx.HTTPError as ex:
+            self._last_status_ok = False
+            return {"error": f"MCP unavailable: {ex}"}

@@ -1,4 +1,4 @@
-# ARCHITECTURE — Windows Desktop Assistant
+# ARCHITECTURE - Windows Desktop Assistant
 
 ## Scope and Goals
 - Windows-first assistant with minimal UI (tray + overlay) and hotkey control.
@@ -60,7 +60,7 @@ flowchart LR
   - Conversation state keyed by `session_id`.
   - LLM calls (Ollama/provider), tools via MCP client, orchestration.
   - System context injected every request: LISA prompt + metadata (time, user display/account, machine, OS, locale/region, home).
-  - Tool cache: fetched on startup, refreshed 6h (backoff retries); injected as tools property and first-system message.
+  - Tool registry: fetched on startup and cached; injected as tools property and first-system message once per session.
   - Streaming callbacks (UDP): thinking, content chunks/done, tool phases.
   - Memory: short-term in process; long-term planned in SQLite + optional embeddings.
   - STT/TTS: STT in agent (future); host plays TTS from agent text (phase 1).
@@ -69,7 +69,7 @@ flowchart LR
   - Tooling: system state (CPU/RAM/disk/network/battery/uptime), process/app inspector, file/disk (large files, duplicates, disk by extension, recent changes, metadata).
 
 ### STT/TTS by Phase
-- Phase 1: Host captures audio → Agent performs STT → Agent returns text + speak flag/tts_text → Host plays TTS from text.
+- Phase 1: Host captures audio -> Agent performs STT -> Agent returns text + speak flag/tts_text -> Host plays TTS from text.
 - Phase 2 (optional): Agent can return audio bytes; host only plays returned audio.
 
 ## IPC Contract (Phase 1: localhost HTTP; Phase 2: optional pipes/gRPC)
@@ -99,7 +99,7 @@ flowchart LR
     "tts_audio_b64": null,
     "diagnostics": { "latency_ms": 1200 },
     "tool_calls": ["tool_a"],
-    "reasoning": "…",
+    "reasoning": "optional reasoning",
     "thinking_ms": 4200
   }
   ```
@@ -174,18 +174,20 @@ sequenceDiagram
 
 ## State & Memory
 - Conversation lives in Agent (by `session_id`); host caches last N for UI.
+- Agent trims history by approximate token cap and max message count.
 - Memory tiers: short-term in process; long-term SQLite (`%LOCALAPPDATA%/LISA/agent.db`); optional FAISS later.
 - Storage: host settings at `%LOCALAPPDATA%/LISA/host-settings.json`; agent cache/data under `%LOCALAPPDATA%/LISA/`.
 
 ## Folder Layout (repo)
-- `/Host.Win/` — WPF host (tray/overlay, settings, chat UI, status chips).
-- `/Agent.Worker/` — FastAPI agent (LLM, tools, prompts, system context).
-- `/Agent.MCP/` — MCP tools server (system/process/file tools).
-- `/docs/` — architecture and diagrams.
+- `/Host.Win/` - WPF host (tray/overlay, settings, chat UI, status chips).
+- `/Agent.Worker/` - FastAPI agent (LLM, tools, prompts, system context).
+- `/Agent.MCP/` - MCP tools server (system/process/file tools).
+- `/docs/` - architecture and diagrams.
 
 ## Security & Privacy
 - Bind servers to `127.0.0.1`; no remote exposure.
-- Payload caps (audio ≤30s, images ≤1–2MB compressed).
+- Payload caps (audio and images) enforced by host and agent.
+- Provider API keys stored encrypted at rest (DPAPI CurrentUser).
 - Redaction hooks for screen/clipboard; permission gates for mic/screen.
 - Actions are suggestions; host enforces confirmation/allowlist. Future: signed actions/tool scopes.
 
@@ -197,7 +199,7 @@ sequenceDiagram
 ## Implementation Phases
 - Phase 0 (done): WPF shell, tray, overlay, hotkey, health indicator stub.
 - Phase 1 (done): Chat end-to-end with streaming (content + reasoning), tool calls via Agent.MCP, system prompt + metadata injection, copy/retry/stop, status chips (MCP/Agent/Provider).
-- Phase 2: Talk mode — mic capture, VAD, POST /input/audio, STT, host TTS playback.
-- Phase 3: Screen share snapshots — capture, send images, vision summary in responses.
-- Phase 4: Settings UI + MCP management — sync settings, manage MCP servers, model/provider selection.
-- Phase 5: Memory + embeddings — long-term recall via SQLite + optional FAISS vectors.
+- Phase 2: Talk mode - mic capture, VAD, POST /input/audio, STT, host TTS playback.
+- Phase 3: Screen share snapshots - capture, send images, vision summary in responses.
+- Phase 4: Settings UI + MCP management - sync settings, manage MCP servers, model/provider selection.
+- Phase 5: Memory + embeddings - long-term recall via SQLite + optional FAISS vectors.

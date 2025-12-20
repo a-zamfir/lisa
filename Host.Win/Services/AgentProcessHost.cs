@@ -16,6 +16,7 @@ namespace Host.Win.Services
         private readonly int _port;
         private readonly string _agentRoot;
         private readonly string _pidFile;
+        private readonly string _requirementsHashFile;
         private IntPtr _jobHandle = IntPtr.Zero;
 
         public AgentProcessHost(string agentPath, int port)
@@ -26,6 +27,7 @@ namespace Host.Win.Services
             var localDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LISA");
             Directory.CreateDirectory(localDir);
             _pidFile = Path.Combine(localDir, "agent.pid");
+            _requirementsHashFile = Path.Combine(localDir, "agent-requirements.sha256");
         }
 
         public void Start()
@@ -140,6 +142,7 @@ namespace Host.Win.Services
 
             if (!Directory.Exists(venvPath) || !File.Exists(pythonExe))
             {
+                // Dev-only bootstrapping; production should ship a packaged runtime.
                 Trace.WriteLine("Creating agent virtual environment...");
                 var createPsi = new ProcessStartInfo
                 {
@@ -181,15 +184,23 @@ namespace Host.Win.Services
 
             if (File.Exists(requirements))
             {
-                Trace.WriteLine("Installing agent requirements...");
-                RunSilently(pythonExe, "-m pip install --upgrade pip", workingDir);
-                RunSilently(pythonExe, "-m pip install -r requirements.txt", workingDir);
+                var hash = ComputeFileHash(requirements);
+                var existingHash = ReadHash(_requirementsHashFile);
+                if (!string.Equals(hash, existingHash, StringComparison.OrdinalIgnoreCase))
+                {
+                    Trace.WriteLine("Installing agent requirements...");
+                    RunSilently(pythonExe, "-m pip install --upgrade pip", workingDir);
+                    if (RunSilently(pythonExe, "-m pip install -r requirements.txt", workingDir))
+                    {
+                        WriteHash(_requirementsHashFile, hash);
+                    }
+                }
             }
 
             return pythonExe;
         }
 
-        private static void RunSilently(string fileName, string arguments, string workingDir)
+        private static bool RunSilently(string fileName, string arguments, string workingDir)
         {
             try
             {
@@ -217,12 +228,14 @@ namespace Host.Win.Services
                     {
                         Trace.TraceWarning($"[Agent cmd ERR] {fileName} {arguments} -> {stderr}");
                     }
+                    return proc.ExitCode == 0;
                 }
             }
             catch (Exception ex)
             {
                 Trace.TraceError($"Command failed: {fileName} {arguments} ({ex.Message})");
             }
+            return false;
         }
 
         public void Stop()
@@ -275,10 +288,77 @@ namespace Host.Win.Services
                 var proc = Process.GetProcessById(pid);
                 if (!proc.HasExited)
                 {
-                    Trace.WriteLine($"Killing existing agent process PID {pid} before start.");
-                    proc.Kill(entireProcessTree: true);
-                    proc.WaitForExit(5000);
+                    if (IsExpectedAgentProcess(proc))
+                    {
+                        Trace.WriteLine($"Killing existing agent process PID {pid} before start.");
+                        proc.Kill(entireProcessTree: true);
+                        proc.WaitForExit(5000);
+                    }
+                    else
+                    {
+                        Trace.TraceWarning($"Refusing to kill PID {pid} (unexpected process).");
+                    }
                 }
+            }
+            catch
+            {
+                // ignore
+            }
+            finally
+            {
+                try
+                {
+                    if (File.Exists(_pidFile))
+                    {
+                        File.Delete(_pidFile);
+                    }
+                }
+                catch { }
+            }
+        }
+
+        private bool IsExpectedAgentProcess(Process process)
+        {
+            try
+            {
+                var exe = process.MainModule?.FileName;
+                if (!string.IsNullOrWhiteSpace(exe))
+                {
+                    return exe.StartsWith(_agentRoot, StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            catch
+            {
+                // Accessing MainModule can fail; do not kill if we cannot verify.
+            }
+            return false;
+        }
+
+        private static string ComputeFileHash(string path)
+        {
+            using var stream = File.OpenRead(path);
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var hash = sha.ComputeHash(stream);
+            return Convert.ToHexString(hash);
+        }
+
+        private static string? ReadHash(string path)
+        {
+            try
+            {
+                return File.Exists(path) ? File.ReadAllText(path).Trim() : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static void WriteHash(string path, string hash)
+        {
+            try
+            {
+                File.WriteAllText(path, hash);
             }
             catch
             {

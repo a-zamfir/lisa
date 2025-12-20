@@ -4,7 +4,7 @@
 - .NET 8 SDK (x64). If `dotnet --list-sdks` shows only x86, install x64 and ensure it is first on PATH.
 - Windows 10/11 with WPF/Win32 available.
 - Visual Studio 2022 (Community or higher) or VS Code with C# extension.
-- Python 3.11+ for `Agent.Worker` and `Agent.MCP` (venvs are created on first run).
+- Python 3.11+ for `Agent.Worker` and `Agent.MCP` (venvs are created on first run; requirements install is skipped unless hashes change).
 
 ## Solution Layout
 - `Host.Win.sln` - solution entry.
@@ -41,7 +41,7 @@
 - **Overlay**: `OverlayController` positions bottom-right with 16px margin, always on top; `OverlayWindow` shows non-intrusive animations (fade/slide) on show/hide.
 - **Theme**: `ThemeService` reads Windows AppsUseLightTheme and merges `LightTheme.xaml` or `DarkTheme.xaml`. User toggle overrides for session.
 - **Modes**: Segmented buttons bound to `OverlayViewModel.SelectedMode` (Talk, Chat, Share, Settings) swap content panes.
-- **Status**: Three health chips. MCP checks `McpHost:McpPort`; Agent checks `AgentHost:AgentPort` via `/health`; Provider checks `ProviderHost:ProviderPort`. Updates every ~2s.
+- **Status**: Three health chips. MCP checks `McpHost:McpPort`; Agent checks `AgentHost:AgentPort` via `/health`; Provider checks `ProviderHost:ProviderPort`. Backoff when down (up to ~10s).
 - **Chat**:
   - UI: bubble list, rounded input, styled send button, slim scrollbar with padding gap.
   - Sending: `AsyncRelayCommand` bound to button/Enter; disables during in-flight send.
@@ -50,6 +50,7 @@
   - Tool calls: agent sends UDP callbacks to `127.0.0.1:5052` with phase updates (`awaiting_tool`, `tool_response`, `tool_complete`). Overlay updates the tool label in the bubble header.
   - Content streaming: agent emits `content_chunk` / `content_done`; overlay appends to message live. Reasoning panel auto-collapses when done.
   - Autoscroll: message collection change in `OverlayWindow` scrolls to end on new/streamed messages.
+  - Reset: chat includes a reset button that clears UI history and starts a fresh session ID.
 - **Context**: `ContextCollector` exposes active window title/process and primary screen.
 - **Autostart helper**: `AutoStartHelper` sets/removes HKCU Run entry (call from settings/installer).
 - **Logging & Observability**:
@@ -58,8 +59,8 @@
   - Agent emits UDP callbacks for thinking, tool phases, and content streaming; overlay updates reasoning panel and tool labels live.
   - `AgentClient` traces request/response lifecycle; extend similarly for audio/image endpoints when added.
 - **Settings**:
-  - Stored at `%LOCALAPPDATA%/LISA/host-settings.json` via `SettingsService` (JSON, pretty printed).
-  - Fields: `mcp_host`, `mcp_port`, `agent_host`, `agent_port`, `provider_mode` (Local|Hosted), `provider_host`, `provider_port`, `provider_api_key`, `provider_model`, `provider_temperature`, `voice_type`, `voice_rate`, `voice_volume`.
+  - Stored at `%LOCALAPPDATA%/LISA/host-settings.json` via `SettingsService` (JSON, pretty printed; provider API key encrypted at rest via DPAPI CurrentUser).
+  - Fields: `mcpHost`, `mcpPort`, `agentHost`, `agentPort`, `providerMode` (Local|Hosted), `providerHost`, `providerPort`, `providerApiKey`, `providerModel`, `providerTemperature`, `providerThink`, `voiceType`, `voiceRate`, `voiceVolume`.
   - Settings pane in overlay allows editing and saving; provider section switches between Local/Hosted (API key enabled only for Hosted); save reloads health checkers and agent base URL live and updates provider API key header for requests.
 
 ## Theming Notes
@@ -93,7 +94,8 @@
 
 - **Agent Worker**:
   - FastAPI, endpoints /health, /input/text, /input/retry.
-  - On startup: fetch MCP tools (cached) and start refresh loop (6h cadence; retry every 30s until success). Build system context (LISA prompt + system metadata: time, user/account, machine, OS, locale/region, home) once and prepend to every provider request.
+  - On startup: fetch MCP tools (cached); if unavailable, retry in background. Build system context (LISA prompt + system metadata: time, user/account, machine, OS, locale/region, home) once and prepend to every provider request.
   - Tool calls: LLM uses tools property; server calls MCP /tools (list) and /call (execute). Tool phases send UDP callbacks.
-  - Streaming: uses Ollama /api/chat streaming; partial content and reasoning forwarded via UDP to Host.Win for live display. 	ool_calls parsed from stream; early exit to call MCP. Content streaming forwarded via content_chunk / content_done callbacks for UI.
-  - Settings: read from %LOCALAPPDATA%/LISA/host-settings.json (agent/provider hosts, ports, provider mode, model, temperature, API key, voice params).
+  - Streaming: uses Ollama /api/chat streaming; partial content and reasoning forwarded via UDP to Host.Win for live display. Tool calls parsed from stream; early exit to call MCP. Content streaming forwarded via content_chunk / content_done callbacks for UI.
+  - Conversations: in-memory store with approximate token cap + max message count trimming.
+  - Settings: read from %LOCALAPPDATA%/LISA/host-settings.json (agent/provider hosts, ports, provider mode, model, temperature, think flag, API key, voice params).
