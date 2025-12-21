@@ -38,9 +38,18 @@ namespace Host.Win.ViewModels
         private ICommand? _toggleShareCommand;
         private HostSettings? _settings;
         private ICommand? _saveSettingsCommand;
+        private ICommand? _toggleCollapseCommand;
         private readonly System.Collections.Generic.Dictionary<string, System.Threading.CancellationTokenSource> _inflightTurns = new();
         private string _sessionId = Guid.NewGuid().ToString();
         private bool _isSharing;
+        private bool _isCollapsed;
+        private double _overlayWidth = ExpandedWidth;
+        private double _overlayHeight = ExpandedHeight;
+
+        private const double ExpandedWidth = 640;
+        private const double ExpandedHeight = 420;
+        private const double CollapsedWidth = 420;
+        private const double CollapsedHeight = 160;
 
         public string? AppName
         {
@@ -194,6 +203,12 @@ namespace Host.Win.ViewModels
             set => SetProperty(ref _saveSettingsCommand, value);
         }
 
+        public ICommand? ToggleCollapseCommand
+        {
+            get => _toggleCollapseCommand;
+            set => SetProperty(ref _toggleCollapseCommand, value);
+        }
+
         public ObservableCollection<ChatMessage> ChatMessages { get; } = new();
 
         public string SessionId
@@ -206,6 +221,28 @@ namespace Host.Win.ViewModels
         {
             get => _isSharing;
             set => SetProperty(ref _isSharing, value);
+        }
+
+        public bool IsCollapsed
+        {
+            get => _isCollapsed;
+            set
+            {
+                if (!SetProperty(ref _isCollapsed, value)) return;
+                UpdateOverlaySize();
+            }
+        }
+
+        public double OverlayWidth
+        {
+            get => _overlayWidth;
+            set => SetProperty(ref _overlayWidth, value);
+        }
+
+        public double OverlayHeight
+        {
+            get => _overlayHeight;
+            set => SetProperty(ref _overlayHeight, value);
         }
 
         public AgentClient? AgentClient { get; set; }
@@ -606,6 +643,33 @@ namespace Host.Win.ViewModels
         {
             IsSharing = !IsSharing;
             Logger?.LogEvent(IsSharing ? "share.start" : "share.stop", new { sessionId = SessionId });
+        }
+
+        public void ToggleCollapsed()
+        {
+            IsCollapsed = !IsCollapsed;
+        }
+
+        public void ExpandOverlay()
+        {
+            if (IsCollapsed)
+            {
+                IsCollapsed = false;
+            }
+        }
+
+        private void UpdateOverlaySize()
+        {
+            if (IsCollapsed)
+            {
+                OverlayWidth = CollapsedWidth;
+                OverlayHeight = CollapsedHeight;
+            }
+            else
+            {
+                OverlayWidth = ExpandedWidth;
+                OverlayHeight = ExpandedHeight;
+            }
         }
     }
 }

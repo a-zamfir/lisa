@@ -71,6 +71,10 @@ namespace Host.Win
 
             overlayVm.SetModeCommand = new Commands.RelayCommand<AssistantMode>(mode =>
             {
+                if (mode == AssistantMode.Chat || mode == AssistantMode.Settings)
+                {
+                    overlayVm.ExpandOverlay();
+                }
                 overlayVm.SelectedMode = mode;
             });
 
@@ -80,6 +84,7 @@ namespace Host.Win
             overlayVm.StopMessageCommand = new Commands.RelayCommand<Models.ChatMessage>(message => overlayVm.StopMessage(message));
             overlayVm.ResetConversationCommand = new Commands.RelayCommand(() => overlayVm.ResetConversation());
             overlayVm.ToggleShareCommand = new Commands.RelayCommand(() => overlayVm.ToggleShare());
+            overlayVm.ToggleCollapseCommand = new Commands.RelayCommand(() => overlayVm.ToggleCollapsed());
 
             overlayVm.SelectedMode = AssistantMode.Chat;
 

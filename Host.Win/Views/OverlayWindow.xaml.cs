@@ -1,4 +1,5 @@
 // File: Host.Win/Views/OverlayWindow.xaml.cs
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Forms;
 using System.Windows.Media;
@@ -15,6 +16,7 @@ namespace Host.Win.Views
     {
         public bool AllowClose { get; set; }
         private OverlayViewModel? _viewModel;
+        private bool _isResizing;
 
         public OverlayWindow()
         {
@@ -111,14 +113,44 @@ namespace Host.Win.Views
             if (_viewModel != null)
             {
                 _viewModel.ChatMessages.CollectionChanged -= ChatMessages_CollectionChanged;
+                _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
             }
 
             _viewModel = DataContext as OverlayViewModel;
             if (_viewModel != null)
             {
                 _viewModel.ChatMessages.CollectionChanged += ChatMessages_CollectionChanged;
+                _viewModel.PropertyChanged += ViewModel_PropertyChanged;
+                Width = _viewModel.OverlayWidth;
+                Height = _viewModel.OverlayHeight;
             }
         }
+
+        private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (_viewModel == null) return;
+            if (e.PropertyName == nameof(OverlayViewModel.OverlayWidth)
+                || e.PropertyName == nameof(OverlayViewModel.OverlayHeight))
+            {
+                ApplyResize(_viewModel.OverlayWidth, _viewModel.OverlayHeight);
+            }
+        }
+
+        private void ApplyResize(double targetWidth, double targetHeight)
+        {
+            _isResizing = false;
+            BeginAnimation(WidthProperty, null);
+            BeginAnimation(HeightProperty, null);
+            BeginAnimation(LeftProperty, null);
+            BeginAnimation(TopProperty, null);
+            Width = targetWidth;
+            Height = targetHeight;
+            if (IsVisible)
+            {
+                ShowAtBottomRight(Screen.PrimaryScreen, 16);
+            }
+        }
+
 
         private void ChatMessages_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
         {
