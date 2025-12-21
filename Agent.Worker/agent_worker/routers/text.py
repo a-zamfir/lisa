@@ -309,7 +309,7 @@ async def handle_text(req: TextInput):
         reasoning=reasoning,
         thinking_ms=thinking_ms,
         speak=False,
-        tts_text=None,
+        tts_text=completion or None,
     )
 
 
@@ -384,5 +384,5 @@ async def handle_retry(req: RetryInput):
         reasoning=reasoning,
         thinking_ms=thinking_ms,
         speak=False,
-        tts_text=None,
+        tts_text=completion or None,
     )

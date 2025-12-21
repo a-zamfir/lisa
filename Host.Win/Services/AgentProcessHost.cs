@@ -69,6 +69,9 @@ namespace Host.Win.Services
                 "host-settings.json");
             psi.Environment["PYTHONPATH"] = workingDir;
             psi.Environment["LISA_CALLBACK_UDP_PORT"] = "5052";
+            psi.Environment["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1";
+            psi.Environment["HF_HUB_OFFLINE"] = "1";
+            psi.Environment["FASTER_WHISPER_MODEL_DIR"] = Path.Combine(workingDir, "speech", "models", "whisper-small");
 
             try
             {

@@ -4,3 +4,7 @@ httpx
 orjson
 langgraph
 pydantic
+faster-whisper
+numpy
+soundfile
+python-multipart

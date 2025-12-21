@@ -20,6 +20,7 @@ namespace Host.Win.Models
         private double _thoughtSeconds;
         private bool _isCancellable;
         private bool _hasContentStream;
+        private bool _hasMarkdown;
 
         public string Sender
         {
@@ -30,7 +31,13 @@ namespace Host.Win.Models
         public string Text
         {
             get => _text;
-            set => SetProperty(ref _text, value);
+            set
+            {
+                if (Equals(_text, value)) return;
+                _text = value;
+                UpdateMarkdownState(value);
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Text)));
+            }
         }
 
         public bool IsAssistant
@@ -105,7 +112,20 @@ namespace Host.Win.Models
             set => SetProperty(ref _hasContentStream, value);
         }
 
+        public bool HasMarkdown
+        {
+            get => _hasMarkdown;
+            private set => SetProperty(ref _hasMarkdown, value);
+        }
+
         public event PropertyChangedEventHandler? PropertyChanged;
+
+        private void UpdateMarkdownState(string? text)
+        {
+            var value = text ?? string.Empty;
+            HasMarkdown = value.Contains("**", System.StringComparison.Ordinal)
+                || value.Contains("`", System.StringComparison.Ordinal);
+        }
 
         private void SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
         {

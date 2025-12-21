@@ -24,6 +24,9 @@ namespace Host.Win
         private PortHealthChecker? _agentHealthChecker;
         private PortHealthChecker? _providerHealthChecker;
         private LoggingService? _loggingService;
+        private AudioCaptureService? _audioCaptureService;
+        private AudioPlaybackService? _audioPlaybackService;
+        private TtsService? _ttsService;
         private HostSettings? _hostSettings;
         private AgentProcessHost? _agentProcessHost;
         private McpProcessHost? _mcpProcessHost;
@@ -39,6 +42,9 @@ namespace Host.Win
             _settingsService = new SettingsService();
             _hostSettings = _settingsService.LoadAsync().GetAwaiter().GetResult();
             _contextCollector = new ContextCollector();
+            _audioCaptureService = new AudioCaptureService();
+            _audioPlaybackService = new AudioPlaybackService();
+            _ttsService = new TtsService();
             _agentClient = new AgentClient(new Uri($"http://{_hostSettings.AgentHost}:{_hostSettings.AgentPort}"));
             _agentClient.SetProviderApiKey(_hostSettings.ProviderApiKey);
             _themeService = new ThemeService();
@@ -49,7 +55,11 @@ namespace Host.Win
                 StatusText = "Checking...",
                 AgentClient = _agentClient,
                 Logger = _loggingService,
-                Settings = _hostSettings
+                Settings = _hostSettings,
+                AudioCaptureService = _audioCaptureService,
+                AudioPlaybackService = _audioPlaybackService,
+                TtsService = _ttsService,
+                ContextCollector = _contextCollector
             };
             overlayVm.UpdateMcpStatus(false);
             overlayVm.UpdateAgentStatus(false);
@@ -84,6 +94,8 @@ namespace Host.Win
             overlayVm.StopMessageCommand = new Commands.RelayCommand<Models.ChatMessage>(message => overlayVm.StopMessage(message));
             overlayVm.ResetConversationCommand = new Commands.RelayCommand(() => overlayVm.ResetConversation());
             overlayVm.ToggleShareCommand = new Commands.RelayCommand(() => overlayVm.ToggleShare());
+            overlayVm.StartTalkCommand = new Commands.AsyncRelayCommand(() => overlayVm.StartTalkAsync(), overlayVm.CanStartTalk);
+            overlayVm.ReplayTtsCommand = new Commands.AsyncRelayCommand(() => overlayVm.ReplayLastTtsAsync());
             overlayVm.ToggleCollapseCommand = new Commands.RelayCommand(() => overlayVm.ToggleCollapsed());
 
             overlayVm.SelectedMode = AssistantMode.Chat;
@@ -239,6 +251,7 @@ namespace Host.Win
             _overlayController?.Dispose();
             _agentClient?.Dispose();
             _contextCollector?.Dispose();
+            _audioPlaybackService?.Dispose();
             _agentProcessHost?.Dispose();
             _mcpProcessHost?.Dispose();
             _agentCallbackServer?.Dispose();

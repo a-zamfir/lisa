@@ -7,6 +7,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Host.Win.Models;
 using System.Text.Json;
+using System.Net.Http.Headers;
+using System.Text;
 
 namespace Host.Win.Services
 {
@@ -78,6 +80,29 @@ namespace Host.Win.Services
 
             await Task.Delay(300, cancellationToken).ConfigureAwait(false);
             return CreateMockResponse(request);
+        }
+
+        public async Task<AudioInputResponse?> SendAudioAsync(byte[] wavBytes, AudioInputMeta meta, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                using var content = new MultipartFormDataContent();
+                var audioContent = new ByteArrayContent(wavBytes);
+                audioContent.Headers.ContentType = new MediaTypeHeaderValue("audio/wav");
+                content.Add(audioContent, "audio", "input.wav");
+
+                var metaJson = JsonSerializer.Serialize(meta);
+                content.Add(new StringContent(metaJson, Encoding.UTF8, "application/json"), "meta");
+
+                var response = await SharedClient.PostAsync(new Uri(_baseUri, "/input/audio"), content, cancellationToken).ConfigureAwait(false);
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<AudioInputResponse>(cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning($"Audio send failed: {ex.Message}");
+                return null;
+            }
         }
 
         public async Task<AgentResponse?> SendRetryAsync(RetryRequest request, CancellationToken cancellationToken = default)
