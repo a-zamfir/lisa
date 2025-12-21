@@ -14,6 +14,12 @@ namespace Host.Win.Models
         private string _toolLabel = string.Empty;
         private bool _hasToolLabel;
         private string _turnId = string.Empty;
+        private string _reasoning = string.Empty;
+        private bool _hasReasoning;
+        private bool _isReasoningExpanded;
+        private double _thoughtSeconds;
+        private bool _isCancellable;
+        private bool _hasContentStream;
 
         public string Sender
         {
@@ -61,6 +67,42 @@ namespace Host.Win.Models
         {
             get => _turnId;
             set => SetProperty(ref _turnId, value);
+        }
+
+        public string Reasoning
+        {
+            get => _reasoning;
+            set => SetProperty(ref _reasoning, value);
+        }
+
+        public bool HasReasoning
+        {
+            get => _hasReasoning;
+            set => SetProperty(ref _hasReasoning, value);
+        }
+
+        public bool IsReasoningExpanded
+        {
+            get => _isReasoningExpanded;
+            set => SetProperty(ref _isReasoningExpanded, value);
+        }
+
+        public double ThoughtSeconds
+        {
+            get => _thoughtSeconds;
+            set => SetProperty(ref _thoughtSeconds, value);
+        }
+
+        public bool IsCancellable
+        {
+            get => _isCancellable;
+            set => SetProperty(ref _isCancellable, value);
+        }
+
+        public bool HasContentStream
+        {
+            get => _hasContentStream;
+            set => SetProperty(ref _hasContentStream, value);
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;

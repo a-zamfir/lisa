@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json
+import orjson
 import os
 from pathlib import Path
 from typing import Optional
@@ -24,12 +24,13 @@ class ProviderConfig(BaseModel):
     model: str = "llama3.2"
     temperature: float = 0.7
     stream: bool = False
+    think: bool = True
 
 
 def load_settings() -> ProviderConfig:
     if SETTINGS_PATH.exists():
         try:
-            data = json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
+            data = orjson.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
 
             def pick(*keys, default=None):
                 for key in keys:
@@ -43,6 +44,7 @@ def load_settings() -> ProviderConfig:
                 api_key=pick("provider_api_key", "providerApiKey") or None,
                 model=pick("provider_model", "providerModel", default="llama3.2"),
                 temperature=float(pick("provider_temperature", "providerTemperature", default=0.7)),
+                think=bool(pick("provider_think", "providerThink", default=True)),
             )
         except Exception:
             pass

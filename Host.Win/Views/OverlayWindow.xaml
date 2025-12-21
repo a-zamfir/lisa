@@ -20,6 +20,7 @@
         <QuadraticEase x:Key="QuadraticEaseOut" EasingMode="EaseOut"/>
         <QuadraticEase x:Key="QuadraticEaseIn" EasingMode="EaseIn"/>
         <conv:StringEqualsConverter x:Key="EqualityConverter"/>
+        <conv:BoolEqualsConverter x:Key="BoolEqualityConverter"/>
         <Style x:Key="FadeInOutOnVisibility" TargetType="FrameworkElement">
             <Setter Property="Opacity" Value="0"/>
             <Style.Triggers>
@@ -101,9 +102,9 @@
             <Setter Property="Height" Value="44"/>
             <Setter Property="Width" Value="100"/>
             <Setter Property="Padding" Value="12 10"/>
-            <Setter Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}"/>
-            <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
+            <Setter Property="Background" Value="{DynamicResource PrimaryButtonBackground}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource PrimaryButtonBackground}"/>
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryButtonForeground}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -117,14 +118,15 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}"/>
+                                <Setter TargetName="Border" Property="Background" Value="{DynamicResource PrimaryButtonHover}"/>
+                                <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource PrimaryButtonHover}"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Border" Property="Background" Value="{DynamicResource ButtonBackground}"/>
+                                <Setter TargetName="Border" Property="Background" Value="{DynamicResource PrimaryButtonHover}"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Border" Property="Opacity" Value="0.55"/>
-                                <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource PrimaryButtonForeground}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -167,14 +169,34 @@
                 </Setter.Value>
             </Setter>
         </Style>
-        <Style x:Key="IconButtonStyle" TargetType="Button">
-            <Setter Property="Width" Value="24"/>
-            <Setter Property="Height" Value="24"/>
-            <Setter Property="Padding" Value="0"/>
+        <Style x:Key="ThoughtToggleStyle" TargetType="ToggleButton">
             <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="{DynamicResource SubtleText}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="IconButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="32"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Background" Value="{DynamicResource ButtonBackground}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource ButtonBorder}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Foreground" Value="{DynamicResource SubtleText}"/>
+            <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -183,21 +205,63 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="6">
+                                CornerRadius="10">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
                                 <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}"/>
-                                <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Border" Property="Background" Value="{DynamicResource ButtonBackground}"/>
+                                <Setter TargetName="Border" Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Opacity" Value="0.5"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="ShareButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="110"/>
+            <Setter Property="Height" Value="110"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="IsTabStop" Value="False"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="Transparent">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="MicButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="88"/>
+            <Setter Property="Height" Value="88"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="IsTabStop" Value="False"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="Transparent">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -287,11 +351,43 @@
             <TranslateTransform x:Name="RootTranslate" Y="12"/>
         </Border.RenderTransform>
         <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
+            <Grid x:Name="ExpandedLayout">
+                <Grid.Style>
+                    <Style TargetType="Grid">
+                        <Setter Property="Opacity" Value="1"/>
+                        <Setter Property="IsHitTestVisible" Value="True"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding DataContext.IsCollapsed, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                <Setter Property="IsHitTestVisible" Value="False"/>
+                                <DataTrigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                             To="0"
+                                                             Duration="0:0:0.12"
+                                                             EasingFunction="{StaticResource QuadraticEaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </DataTrigger.EnterActions>
+                                <DataTrigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                             To="1"
+                                                             Duration="0:0:0.12"
+                                                             EasingFunction="{StaticResource QuadraticEaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </DataTrigger.ExitActions>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Grid.Style>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
 
             <!-- Title / status / theme toggle -->
             <Grid Grid.Row="0" Margin="4 0 4 12" VerticalAlignment="Center">
@@ -300,60 +396,92 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding AppName}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource OverlayForeground}"/>
-                    <StackPanel Orientation="Horizontal" Margin="12 0 0 0" VerticalAlignment="Center">
-                        <Border Background="{DynamicResource ButtonBackground}" CornerRadius="10" Padding="8 4" Margin="0 0 8 0">
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <Ellipse Width="10" Height="10" Fill="{Binding McpStatusBrush}" VerticalAlignment="Center"/>
-                                <TextBlock Text="{Binding McpStatusText}"
-                                           FontSize="13"
-                                           Foreground="{DynamicResource SubtleText}"
-                                           Margin="6 0 0 0"
-                                           VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </Border>
-                        <Border Background="{DynamicResource ButtonBackground}" CornerRadius="10" Padding="8 4" Margin="0 0 8 0">
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <Ellipse Width="10" Height="10" Fill="{Binding AgentStatusBrush}" VerticalAlignment="Center"/>
-                                <TextBlock Text="{Binding AgentStatusText}"
-                                           FontSize="13"
-                                           Foreground="{DynamicResource SubtleText}"
-                                           Margin="6 0 0 0"
-                                           VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </Border>
-                        <Border Background="{DynamicResource ButtonBackground}" CornerRadius="10" Padding="8 4">
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <Ellipse Width="10" Height="10" Fill="{Binding ProviderStatusBrush}" VerticalAlignment="Center"/>
-                                <TextBlock Text="{Binding ProviderStatusText}"
-                                           FontSize="13"
-                                           Foreground="{DynamicResource SubtleText}"
-                                           Margin="6 0 0 0"
-                                           VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </Border>
+                <Grid Grid.Column="0">
+                    <StackPanel x:Name="ExpandedHeader" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding AppName}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource OverlayForeground}"/>
+                        <StackPanel Orientation="Horizontal" Margin="12 0 0 0" VerticalAlignment="Center">
+                            <Border Background="{DynamicResource ButtonBackground}" CornerRadius="10" Padding="8 4" Margin="0 0 8 0">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Ellipse Width="10" Height="10" Fill="{Binding McpStatusBrush}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding McpStatusText}"
+                                               FontSize="13"
+                                               Foreground="{DynamicResource SubtleText}"
+                                               Margin="6 0 0 0"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{DynamicResource ButtonBackground}" CornerRadius="10" Padding="8 4" Margin="0 0 8 0">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Ellipse Width="10" Height="10" Fill="{Binding AgentStatusBrush}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding AgentStatusText}"
+                                               FontSize="13"
+                                               Foreground="{DynamicResource SubtleText}"
+                                               Margin="6 0 0 0"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{DynamicResource ButtonBackground}" CornerRadius="10" Padding="8 4">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Ellipse Width="10" Height="10" Fill="{Binding ProviderStatusBrush}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding ProviderStatusText}"
+                                               FontSize="13"
+                                               Foreground="{DynamicResource SubtleText}"
+                                               Margin="6 0 0 0"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
                     </StackPanel>
-                </StackPanel>
+                </Grid>
 
-                <Button Command="{Binding ToggleThemeCommand}"
-                        Grid.Column="1"
-                        Width="32"
-                        Height="32"
-                        Background="{DynamicResource ButtonBackground}"
-                        Foreground="{DynamicResource OverlayForeground}"
-                        BorderBrush="{DynamicResource ButtonBorder}"
-                        BorderThickness="1"
-                        HorizontalAlignment="Right"
-                        Padding="0"
-                        ToolTip="Toggle theme"
-                        Cursor="Hand">
-                    <TextBlock Text="{Binding ThemeIcon}"
-                               FontFamily="Segoe MDL2 Assets"
-                               FontSize="16"
-                               VerticalAlignment="Center"
-                               HorizontalAlignment="Center"/>
-                </Button>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0 0 4 0">
+                    <Button Command="{Binding ToggleThemeCommand}"
+                            Width="32"
+                            Height="32"
+                            HorizontalAlignment="Right"
+                            Padding="0"
+                            ToolTip="Toggle theme"
+                            Cursor="Hand"
+                            Style="{StaticResource IconButtonStyle}">
+                        <TextBlock FontFamily="Segoe MDL2 Assets"
+                                   FontSize="16"
+                                   Foreground="{DynamicResource OverlayForeground}"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Center">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Text" Value="&#xE708;"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding DataContext.IsLightTheme, RelativeSource={RelativeSource AncestorType=Window}}" Value="False">
+                                            <Setter Property="Text" Value="&#xE706;"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Button>
+                    <Button Command="{Binding ToggleCollapseCommand}"
+                            Width="32"
+                            Height="32"
+                            Padding="0"
+                            Margin="8 0 0 0"
+                            ToolTip="Toggle size"
+                            Cursor="Hand"
+                            Style="{StaticResource IconButtonStyle}">
+                        <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="16" VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Text" Value="&#xE70D;"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding DataContext.IsCollapsed, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                            <Setter Property="Text" Value="&#xE70E;"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Button>
+                </StackPanel>
             </Grid>
 
             <!-- Mode buttons + content -->
@@ -363,7 +491,46 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
-                    <UniformGrid Grid.Row="0" Rows="1" Columns="4" Margin="0 0 0 14">
+                    <UniformGrid Grid.Row="0" Rows="1" Columns="4" Margin="0 0 0 14" RenderTransformOrigin="0.5,0.5">
+                        <UniformGrid.RenderTransform>
+                            <TranslateTransform Y="0"/>
+                        </UniformGrid.RenderTransform>
+                        <UniformGrid.Style>
+                            <Style TargetType="UniformGrid">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding DataContext.IsCollapsed, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                        <DataTrigger.EnterActions>
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                     To="0"
+                                                                     Duration="0:0:0.3"
+                                                                     EasingFunction="{StaticResource QuadraticEaseOut}"/>
+                                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                                                     To="-6"
+                                                                     Duration="0:0:0.3"
+                                                                     EasingFunction="{StaticResource QuadraticEaseOut}"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </DataTrigger.EnterActions>
+                                        <DataTrigger.ExitActions>
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                     To="1"
+                                                                     Duration="0:0:0.3"
+                                                                     EasingFunction="{StaticResource QuadraticEaseOut}"/>
+                                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                                                     To="0"
+                                                                     Duration="0:0:0.3"
+                                                                     EasingFunction="{StaticResource QuadraticEaseOut}"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </DataTrigger.ExitActions>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </UniformGrid.Style>
                         <Button Command="{Binding SetModeCommand}" CommandParameter="{x:Static models:AssistantMode.Talk}">
                             <Button.Style>
                                 <Style TargetType="Button" BasedOn="{StaticResource ModeButtonStyle}">
@@ -465,14 +632,17 @@
                                     <DataTrigger Binding="{Binding SelectedMode}" Value="{x:Static models:AssistantMode.Chat}">
                                         <Setter Property="Visibility" Value="Visible"/>
                                     </DataTrigger>
+                                    <DataTrigger Binding="{Binding DataContext.IsCollapsed, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
                                 </Style.Triggers>
                             </Style>
                         </Border.Style>
                         <Grid Style="{StaticResource FadeInOutOnVisibility}">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="*"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
 
                                 <ScrollViewer x:Name="ChatScrollViewer"
                                               Grid.Row="0"
@@ -493,10 +663,12 @@
                                                     </Style>
                                                 </Grid.Resources>
 
-                                                <Border x:Name="Bubble"
+                                                        <Border x:Name="Bubble"
                                                         Padding="10"
                                                         Margin="0 6 8 6"
                                                         Background="{DynamicResource ButtonBackground}"
+                                                        BorderBrush="Transparent"
+                                                        BorderThickness="0"
                                                         CornerRadius="12"
                                                         HorizontalAlignment="Left"
                                                         MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ScrollViewer}}">
@@ -505,11 +677,13 @@
                                                             <RowDefinition Height="Auto"/>
                                                             <RowDefinition Height="Auto"/>
                                                             <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
                                                         </Grid.RowDefinitions>
                                                         <StackPanel Orientation="Horizontal">
-                                                            <TextBlock Text="{Binding Sender}"
-                                                                       FontWeight="SemiBold"
-                                                                       Foreground="{DynamicResource SubtleText}"/>
+                                                            <TextBlock x:Name="SenderText"
+                                                                       Text="{Binding Sender}"
+                                                                       FontWeight="SemiBold"/>
                                                             <StackPanel x:Name="TypingDotsPanel" Orientation="Horizontal" Visibility="Collapsed" Margin="6 2 0 0">
                                                                 <Ellipse Style="{StaticResource TypingDotStyle}">
                                                                     <Ellipse.Triggers>
@@ -572,20 +746,96 @@
                                                                            Foreground="{DynamicResource SubtleText}"/>
                                                             </Border>
                                                         </StackPanel>
-                                                        <TextBox Grid.Row="1"
-                                                                 Text="{Binding Text}"
-                                                                 TextWrapping="Wrap"
-                                                                 AcceptsReturn="True"
-                                                                 IsReadOnly="True"
-                                                                 BorderThickness="0"
-                                                                 Background="Transparent"
-                                                                 Foreground="{DynamicResource OverlayForeground}"
-                                                                 VerticalScrollBarVisibility="Hidden"
-                                                                 HorizontalScrollBarVisibility="Hidden"
-                                                                 Padding="0"
-                                                                 Margin="0 6 0 0"
-                                                                 MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ScrollViewer}}"/>
-                                                        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0 10 0 0">
+                                                        <ToggleButton Grid.Row="1"
+                                                                      IsChecked="{Binding IsReasoningExpanded}"
+                                                                      Margin="0 6 0 0">
+                                                            <ToggleButton.Style>
+                                                                <Style TargetType="ToggleButton" BasedOn="{StaticResource ThoughtToggleStyle}">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding HasReasoning}" Value="True">
+                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </ToggleButton.Style>
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <TextBlock Text="Thinking..."
+                                                                           FontSize="12">
+                                                                    <TextBlock.Style>
+                                                                        <Style TargetType="TextBlock">
+                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding ThoughtSeconds}" Value="0">
+                                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </TextBlock.Style>
+                                                                </TextBlock>
+                                                                <TextBlock Text="{Binding ThoughtSeconds, StringFormat=Thought for {0:0.0} seconds}"
+                                                                           FontSize="12">
+                                                                    <TextBlock.Style>
+                                                                        <Style TargetType="TextBlock">
+                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding ThoughtSeconds}" Value="0">
+                                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </TextBlock.Style>
+                                                                </TextBlock>
+                                                                <TextBlock Text="&#xE70D;" FontFamily="Segoe MDL2 Assets" FontSize="12" Margin="8 0 0 0">
+                                                                    <TextBlock.RenderTransform>
+                                                                        <RotateTransform Angle="0"/>
+                                                                    </TextBlock.RenderTransform>
+                                                                    <TextBlock.Style>
+                                                                        <Style TargetType="TextBlock">
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding IsReasoningExpanded}" Value="True">
+                                                                                    <Setter Property="RenderTransform">
+                                                                                        <Setter.Value>
+                                                                                            <RotateTransform Angle="180"/>
+                                                                                        </Setter.Value>
+                                                                                    </Setter>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </TextBlock.Style>
+                                                                </TextBlock>
+                                                            </StackPanel>
+                                                        </ToggleButton>
+                                                        <TextBlock Grid.Row="2"
+                                                                   Text="{Binding Reasoning}"
+                                                                   TextWrapping="Wrap"
+                                                                   Foreground="{DynamicResource SubtleText}"
+                                                                   FontSize="12"
+                                                                   Margin="0 6 0 0">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsReasoningExpanded}" Value="True">
+                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                        <RichTextBox x:Name="MessageText"
+                                                                     Grid.Row="3"
+                                                                     IsReadOnly="True"
+                                                                     BorderThickness="0"
+                                                                     Background="Transparent"
+                                                                     VerticalScrollBarVisibility="Hidden"
+                                                                     HorizontalScrollBarVisibility="Hidden"
+                                                                     Padding="0"
+                                                                     Margin="0 10 0 0"
+                                                                     MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ScrollViewer}}"
+                                                                     Focusable="False"
+                                                                     conv:MarkdownText.Text="{Binding Text}"/>
+                                                        <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0 10 0 0">
                                                             <StackPanel.Style>
                                                                 <Style TargetType="StackPanel">
                                                                     <Setter Property="Visibility" Value="Collapsed"/>
@@ -599,14 +849,24 @@
                                                             <Button Style="{StaticResource ChatActionButtonStyle}"
                                                                     Command="{Binding DataContext.CopyMessageCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                     CommandParameter="{Binding}"
+                                                                    ToolTip="Copy to Clipboard"
                                                                     Margin="0 0 8 0">
                                                                 <TextBlock Text="&#xE8C8;" FontFamily="Segoe MDL2 Assets"/>
                                                             </Button>
                                                             <Button Style="{StaticResource ChatActionButtonStyle}"
                                                                     Command="{Binding DataContext.RetryMessageCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                     CommandParameter="{Binding}"
-                                                                    IsEnabled="{Binding IsRetryable}">
+                                                                    IsEnabled="{Binding IsRetryable}"
+                                                                    ToolTip="Retry">
                                                                 <TextBlock Text="&#xE72C;" FontFamily="Segoe MDL2 Assets"/>
+                                                            </Button>
+                                                            <Button Style="{StaticResource ChatActionButtonStyle}"
+                                                                    Command="{Binding DataContext.StopMessageCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                    CommandParameter="{Binding}"
+                                                                    IsEnabled="{Binding IsCancellable}"
+                                                                    ToolTip="Stop"
+                                                                    Margin="8 0 0 0">
+                                                                <TextBlock Text="&#xE71A;" FontFamily="Segoe MDL2 Assets"/>
                                                             </Button>
                                                         </StackPanel>
                                                     </Grid>
@@ -614,13 +874,21 @@
 
                                             </Grid>
                                                 <DataTemplate.Triggers>
-                                                    <DataTrigger Binding="{Binding IsAssistant}" Value="True">
-                                                        <Setter TargetName="Bubble" Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
+                                                <DataTrigger Binding="{Binding IsAssistant}" Value="True">
+                                                        <Setter TargetName="Bubble" Property="Background" Value="{DynamicResource AssistantBubbleBackground}"/>
+                                                        <Setter TargetName="Bubble" Property="BorderBrush" Value="{DynamicResource AssistantBubbleBorder}"/>
+                                                        <Setter TargetName="Bubble" Property="BorderThickness" Value="1"/>
                                                         <Setter TargetName="Bubble" Property="HorizontalAlignment" Value="Left"/>
-                                                        <Setter TargetName="Bubble" Property="Width" Value="520"/>
+                                                        <Setter TargetName="MessageText" Property="Foreground" Value="{DynamicResource AssistantBubbleForeground}"/>
+                                                        <Setter TargetName="SenderText" Property="Foreground" Value="{DynamicResource SubtleText}"/>
                                                     </DataTrigger>
                                                 <DataTrigger Binding="{Binding IsAssistant}" Value="False">
                                                     <Setter TargetName="Bubble" Property="HorizontalAlignment" Value="Right"/>
+                                                    <Setter TargetName="Bubble" Property="Background" Value="{DynamicResource UserBubbleBackground}"/>
+                                                    <Setter TargetName="Bubble" Property="BorderThickness" Value="0"/>
+                                                    <Setter TargetName="Bubble" Property="BorderBrush" Value="Transparent"/>
+                                                    <Setter TargetName="MessageText" Property="Foreground" Value="{DynamicResource UserBubbleForeground}"/>
+                                                    <Setter TargetName="SenderText" Property="Foreground" Value="{DynamicResource UserBubbleForeground}"/>
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding IsStreaming}" Value="True">
                                                     <Setter TargetName="TypingDotsPanel" Property="Visibility" Value="Visible"/>
@@ -635,6 +903,7 @@
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBox Grid.Column="0"
                                          Text="{Binding ChatInput, UpdateSourceTrigger=PropertyChanged}"
@@ -646,20 +915,29 @@
                                         <KeyBinding Key="Enter" Command="{Binding SendChatCommand}"/>
                                     </TextBox.InputBindings>
                                 </TextBox>
-                                    <Button Grid.Column="1"
-                                            Command="{Binding SendChatCommand}"
-                                            Margin="10 0 0 0"
-                                            Style="{StaticResource SendButtonStyle}"
-                                            Cursor="Hand">
-                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                            <TextBlock Text="&#xE122;" FontFamily="Segoe MDL2 Assets" Margin="0 0 6 0" VerticalAlignment="Center"/>
-                                            <TextBlock Text="Send" VerticalAlignment="Center"/>
-                                        </StackPanel>
-                                    </Button>
+                                <Button Grid.Column="1"
+                                        Command="{Binding ResetConversationCommand}"
+                                        Margin="10 0 0 0"
+                                        Style="{StaticResource ChatActionButtonStyle}"
+                                        Cursor="Hand"
+                                        ToolTip="Reset conversation">
+                                    <TextBlock Text="&#xE895;" FontFamily="Segoe MDL2 Assets"/>
+                                </Button>
+                                <Button Grid.Column="2"
+                                        Command="{Binding SendChatCommand}"
+                                        Margin="10 0 0 0"
+                                        Style="{StaticResource SendButtonStyle}"
+                                        Cursor="Hand">
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <TextBlock Text="&#xE122;" FontFamily="Segoe MDL2 Assets" Margin="0 0 6 0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Send" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
                                 </Grid>
                         </Grid>
                     </Border>
 
+                    <!-- Talk mode -->
                     <Grid Grid.Row="1">
                         <Grid.Style>
                             <Style TargetType="Grid" BasedOn="{StaticResource FadeInOutOnVisibility}">
@@ -668,21 +946,520 @@
                                     <DataTrigger Binding="{Binding SelectedMode}" Value="{x:Static models:AssistantMode.Talk}">
                                         <Setter Property="Visibility" Value="Visible"/>
                                     </DataTrigger>
-                                    <DataTrigger Binding="{Binding SelectedMode}" Value="{x:Static models:AssistantMode.Share}">
-                                        <Setter Property="Visibility" Value="Visible"/>
+                                    <DataTrigger Binding="{Binding DataContext.IsCollapsed, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
                         </Grid.Style>
                         <Border Padding="18" Background="{DynamicResource ContentBackground}" CornerRadius="10">
-                            <TextBlock Text="{Binding ModeContent}"
-                                       Foreground="{DynamicResource OverlayForeground}"
-                                       FontSize="14"
-                                       VerticalAlignment="Center"
-                                       TextWrapping="Wrap"/>
+                            <Grid>
+                                <Grid.Resources>
+                                    <SolidColorBrush x:Key="MicListeningGlowBrush" Color="#22C55E"/>
+                                    <SolidColorBrush x:Key="MicSpeakingGlowBrush" Color="#F59E0B"/>
+                                    <Storyboard x:Key="VoiceCycleStoryboard">
+                                        <!-- Breathing (0-5s) -->
+                                        <DoubleAnimation Storyboard.TargetName="MicCluster"
+                                                         Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                         From="1" To="1.08"
+                                                         Duration="0:0:1.2"
+                                                         AutoReverse="True"
+                                                         RepeatBehavior="4x"/>
+                                        <DoubleAnimation Storyboard.TargetName="MicCluster"
+                                                         Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                         From="1" To="1.08"
+                                                         Duration="0:0:1.2"
+                                                         AutoReverse="True"
+                                                         RepeatBehavior="4x"/>
+                                        <DoubleAnimation Storyboard.TargetName="ListeningGlow"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         From="0.0" To="0.22"
+                                                         Duration="0:0:0.4"
+                                                         AutoReverse="True"
+                                                         RepeatBehavior="6x"/>
+                                        <!-- Thinking (5-7s) -->
+                                        <DoubleAnimation Storyboard.TargetName="ThinkingRing"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         From="0" To="1"
+                                                         BeginTime="0:0:5"
+                                                         Duration="0:0:0.3"/>
+                                        <DoubleAnimation Storyboard.TargetName="ThinkingTrail"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         From="0" To="1"
+                                                         BeginTime="0:0:5"
+                                                         Duration="0:0:0.2"/>
+                                        <DoubleAnimation Storyboard.TargetName="ThinkingTrailRotate"
+                                                         Storyboard.TargetProperty="Angle"
+                                                         From="0" To="360"
+                                                         BeginTime="0:0:5"
+                                                         Duration="0:0:2"
+                                                         RepeatBehavior="1x"/>
+                                        <!-- Speaking (7-9s) -->
+                                        <DoubleAnimation Storyboard.TargetName="MicIcon"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         From="1" To="0"
+                                                         BeginTime="0:0:7"
+                                                         Duration="0:0:0.15"/>
+                                        <DoubleAnimation Storyboard.TargetName="ThinkingRing"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         From="1" To="0"
+                                                         BeginTime="0:0:7"
+                                                         Duration="0:0:0.2"/>
+                                        <DoubleAnimation Storyboard.TargetName="ThinkingTrail"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         From="1" To="0"
+                                                         BeginTime="0:0:7"
+                                                         Duration="0:0:0.2"/>
+                                        <DoubleAnimation Storyboard.TargetName="SpeakBar1"
+                                                         Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                         From="0.5" To="1.2"
+                                                         BeginTime="0:0:7"
+                                                         Duration="0:0:0.5"
+                                                         AutoReverse="True"
+                                                         RepeatBehavior="4x"/>
+                                        <DoubleAnimation Storyboard.TargetName="SpeakBar2"
+                                                         Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                         From="0.6" To="1.4"
+                                                         BeginTime="0:0:7"
+                                                         Duration="0:0:0.4"
+                                                         AutoReverse="True"
+                                                         RepeatBehavior="5x"/>
+                                        <DoubleAnimation Storyboard.TargetName="SpeakBar3"
+                                                         Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                         From="0.7" To="1.6"
+                                                         BeginTime="0:0:7"
+                                                         Duration="0:0:0.6"
+                                                         AutoReverse="True"
+                                                         RepeatBehavior="3x"/>
+                                        <DoubleAnimation Storyboard.TargetName="SpeakingBars"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         From="0" To="1"
+                                                         BeginTime="0:0:7"
+                                                         Duration="0:0:0.2"/>
+                                        <DoubleAnimation Storyboard.TargetName="SpeakingGlow"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         From="0.0" To="0.22"
+                                                         BeginTime="0:0:7"
+                                                         Duration="0:0:0.2"
+                                                         AutoReverse="True"
+                                                         RepeatBehavior="4x"/>
+                                        <DoubleAnimation Storyboard.TargetName="MicIcon"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         From="0" To="1"
+                                                         BeginTime="0:0:9"
+                                                         Duration="0:0:0.15"/>
+                                        <DoubleAnimation Storyboard.TargetName="SpeakingBars"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         From="1" To="0"
+                                                         BeginTime="0:0:9"
+                                                         Duration="0:0:0.2"/>
+                                    </Storyboard>
+                                    <Storyboard x:Key="VoiceSpeakStoryboard">
+                                        <DoubleAnimation Storyboard.TargetName="MicIcon"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         From="1" To="0"
+                                                         Duration="0:0:0.15"/>
+                                        <DoubleAnimation Storyboard.TargetName="SpeakingBars"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         From="0" To="1"
+                                                         Duration="0:0:0.2"/>
+                                        <DoubleAnimation Storyboard.TargetName="SpeakBar1"
+                                                         Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                         From="0.5" To="1.2"
+                                                         Duration="0:0:0.5"
+                                                         AutoReverse="True"
+                                                         RepeatBehavior="4x"/>
+                                        <DoubleAnimation Storyboard.TargetName="SpeakBar2"
+                                                         Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                         From="0.6" To="1.4"
+                                                         Duration="0:0:0.4"
+                                                         AutoReverse="True"
+                                                         RepeatBehavior="5x"/>
+                                        <DoubleAnimation Storyboard.TargetName="SpeakBar3"
+                                                         Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                         From="0.7" To="1.6"
+                                                         Duration="0:0:0.6"
+                                                         AutoReverse="True"
+                                                         RepeatBehavior="3x"/>
+                                        <DoubleAnimation Storyboard.TargetName="SpeakingGlow"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         From="0.0" To="0.22"
+                                                         Duration="0:0:0.2"
+                                                         AutoReverse="True"
+                                                         RepeatBehavior="4x"/>
+                                        <DoubleAnimation Storyboard.TargetName="MicIcon"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         From="0" To="1"
+                                                         BeginTime="0:0:2"
+                                                         Duration="0:0:0.15"/>
+                                        <DoubleAnimation Storyboard.TargetName="SpeakingBars"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         From="1" To="0"
+                                                         BeginTime="0:0:2"
+                                                         Duration="0:0:0.2"/>
+                                    </Storyboard>
+                                </Grid.Resources>
+
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+
+                                <Grid x:Name="MicCluster"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"
+                                      RenderTransformOrigin="0.5,0.5">
+                                    <Grid.RenderTransform>
+                                        <ScaleTransform ScaleX="1" ScaleY="1"/>
+                                    </Grid.RenderTransform>
+                                    <Ellipse x:Name="ListeningGlow"
+                                             Width="118" Height="118"
+                                             Fill="{StaticResource MicListeningGlowBrush}"
+                                             Opacity="0"/>
+                                    <Ellipse x:Name="SpeakingGlow"
+                                             Width="118" Height="118"
+                                             Fill="{StaticResource MicSpeakingGlowBrush}"
+                                             Opacity="0"/>
+                                    <Ellipse x:Name="MicGlow"
+                                             Width="110" Height="110"
+                                             Fill="{DynamicResource ButtonBackground}"
+                                             Stroke="{DynamicResource ButtonBorder}"
+                                             StrokeThickness="1.2"
+                                             Opacity="0.95"/>
+                                    <Canvas Width="124" Height="124" IsHitTestVisible="False">
+                                        <Ellipse x:Name="ThinkingRing"
+                                                 Width="124" Height="124"
+                                                 Stroke="{DynamicResource ButtonActiveBorder}"
+                                                 StrokeThickness="1.2"
+                                                 Opacity="0">
+                                            <Ellipse.StrokeDashArray>2 4</Ellipse.StrokeDashArray>
+                                        </Ellipse>
+                                        <Path x:Name="ThinkingTrail"
+                                              StrokeThickness="2"
+                                              Opacity="0"
+                                              StrokeStartLineCap="Round"
+                                              StrokeEndLineCap="Round">
+                                            <Path.Stroke>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                    <GradientStop Color="#22C55E" Offset="0"/>
+                                                    <GradientStop Color="#22C55E" Offset="0.5" />
+                                                    <GradientStop Color="Transparent" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Path.Stroke>
+                                            <Path.Data>
+                                                <PathGeometry>
+                                                    <PathFigure StartPoint="62,6">
+                                                        <ArcSegment Point="106,30" Size="50,50" SweepDirection="Clockwise" IsLargeArc="False"/>
+                                                    </PathFigure>
+                                                </PathGeometry>
+                                            </Path.Data>
+                                            <Path.RenderTransform>
+                                                <RotateTransform x:Name="ThinkingTrailRotate" Angle="0" CenterX="62" CenterY="62"/>
+                                            </Path.RenderTransform>
+                                        </Path>
+                                    </Canvas>
+                                    <StackPanel x:Name="SpeakingBars"
+                                                Orientation="Horizontal"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center"
+                                                Opacity="0"
+                                                Margin="0 0 0 8">
+                                        <Rectangle x:Name="SpeakBar1" Width="6" Height="16" Fill="{DynamicResource OverlayForeground}">
+                                            <Rectangle.RenderTransform>
+                                                <ScaleTransform ScaleX="1" ScaleY="0.5" CenterY="8"/>
+                                            </Rectangle.RenderTransform>
+                                        </Rectangle>
+                                        <Rectangle x:Name="SpeakBar2" Width="6" Height="22" Fill="{DynamicResource OverlayForeground}" Margin="6 0 6 0">
+                                            <Rectangle.RenderTransform>
+                                                <ScaleTransform ScaleX="1" ScaleY="0.6" CenterY="11"/>
+                                            </Rectangle.RenderTransform>
+                                        </Rectangle>
+                                        <Rectangle x:Name="SpeakBar3" Width="6" Height="14" Fill="{DynamicResource OverlayForeground}">
+                                            <Rectangle.RenderTransform>
+                                                <ScaleTransform ScaleX="1" ScaleY="0.7" CenterY="7"/>
+                                            </Rectangle.RenderTransform>
+                                        </Rectangle>
+                                    </StackPanel>
+                                    <Button Style="{StaticResource MicButtonStyle}"
+                                            ToolTip="Start listening">
+                                        <TextBlock x:Name="MicIcon"
+                                                   Text="&#xE720;"
+                                                   FontFamily="Segoe MDL2 Assets"
+                                                   FontSize="32"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
+                                        <Button.Triggers>
+                                            <EventTrigger RoutedEvent="Button.Click">
+                                                <BeginStoryboard Storyboard="{StaticResource VoiceCycleStoryboard}"/>
+                                            </EventTrigger>
+                                        </Button.Triggers>
+                                    </Button>
+                                </Grid>
+                                <Border HorizontalAlignment="Left"
+                                        VerticalAlignment="Bottom"
+                                        Margin="6 0 0 6"
+                                        Background="{DynamicResource PanelBackground}"
+                                        CornerRadius="10"
+                                        Padding="8 6">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="Continuous listening"
+                                                   Foreground="{DynamicResource SubtleText}"
+                                                   FontSize="12"
+                                                   VerticalAlignment="Center"
+                                                   Margin="0 0 8 0"/>
+                                        <ToggleButton Width="34"
+                                                      Height="18"
+                                                      Background="{DynamicResource ButtonBackground}"
+                                                      BorderBrush="{DynamicResource ButtonBorder}"
+                                                      BorderThickness="1"
+                                                      HorizontalAlignment="Right">
+                                            <ToggleButton.Template>
+                                                <ControlTemplate TargetType="ToggleButton">
+                                                    <Border x:Name="Track"
+                                                            Background="{TemplateBinding Background}"
+                                                            BorderBrush="{TemplateBinding BorderBrush}"
+                                                            BorderThickness="{TemplateBinding BorderThickness}"
+                                                            CornerRadius="9">
+                                                        <Grid ClipToBounds="True">
+                                                            <Ellipse x:Name="Thumb"
+                                                                     Width="12" Height="12"
+                                                                     Fill="{DynamicResource OverlayForeground}"
+                                                                     HorizontalAlignment="Left"
+                                                                     VerticalAlignment="Center"
+                                                                     Margin="3 0 0 0">
+                                                                <Ellipse.RenderTransform>
+                                                                    <TranslateTransform x:Name="ThumbTranslate" X="0" Y="0"/>
+                                                                </Ellipse.RenderTransform>
+                                                            </Ellipse>
+                                                        </Grid>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsChecked" Value="True">
+                                                            <Setter TargetName="Track" Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
+                                                            <Setter TargetName="Track" Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}"/>
+                                                            <Trigger.EnterActions>
+                                                                <BeginStoryboard>
+                                                                    <Storyboard>
+                                                                        <DoubleAnimation Storyboard.TargetName="ThumbTranslate"
+                                                                                         Storyboard.TargetProperty="X"
+                                                                                         To="16"
+                                                                                         Duration="0:0:0.18"
+                                                                                         EasingFunction="{StaticResource QuadraticEaseOut}"/>
+                                                                    </Storyboard>
+                                                                </BeginStoryboard>
+                                                            </Trigger.EnterActions>
+                                                            <Trigger.ExitActions>
+                                                                <BeginStoryboard>
+                                                                    <Storyboard>
+                                                                        <DoubleAnimation Storyboard.TargetName="ThumbTranslate"
+                                                                                         Storyboard.TargetProperty="X"
+                                                                                         To="3"
+                                                                                         Duration="0:0:0.18"
+                                                                                         EasingFunction="{StaticResource QuadraticEaseOut}"/>
+                                                                    </Storyboard>
+                                                                </BeginStoryboard>
+                                                            </Trigger.ExitActions>
+                                                        </Trigger>
+                                                        <Trigger Property="IsEnabled" Value="False">
+                                                            <Setter TargetName="Track" Property="Opacity" Value="0.6"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </ToggleButton.Template>
+                                        </ToggleButton>
+                                    </StackPanel>
+                                </Border>
+                                <Button Width="32"
+                                        Height="32"
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Bottom"
+                                        Margin="0 48 6 6"
+                                        Style="{StaticResource IconButtonStyle}"
+                                        ToolTip="Replay last voice response">
+                                    <TextBlock Text="&#xE768;" FontFamily="Segoe MDL2 Assets" FontSize="14"/>
+                                    <Button.Triggers>
+                                        <EventTrigger RoutedEvent="Button.Click">
+                                            <BeginStoryboard Storyboard="{StaticResource VoiceSpeakStoryboard}"/>
+                                        </EventTrigger>
+                                    </Button.Triggers>
+                                </Button>
+                            </Grid>
                         </Border>
                     </Grid>
 
+                    <!-- Share mode -->
+                    <Grid Grid.Row="1">
+                        <Grid.Style>
+                            <Style TargetType="Grid" BasedOn="{StaticResource FadeInOutOnVisibility}">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedMode}" Value="{x:Static models:AssistantMode.Share}">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding DataContext.IsCollapsed, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Grid.Style>
+                        <Border Padding="18" Background="{DynamicResource ContentBackground}" CornerRadius="10">
+                            <Grid>
+                                <Grid x:Name="ShareCluster"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"
+                                      RenderTransformOrigin="0.5,0.5">
+                                    <Grid.RenderTransform>
+                                        <ScaleTransform ScaleX="1" ScaleY="1"/>
+                                    </Grid.RenderTransform>
+                                    <Ellipse x:Name="ShareRing"
+                                             Width="140" Height="140"
+                                             Stroke="{DynamicResource ButtonActiveBorder}"
+                                             StrokeThickness="1.2"
+                                             Opacity="0.2">
+                                        <Ellipse.Style>
+                                            <Style TargetType="Ellipse">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsSharing}" Value="True">
+                                                        <DataTrigger.EnterActions>
+                                                            <BeginStoryboard>
+                                                                <Storyboard RepeatBehavior="Forever">
+                                                                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                     From="0.15" To="0.35"
+                                                                                     Duration="0:0:1.4"
+                                                                                     AutoReverse="True"/>
+                                                                </Storyboard>
+                                                            </BeginStoryboard>
+                                                        </DataTrigger.EnterActions>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Ellipse.Style>
+                                    </Ellipse>
+                                    <Ellipse Width="120" Height="120"
+                                             Fill="{DynamicResource ButtonBackground}"
+                                             Stroke="{DynamicResource ButtonBorder}"
+                                             StrokeThickness="1.2"
+                                             Opacity="0.95"/>
+                                    <Button Command="{Binding ToggleShareCommand}">
+                                        <Grid>
+                                            <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="30" Text="&#xE72D;">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Opacity" Value="1"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsSharing}" Value="True">
+                                                                <Setter Property="Opacity" Value="0"/>
+                                                                <DataTrigger.EnterActions>
+                                                                    <BeginStoryboard>
+                                                                        <Storyboard>
+                                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                             To="0"
+                                                                                             Duration="0:0:0.18"
+                                                                                             EasingFunction="{StaticResource QuadraticEaseOut}"/>
+                                                                        </Storyboard>
+                                                                    </BeginStoryboard>
+                                                                </DataTrigger.EnterActions>
+                                                                <DataTrigger.ExitActions>
+                                                                    <BeginStoryboard>
+                                                                        <Storyboard>
+                                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                             To="1"
+                                                                                             Duration="0:0:0.18"
+                                                                                             EasingFunction="{StaticResource QuadraticEaseOut}"/>
+                                                                        </Storyboard>
+                                                                    </BeginStoryboard>
+                                                                </DataTrigger.ExitActions>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="30" Text="&#xE711;" Opacity="0">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsSharing}" Value="True">
+                                                                <Setter Property="Opacity" Value="1"/>
+                                                                <DataTrigger.EnterActions>
+                                                                    <BeginStoryboard>
+                                                                        <Storyboard>
+                                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                             To="1"
+                                                                                             Duration="0:0:0.18"
+                                                                                             EasingFunction="{StaticResource QuadraticEaseOut}"/>
+                                                                        </Storyboard>
+                                                                    </BeginStoryboard>
+                                                                </DataTrigger.EnterActions>
+                                                                <DataTrigger.ExitActions>
+                                                                    <BeginStoryboard>
+                                                                        <Storyboard>
+                                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                             To="0"
+                                                                                             Duration="0:0:0.18"
+                                                                                             EasingFunction="{StaticResource QuadraticEaseOut}"/>
+                                                                        </Storyboard>
+                                                                    </BeginStoryboard>
+                                                                </DataTrigger.ExitActions>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Grid>
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource ShareButtonStyle}">
+                                                <Setter Property="ToolTip" Value="Start screen share"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsSharing}" Value="True">
+                                                        <Setter Property="ToolTip" Value="Stop screen share"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                    </Button>
+                                    <Ellipse x:Name="RecDot"
+                                             Width="10" Height="10"
+                                             Fill="#EF4444"
+                                             Stroke="#B91C1C"
+                                             StrokeThickness="1"
+                                             HorizontalAlignment="Right"
+                                             VerticalAlignment="Top"
+                                             Margin="0 8 8 0"
+                                             Opacity="0">
+                                        <Ellipse.Style>
+                                            <Style TargetType="Ellipse">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsSharing}" Value="True">
+                                                        <Setter Property="Opacity" Value="1"/>
+                                                        <DataTrigger.EnterActions>
+                                                            <BeginStoryboard>
+                                                                <Storyboard RepeatBehavior="Forever">
+                                                                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                     From="0.35" To="1"
+                                                                                     Duration="0:0:0.8"
+                                                                                     AutoReverse="True"/>
+                                                                </Storyboard>
+                                                            </BeginStoryboard>
+                                                        </DataTrigger.EnterActions>
+                                                        <DataTrigger.ExitActions>
+                                                            <BeginStoryboard>
+                                                                <Storyboard>
+                                                                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                     To="0"
+                                                                                     Duration="0:0:0.1"/>
+                                                                </Storyboard>
+                                                            </BeginStoryboard>
+                                                        </DataTrigger.ExitActions>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Ellipse.Style>
+                                    </Ellipse>
+                                </Grid>
+                            </Grid>
+                        </Border>
+                    </Grid>
+
+                    <!-- Settings mode -->
                     <Grid Grid.Row="1">
                         <Grid.Style>
                             <Style TargetType="Grid" BasedOn="{StaticResource FadeInOutOnVisibility}">
@@ -690,6 +1467,9 @@
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding SelectedMode}" Value="{x:Static models:AssistantMode.Settings}">
                                         <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding DataContext.IsCollapsed, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
@@ -765,6 +1545,19 @@
                                                              Style="{StaticResource RoundedTextBoxStyle}"/>
                                                 </StackPanel>
                                             </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Margin="0 8 0 0" VerticalAlignment="Center">
+                                                <TextBlock Text="Thinking (reasoning)" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <RadioButton Content="Enabled"
+                                                                 GroupName="ProviderThink"
+                                                                 Style="{StaticResource ChipRadioStyle}"
+                                                                 IsChecked="{Binding Settings.ProviderThink, Converter={StaticResource BoolEqualityConverter}, ConverterParameter=True}"/>
+                                                    <RadioButton Content="Disabled"
+                                                                 GroupName="ProviderThink"
+                                                                 Style="{StaticResource ChipRadioStyle}"
+                                                                 IsChecked="{Binding Settings.ProviderThink, Converter={StaticResource BoolEqualityConverter}, ConverterParameter=False}"/>
+                                                </StackPanel>
+                                            </StackPanel>
                                             <StackPanel Orientation="Vertical" Margin="0 8 0 0">
                                                 <TextBlock Text="API Key (Hosted only)" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 0 4"/>
                                                 <TextBox Width="240"
@@ -820,12 +1613,183 @@
                 </Grid>
             </Border>
 
-            <TextBlock Grid.Row="2"
-                       Text="Ctrl+Space to toggle"
-                       Foreground="{DynamicResource SubtleText}"
-                       FontSize="12"
-                       HorizontalAlignment="Right"
-                       Margin="0 10 4 0"/>
+                <TextBlock Grid.Row="2"
+                           Text="Ctrl+Space to toggle"
+                           Foreground="{DynamicResource SubtleText}"
+                           FontSize="12"
+                           HorizontalAlignment="Right"
+                           Margin="0 10 4 0">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DataContext.IsCollapsed, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </Grid>
+
+            <Grid x:Name="CollapsedLayout">
+                <Grid.Style>
+                    <Style TargetType="Grid">
+                        <Setter Property="Opacity" Value="0"/>
+                        <Setter Property="IsHitTestVisible" Value="False"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding DataContext.IsCollapsed, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                <Setter Property="IsHitTestVisible" Value="True"/>
+                                <DataTrigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                             To="1"
+                                                             Duration="0:0:0.12"
+                                                             EasingFunction="{StaticResource QuadraticEaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </DataTrigger.EnterActions>
+                                <DataTrigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                             To="0"
+                                                             Duration="0:0:0.12"
+                                                             EasingFunction="{StaticResource QuadraticEaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </DataTrigger.ExitActions>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Grid.Style>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0" Margin="4 0 4 8" VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding AppName}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource OverlayForeground}"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="STATUS" FontSize="12" Foreground="{DynamicResource SubtleText}" Margin="0 0 8 0" VerticalAlignment="Center"/>
+                        <Ellipse Width="8" Height="8" Fill="{Binding McpStatusBrush}" VerticalAlignment="Center" Margin="0 0 6 0"/>
+                        <Ellipse Width="8" Height="8" Fill="{Binding AgentStatusBrush}" VerticalAlignment="Center" Margin="0 0 6 0"/>
+                        <Ellipse Width="8" Height="8" Fill="{Binding ProviderStatusBrush}" VerticalAlignment="Center" Margin="0 0 10 0"/>
+                        <Button Command="{Binding ToggleCollapseCommand}"
+                                Width="28"
+                                Height="28"
+                                Padding="0"
+                                ToolTip="Expand"
+                                Cursor="Hand"
+                                Style="{StaticResource IconButtonStyle}">
+                            <TextBlock Text="&#xE70E;" FontFamily="Segoe MDL2 Assets" FontSize="14" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+
+                <UniformGrid Grid.Row="1" Rows="1" Columns="4" Margin="0" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
+                    <UniformGrid.RenderTransform>
+                        <TranslateTransform Y="6"/>
+                    </UniformGrid.RenderTransform>
+                    <UniformGrid.Style>
+                        <Style TargetType="UniformGrid">
+                            <Setter Property="Opacity" Value="0"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding DataContext.IsCollapsed, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                    <DataTrigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                 To="1"
+                                                                 Duration="0:0:0.3"
+                                                                 EasingFunction="{StaticResource QuadraticEaseOut}"/>
+                                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                                                 To="0"
+                                                                 Duration="0:0:0.3"
+                                                                 EasingFunction="{StaticResource QuadraticEaseOut}"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.EnterActions>
+                                    <DataTrigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                 To="0"
+                                                                 Duration="0:0:0.3"
+                                                                 EasingFunction="{StaticResource QuadraticEaseOut}"/>
+                                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                                                 To="6"
+                                                                 Duration="0:0:0.3"
+                                                                 EasingFunction="{StaticResource QuadraticEaseOut}"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.ExitActions>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </UniformGrid.Style>
+                    <Button Command="{Binding SetModeCommand}" CommandParameter="{x:Static models:AssistantMode.Talk}">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource ModeButtonStyle}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedMode}" Value="{x:Static models:AssistantMode.Talk}">
+                                        <Setter Property="Background" Value="{StaticResource ButtonActiveBackground}"/>
+                                        <Setter Property="BorderBrush" Value="{StaticResource ButtonActiveBorder}"/>
+                                        <Setter Property="Foreground" Value="{StaticResource ModeButtonActiveForeground}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <TextBlock Text="&#xE720;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center"/>
+                    </Button>
+                    <Button Command="{Binding SetModeCommand}" CommandParameter="{x:Static models:AssistantMode.Chat}">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource ModeButtonStyle}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedMode}" Value="{x:Static models:AssistantMode.Chat}">
+                                        <Setter Property="Background" Value="{StaticResource ButtonActiveBackground}"/>
+                                        <Setter Property="BorderBrush" Value="{StaticResource ButtonActiveBorder}"/>
+                                        <Setter Property="Foreground" Value="{StaticResource ModeButtonActiveForeground}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <TextBlock Text="&#xE8F2;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center"/>
+                    </Button>
+                    <Button Command="{Binding SetModeCommand}" CommandParameter="{x:Static models:AssistantMode.Share}">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource ModeButtonStyle}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedMode}" Value="{x:Static models:AssistantMode.Share}">
+                                        <Setter Property="Background" Value="{StaticResource ButtonActiveBackground}"/>
+                                        <Setter Property="BorderBrush" Value="{StaticResource ButtonActiveBorder}"/>
+                                        <Setter Property="Foreground" Value="{StaticResource ModeButtonActiveForeground}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <TextBlock Text="&#xE72D;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center"/>
+                    </Button>
+                    <Button Command="{Binding SetModeCommand}" CommandParameter="{x:Static models:AssistantMode.Settings}">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource ModeButtonStyle}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedMode}" Value="{x:Static models:AssistantMode.Settings}">
+                                        <Setter Property="Background" Value="{StaticResource ButtonActiveBackground}"/>
+                                        <Setter Property="BorderBrush" Value="{StaticResource ButtonActiveBorder}"/>
+                                        <Setter Property="Foreground" Value="{StaticResource ModeButtonActiveForeground}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center"/>
+                    </Button>
+                </UniformGrid>
+            </Grid>
         </Grid>
     </Border>
 </Window>

@@ -1,3 +1,5 @@
 mcp
 fastapi
 uvicorn
+orjson
+typing_extensions

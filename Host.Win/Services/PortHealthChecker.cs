@@ -12,6 +12,9 @@ namespace Host.Win.Services
         private readonly string _host;
         private readonly Action<bool> _onStatusChanged;
         private readonly DispatcherTimer _timer;
+        private readonly TimeSpan _minInterval = TimeSpan.FromSeconds(2);
+        private readonly TimeSpan _maxInterval = TimeSpan.FromSeconds(10);
+        private TimeSpan _currentInterval;
         private readonly Func<Task<bool>>? _customCheck;
         private bool _disposed;
         private bool _isChecking;
@@ -26,6 +29,7 @@ namespace Host.Win.Services
             {
                 Interval = TimeSpan.FromSeconds(2)
             };
+            _currentInterval = _timer.Interval;
             _timer.Tick += OnTick;
         }
 
@@ -37,6 +41,7 @@ namespace Host.Win.Services
             _isChecking = true;
             var ready = await CheckAsync().ConfigureAwait(true);
             _onStatusChanged(ready);
+            UpdateBackoff(ready);
             _isChecking = false;
         }
 
@@ -61,6 +66,24 @@ namespace Host.Win.Services
             catch
             {
                 return false;
+            }
+        }
+
+        private void UpdateBackoff(bool ready)
+        {
+            if (ready)
+            {
+                _currentInterval = _minInterval;
+            }
+            else
+            {
+                var next = TimeSpan.FromMilliseconds(Math.Min(_currentInterval.TotalMilliseconds * 2, _maxInterval.TotalMilliseconds));
+                _currentInterval = next < _minInterval ? _minInterval : next;
+            }
+
+            if (_timer.Interval != _currentInterval)
+            {
+                _timer.Interval = _currentInterval;
             }
         }
 

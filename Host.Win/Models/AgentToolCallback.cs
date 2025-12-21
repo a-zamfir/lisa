@@ -17,5 +17,11 @@ namespace Host.Win.Models
 
         [JsonPropertyName("tool_calls")]
         public List<string> ToolCalls { get; set; } = new();
+
+        [JsonPropertyName("thinking_delta")]
+        public string? ThinkingDelta { get; set; }
+
+        [JsonPropertyName("content_delta")]
+        public string? ContentDelta { get; set; }
     }
 }

@@ -215,3 +215,6 @@ obj/
 *.userosscache
 *.sln.docstates
 *.nupkg
+
+# Internal Docs
+PENDING_IMPLEMENTATION.md

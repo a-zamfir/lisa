@@ -77,7 +77,17 @@ namespace Host.Win.Services
                 _process.ErrorDataReceived += (_, args) =>
                 {
                     if (!string.IsNullOrWhiteSpace(args.Data))
-                        Trace.TraceError($"[MCP ERR] {args.Data}");
+                    {
+                        var line = args.Data;
+                        if (line.StartsWith("INFO:", StringComparison.OrdinalIgnoreCase))
+                        {
+                            Trace.WriteLine($"[MCP] {line}");
+                        }
+                        else
+                        {
+                            Trace.TraceError($"[MCP ERR] {line}");
+                        }
+                    }
                 };
                 _process.BeginOutputReadLine();
                 _process.BeginErrorReadLine();
@@ -188,8 +198,6 @@ namespace Host.Win.Services
                 Trace.WriteLine("Installing MCP requirements...");
                 RunSilently(pythonExe, "-m pip install --upgrade pip", workingDir);
                 RunSilently(pythonExe, "-m pip install -r requirements.txt", workingDir);
-                RunSilently(pythonExe, "-m pip show fastmcp", workingDir);
-                RunSilently(pythonExe, "-m pip list", workingDir);
             }
 
             return pythonExe;
