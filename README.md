@@ -28,8 +28,9 @@ On launch, the app lives in the system tray. Use the tray menu or Ctrl+Space (gl
 - Modes: Talk / Chat / Share / Settings segmented control bound to `OverlayViewModel`.
 - Status: live probes for MCP (`<McpHost>:<McpPort>`), Agent (`<AgentHost>:<AgentPort>`), and Provider (`<ProviderHost>:<ProviderPort>`).
 - Chat UX: streaming assistant replies (content + reasoning), tool-call labels, copy/retry/stop actions per bubble, markdown rendering.
-- IPC: HTTP client for `/health`, `/input/text`, and `/input/retry` to the Python agent; UDP callbacks for thinking/tool/content streaming.
+- IPC: HTTP client for `/health`, `/input/text`, `/input/retry`, and `/input/audio` to the Python agent; UDP callbacks for thinking/tool/content streaming.
 - Context: active window title/process and screen detection stubs; agent system prompt includes local metadata (user, time, OS, locale).
+- TTS: Piper is GPL and is invoked only as an external process (no embedding/linking or redistribution); host plays generated WAV and stores last audio for replay.
 
 ## Autostart Helper
 `Services/AutoStartHelper` adds/removes HKCU Run entry. Call from installer or settings UI as needed.
