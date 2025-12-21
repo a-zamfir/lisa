@@ -43,7 +43,7 @@ flowchart LR
 ```
 
 ## Modalities & UX
-- Talk: user presses/holds mic; host captures PCM; VAD stops on silence; host uploads audio; agent transcribes; agent responds with text and speak flag; host plays TTS (phase 1 text-to-speech on host).
+- Talk: user presses/holds mic; host captures PCM; VAD stops on silence; host uploads audio; agent transcribes; agent responds with text and speak flag; host plays TTS via external Piper process (GPL, no embedding or redistribution).
 - Chat: text input in overlay; show history; send to agent; render markdown; show tool/stream status; copy/retry/stop per message.
 - Share Screen: user toggles permission; host captures snapshots (WinRT Graphics Capture) on interval/on-demand; send to agent; agent summarizes/uses vision; results inline.
 - Settings: MCP servers, voice settings, hotkeys, startup, provider selection; stored locally and synced to agent.
@@ -63,13 +63,13 @@ flowchart LR
   - Tool registry: fetched on startup and cached; injected as tools property and first-system message once per session.
   - Streaming callbacks (UDP): thinking, content chunks/done, tool phases.
   - Memory: short-term in process; long-term planned in SQLite + optional embeddings.
-  - STT/TTS: STT in agent (future); host plays TTS from agent text (phase 1).
+  - STT/TTS: STT in agent (future); host plays TTS from agent text via external Piper process (GPL boundary; subprocess only).
 - Agent.MCP (Python FastAPI):
   - `/tools` (name/description) and `/call` to execute tools.
   - Tooling: system state (CPU/RAM/disk/network/battery/uptime), process/app inspector, file/disk (large files, duplicates, disk by extension, recent changes, metadata).
 
 ### STT/TTS by Phase
-- Phase 1: Host captures audio -> Agent performs STT -> Agent returns text + speak flag/tts_text -> Host plays TTS from text.
+- Phase 1: Host captures audio -> Agent performs STT -> Agent returns text + speak flag/tts_text -> Host plays TTS via Piper as an external process (GPL isolation; no linked/embedded Piper).
 - Phase 2 (optional): Agent can return audio bytes; host only plays returned audio.
 
 ## IPC Contract (Phase 1: localhost HTTP; Phase 2: optional pipes/gRPC)
@@ -168,7 +168,7 @@ sequenceDiagram
 ```
 
 ## Tech Stack
-- Host: .NET 8 WPF, MVVM; WASAPI capture; WebRTC VAD; WinRT Graphics Capture; NAudio playback; JSON settings (SQLite later).
+- Host: .NET 8 WPF, MVVM; WASAPI capture; WebRTC VAD; WinRT Graphics Capture; NAudio playback; Piper via external process only (GPL, user-installed); JSON settings (SQLite later).
 - Agent Worker: FastAPI; Ollama/provider; MCP client; UDP callbacks; system context builder; prompts as markdown files.
 - Agent.MCP: FastAPI tools server; PowerShell/WMI under the hood; read-only tools.
 

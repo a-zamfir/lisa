@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Windows;
+using System.ComponentModel;
 using System.Windows.Threading;
 using WpfControls = System.Windows.Controls;
 using System.Windows.Documents;
@@ -46,6 +47,13 @@ namespace Host.Win.Converters
                 typeof(long),
                 typeof(MarkdownText),
                 new PropertyMetadata(0L));
+        
+        private static readonly DependencyProperty ForegroundHookedProperty =
+            DependencyProperty.RegisterAttached(
+                "ForegroundHooked",
+                typeof(bool),
+                typeof(MarkdownText),
+                new PropertyMetadata(false));
 
         private const int MaxMarkdownLength = 4000;
 
@@ -70,6 +78,7 @@ namespace Host.Win.Converters
                 return;
             }
             SetPendingText(rtb, text);
+            HookForegroundChanges(rtb);
             var timer = GetRenderTimer(rtb);
             if (timer == null)
             {
@@ -93,17 +102,48 @@ namespace Host.Win.Converters
                     SetLastRenderTicks(rtb, DateTime.UtcNow.Ticks);
                     try
                     {
-                        rtb.Document = BuildFlowDocument(pending);
+                        rtb.Document = BuildFlowDocument(pending, rtb.Foreground as WpfMedia.Brush);
                     }
                     catch
                     {
-                        rtb.Document = BuildPlainDocument(pending);
+                        rtb.Document = BuildPlainDocument(pending, rtb.Foreground as WpfMedia.Brush);
                     }
                 };
                 SetRenderTimer(rtb, timer);
             }
             timer.Stop();
             timer.Start();
+        }
+
+        private static void HookForegroundChanges(WpfControls.RichTextBox rtb)
+        {
+            if (GetForegroundHooked(rtb)) return;
+            SetForegroundHooked(rtb, true);
+            var descriptor = DependencyPropertyDescriptor.FromProperty(
+                WpfControls.Control.ForegroundProperty, typeof(WpfControls.RichTextBox));
+            descriptor?.AddValueChanged(rtb, (_, _) =>
+            {
+                var current = GetText(rtb);
+                if (string.IsNullOrEmpty(current)) return;
+                try
+                {
+                    rtb.Document = BuildFlowDocument(current, rtb.Foreground as WpfMedia.Brush);
+                }
+                catch
+                {
+                    rtb.Document = BuildPlainDocument(current, rtb.Foreground as WpfMedia.Brush);
+                }
+            });
+        }
+
+        private static void SetForegroundHooked(DependencyObject element, bool value)
+        {
+            element.SetValue(ForegroundHookedProperty, value);
+        }
+
+        private static bool GetForegroundHooked(DependencyObject element)
+        {
+            return (bool)element.GetValue(ForegroundHookedProperty);
         }
 
         private static void SetPendingText(DependencyObject element, string value)
@@ -141,11 +181,11 @@ namespace Host.Win.Converters
             element.SetValue(LastRenderTicksProperty, value);
         }
 
-        private static FlowDocument BuildFlowDocument(string text)
+        private static FlowDocument BuildFlowDocument(string text, WpfMedia.Brush? foreground)
         {
             if (text.Length > MaxMarkdownLength)
             {
-                return BuildPlainDocument(text);
+                return BuildPlainDocument(text, foreground);
             }
 
             var doc = new FlowDocument
@@ -154,6 +194,10 @@ namespace Host.Win.Converters
                 FontFamily = new WpfMedia.FontFamily("Segoe UI"),
                 FontSize = 14
             };
+            if (foreground != null)
+            {
+                doc.Foreground = foreground;
+            }
 
             var lines = text.Replace("\r\n", "\n").Split('\n');
             var paragraph = new Paragraph { Margin = new Thickness(0) };
@@ -163,7 +207,7 @@ namespace Host.Win.Converters
                 {
                     paragraph.Inlines.Add(new LineBreak());
                 }
-                foreach (var inline in ParseInline(lines[index]))
+                foreach (var inline in ParseInline(lines[index], foreground))
                 {
                     paragraph.Inlines.Add(inline);
                 }
@@ -173,7 +217,7 @@ namespace Host.Win.Converters
             return doc;
         }
 
-        private static FlowDocument BuildPlainDocument(string text)
+        private static FlowDocument BuildPlainDocument(string text, WpfMedia.Brush? foreground)
         {
             var doc = new FlowDocument
             {
@@ -181,6 +225,10 @@ namespace Host.Win.Converters
                 FontFamily = new WpfMedia.FontFamily("Segoe UI"),
                 FontSize = 14
             };
+            if (foreground != null)
+            {
+                doc.Foreground = foreground;
+            }
             var paragraph = new Paragraph { Margin = new Thickness(0) };
             var lines = text.Replace("\r\n", "\n").Split('\n');
             for (var index = 0; index < lines.Length; index++)
@@ -189,13 +237,18 @@ namespace Host.Win.Converters
                 {
                     paragraph.Inlines.Add(new LineBreak());
                 }
-                paragraph.Inlines.Add(new Run(lines[index]));
+                var run = new Run(lines[index]);
+                if (foreground != null)
+                {
+                    run.Foreground = foreground;
+                }
+                paragraph.Inlines.Add(run);
             }
             doc.Blocks.Add(paragraph);
             return doc;
         }
 
-        private static IEnumerable<Inline> ParseInline(string text)
+        private static IEnumerable<Inline> ParseInline(string text, WpfMedia.Brush? foreground)
         {
             var inlines = new List<Inline>();
             var i = 0;
@@ -207,7 +260,12 @@ namespace Host.Win.Converters
                     if (end > i + 2)
                     {
                         var content = text.Substring(i + 2, end - (i + 2));
-                        var bold = new Bold(new Run(content)) { FontWeight = FontWeights.SemiBold };
+                        var run = new Run(content);
+                        if (foreground != null)
+                        {
+                            run.Foreground = foreground;
+                        }
+                        var bold = new Bold(run) { FontWeight = FontWeights.SemiBold };
                         inlines.Add(bold);
                         i = end + 2;
                         continue;
@@ -219,7 +277,12 @@ namespace Host.Win.Converters
                     if (end > i + 1)
                     {
                         var content = text.Substring(i + 1, end - (i + 1));
-                        var italic = new Italic(new Run(content));
+                        var run = new Run(content);
+                        if (foreground != null)
+                        {
+                            run.Foreground = foreground;
+                        }
+                        var italic = new Italic(run);
                         inlines.Add(italic);
                         i = end + 1;
                         continue;
@@ -235,6 +298,10 @@ namespace Host.Win.Converters
                         {
                             FontFamily = new WpfMedia.FontFamily("Consolas")
                         };
+                        if (foreground != null)
+                        {
+                            run.Foreground = foreground;
+                        }
                         inlines.Add(run);
                         i = end + 1;
                         continue;
@@ -253,7 +320,12 @@ namespace Host.Win.Converters
                 }
                 if (sb.Length > 0)
                 {
-                    inlines.Add(new Run(sb.ToString()));
+                    var run = new Run(sb.ToString());
+                    if (foreground != null)
+                    {
+                        run.Foreground = foreground;
+                    }
+                    inlines.Add(run);
                 }
             }
 

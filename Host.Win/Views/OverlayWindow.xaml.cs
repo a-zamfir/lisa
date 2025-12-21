@@ -16,7 +16,9 @@ namespace Host.Win.Views
     {
         public bool AllowClose { get; set; }
         private OverlayViewModel? _viewModel;
-        private bool _isResizing;
+        private Storyboard? _listeningStoryboard;
+        private Storyboard? _processingStoryboard;
+        private Storyboard? _speakingStoryboard;
 
         public OverlayWindow()
         {
@@ -123,6 +125,7 @@ namespace Host.Win.Views
                 _viewModel.PropertyChanged += ViewModel_PropertyChanged;
                 Width = _viewModel.OverlayWidth;
                 Height = _viewModel.OverlayHeight;
+                UpdateVoiceState();
             }
         }
 
@@ -133,12 +136,19 @@ namespace Host.Win.Views
                 || e.PropertyName == nameof(OverlayViewModel.OverlayHeight))
             {
                 ApplyResize(_viewModel.OverlayWidth, _viewModel.OverlayHeight);
+                return;
+            }
+
+            if (e.PropertyName == nameof(OverlayViewModel.IsListening)
+                || e.PropertyName == nameof(OverlayViewModel.IsProcessing)
+                || e.PropertyName == nameof(OverlayViewModel.IsSpeaking))
+            {
+                UpdateVoiceState();
             }
         }
 
         private void ApplyResize(double targetWidth, double targetHeight)
         {
-            _isResizing = false;
             BeginAnimation(WidthProperty, null);
             BeginAnimation(HeightProperty, null);
             BeginAnimation(LeftProperty, null);
@@ -158,6 +168,173 @@ namespace Host.Win.Views
             {
                 ChatScrollViewer?.ScrollToEnd();
             });
+        }
+
+        private void UpdateVoiceState()
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.InvokeAsync(UpdateVoiceState);
+                return;
+            }
+
+            if (_viewModel == null) return;
+            EnsureVoiceStoryboards();
+            StopVoiceStoryboards();
+            StopProcessingAnimation();
+
+            if (_viewModel.IsSpeaking)
+            {
+                ApplyVoiceVisuals(showListening: false, showProcessing: false, showSpeaking: true);
+                _speakingStoryboard?.Begin();
+            }
+            else if (_viewModel.IsProcessing)
+            {
+                ApplyVoiceVisuals(showListening: false, showProcessing: true, showSpeaking: false);
+                StartProcessingAnimation();
+            }
+            else if (_viewModel.IsListening)
+            {
+                ApplyVoiceVisuals(showListening: true, showProcessing: false, showSpeaking: false);
+                _listeningStoryboard?.Begin();
+            }
+            else
+            {
+                ApplyVoiceVisuals(showListening: false, showProcessing: false, showSpeaking: false);
+            }
+        }
+
+        private void EnsureVoiceStoryboards()
+        {
+            if (_listeningStoryboard != null && _processingStoryboard != null && _speakingStoryboard != null)
+            {
+                return;
+            }
+
+            if (MicCluster == null || ListeningGlow == null || ThinkingRing == null || ThinkingTrail == null || ThinkingTrailRotate == null
+                || SpeakingBars == null || SpeakingGlow == null || MicIcon == null)
+            {
+                return;
+            }
+
+            var ease = new QuadraticEase { EasingMode = EasingMode.EaseInOut };
+
+            _listeningStoryboard = new Storyboard { RepeatBehavior = RepeatBehavior.Forever };
+            var scaleX = new DoubleAnimation(1, 1.08, TimeSpan.FromSeconds(1.2)) { AutoReverse = true, EasingFunction = ease };
+            var scaleY = new DoubleAnimation(1, 1.08, TimeSpan.FromSeconds(1.2)) { AutoReverse = true, EasingFunction = ease };
+            var glowPulse = new DoubleAnimation(0.1, 0.35, TimeSpan.FromSeconds(1.2)) { AutoReverse = true, EasingFunction = ease };
+            Storyboard.SetTarget(scaleX, MicCluster);
+            Storyboard.SetTarget(scaleY, MicCluster);
+            Storyboard.SetTarget(glowPulse, ListeningGlow);
+            Storyboard.SetTargetProperty(scaleX, new PropertyPath("RenderTransform.ScaleX"));
+            Storyboard.SetTargetProperty(scaleY, new PropertyPath("RenderTransform.ScaleY"));
+            Storyboard.SetTargetProperty(glowPulse, new PropertyPath(UIElement.OpacityProperty));
+            _listeningStoryboard.Children.Add(scaleX);
+            _listeningStoryboard.Children.Add(scaleY);
+            _listeningStoryboard.Children.Add(glowPulse);
+
+            _processingStoryboard = new Storyboard { RepeatBehavior = RepeatBehavior.Forever };
+            var ringFade = new DoubleAnimation(0.2, 0.5, TimeSpan.FromSeconds(1.2)) { AutoReverse = true };
+            var trailFade = new DoubleAnimation(0.6, 1.0, TimeSpan.FromSeconds(1.2)) { AutoReverse = true };
+            var rotate = new DoubleAnimation(0, 360, TimeSpan.FromSeconds(1.6)) { RepeatBehavior = RepeatBehavior.Forever };
+            Storyboard.SetTarget(ringFade, ThinkingRing);
+            Storyboard.SetTarget(trailFade, ThinkingTrail);
+            Storyboard.SetTarget(rotate, ThinkingTrailRotate);
+            Storyboard.SetTargetProperty(ringFade, new PropertyPath(UIElement.OpacityProperty));
+            Storyboard.SetTargetProperty(trailFade, new PropertyPath(UIElement.OpacityProperty));
+            Storyboard.SetTargetProperty(rotate, new PropertyPath(RotateTransform.AngleProperty));
+            _processingStoryboard.Children.Add(ringFade);
+            _processingStoryboard.Children.Add(trailFade);
+            _processingStoryboard.Children.Add(rotate);
+
+            _speakingStoryboard = new Storyboard { RepeatBehavior = RepeatBehavior.Forever };
+            var bar1 = new DoubleAnimation(0.4, 1.2, TimeSpan.FromSeconds(0.4)) { AutoReverse = true };
+            var bar2 = new DoubleAnimation(0.3, 1.4, TimeSpan.FromSeconds(0.5)) { AutoReverse = true };
+            var bar3 = new DoubleAnimation(0.5, 1.1, TimeSpan.FromSeconds(0.45)) { AutoReverse = true };
+            Storyboard.SetTarget(bar1, SpeakBar1);
+            Storyboard.SetTarget(bar2, SpeakBar2);
+            Storyboard.SetTarget(bar3, SpeakBar3);
+            Storyboard.SetTargetProperty(bar1, new PropertyPath("RenderTransform.ScaleY"));
+            Storyboard.SetTargetProperty(bar2, new PropertyPath("RenderTransform.ScaleY"));
+            Storyboard.SetTargetProperty(bar3, new PropertyPath("RenderTransform.ScaleY"));
+            _speakingStoryboard.Children.Add(bar1);
+            _speakingStoryboard.Children.Add(bar2);
+            _speakingStoryboard.Children.Add(bar3);
+        }
+
+        private void StopVoiceStoryboards()
+        {
+            _listeningStoryboard?.Stop();
+            _processingStoryboard?.Stop();
+            _speakingStoryboard?.Stop();
+        }
+
+        private void StartProcessingAnimation()
+        {
+            if (ThinkingRing == null || ThinkingTrail == null || ThinkingTrailRotate == null)
+            {
+                return;
+            }
+
+            var ring = new DoubleAnimation(0.2, 0.55, TimeSpan.FromSeconds(1.2))
+            {
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever
+            };
+            ThinkingRing.BeginAnimation(UIElement.OpacityProperty, ring);
+
+            var trail = new DoubleAnimation(0.6, 1.0, TimeSpan.FromSeconds(1.2))
+            {
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever
+            };
+            ThinkingTrail.BeginAnimation(UIElement.OpacityProperty, trail);
+
+            var rotate = new DoubleAnimation(0, 360, TimeSpan.FromSeconds(1.6))
+            {
+                RepeatBehavior = RepeatBehavior.Forever
+            };
+            ThinkingTrailRotate.BeginAnimation(RotateTransform.AngleProperty, rotate);
+        }
+
+        private void StopProcessingAnimation()
+        {
+            ThinkingRing?.BeginAnimation(UIElement.OpacityProperty, null);
+            ThinkingTrail?.BeginAnimation(UIElement.OpacityProperty, null);
+            ThinkingTrailRotate?.BeginAnimation(RotateTransform.AngleProperty, null);
+        }
+
+        private void ApplyVoiceVisuals(bool showListening, bool showProcessing, bool showSpeaking)
+        {
+            if (ListeningGlow != null)
+            {
+                ListeningGlow.Opacity = showListening ? 0.2 : 0;
+            }
+
+            if (ThinkingRing != null)
+            {
+                ThinkingRing.Opacity = showProcessing ? 0.4 : 0;
+            }
+
+            if (ThinkingTrail != null)
+            {
+                ThinkingTrail.Opacity = showProcessing ? 1 : 0;
+            }
+
+            if (SpeakingBars != null)
+            {
+                SpeakingBars.Opacity = showSpeaking ? 1 : 0;
+            }
+
+            if (SpeakingGlow != null)
+            {
+                SpeakingGlow.Opacity = showSpeaking ? 0.35 : 0;
+            }
+
+            if (MicIcon != null)
+            {
+                MicIcon.Opacity = showSpeaking ? 0 : 1;
+            }
         }
     }
 }

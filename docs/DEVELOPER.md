@@ -60,8 +60,16 @@
   - `AgentClient` traces request/response lifecycle; extend similarly for audio/image endpoints when added.
 - **Settings**:
   - Stored at `%LOCALAPPDATA%/LISA/host-settings.json` via `SettingsService` (JSON, pretty printed; provider API key encrypted at rest via DPAPI CurrentUser).
-  - Fields: `mcpHost`, `mcpPort`, `agentHost`, `agentPort`, `providerMode` (Local|Hosted), `providerHost`, `providerPort`, `providerApiKey`, `providerModel`, `providerTemperature`, `providerThink`, `voiceType`, `voiceRate`, `voiceVolume`.
+  - Fields: `mcpHost`, `mcpPort`, `agentHost`, `agentPort`, `providerMode` (Local|Hosted), `providerHost`, `providerPort`, `providerApiKey`, `providerModel`, `providerTemperature`, `providerThink`, `voiceType`, `voiceRate`, `voiceVolume`, `piperMode` (exe|python), `piperExePath`, `piperPythonPath`, `piperVoiceModelPath`, `piperVoiceConfigPath`, `piperSpeakerId`.
   - Settings pane in overlay allows editing and saving; provider section switches between Local/Hosted (API key enabled only for Hosted); save reloads health checkers and agent base URL live and updates provider API key header for requests.
+
+- **TTS (Host)**:
+  - Piper is GPL (`piper-tts` / OHF-Voice/piper1-gpl): we keep it behind a subprocess boundary, do not embed/link it, and avoid redistributing Piper binaries in our app to prevent GPL contagion.
+  - `TtsService` invokes Piper as an external process in one of two modes:
+    - `piper.exe` via `PiperExePath`.
+    - `python -m piper` (or `piper`) via `PiperPythonPath` when Piper is installed in a venv/system.
+  - Input text is passed via stdin; output is a temp WAV file read into memory for playback (NAudio) and replay.
+  - If Piper fails, `TtsService` falls back to Windows SAPI when available; replay uses last audio or last text.
 
 ## Theming Notes
 - Theme dictionaries are merged at runtime; keep palette keys in both light/dark files in sync.

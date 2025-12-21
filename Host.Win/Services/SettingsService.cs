@@ -72,7 +72,13 @@ namespace Host.Win.Services
                 ProviderThink = settings.ProviderThink,
                 VoiceType = settings.VoiceType,
                 VoiceRate = settings.VoiceRate,
-                VoiceVolume = settings.VoiceVolume
+                VoiceVolume = settings.VoiceVolume,
+                PiperExePath = settings.PiperExePath,
+                PiperMode = settings.PiperMode,
+                PiperPythonPath = settings.PiperPythonPath,
+                PiperVoiceModelPath = settings.PiperVoiceModelPath,
+                PiperVoiceConfigPath = settings.PiperVoiceConfigPath,
+                PiperSpeakerId = settings.PiperSpeakerId
             };
         }
 

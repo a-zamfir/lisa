@@ -17,5 +17,11 @@ namespace Host.Win.Models
         public string VoiceType { get; set; } = "default";
         public double VoiceRate { get; set; } = 1.0;
         public double VoiceVolume { get; set; } = 1.0;
+        public string PiperExePath { get; set; } = string.Empty;
+        public string PiperMode { get; set; } = "exe"; // exe | python
+        public string PiperPythonPath { get; set; } = "python";
+        public string PiperVoiceModelPath { get; set; } = string.Empty;
+        public string PiperVoiceConfigPath { get; set; } = string.Empty;
+        public int? PiperSpeakerId { get; set; }
     }
 }

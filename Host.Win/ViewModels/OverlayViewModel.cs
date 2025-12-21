@@ -3,6 +3,7 @@ using Host.Win.Commands;
 using Host.Win.Models;
 using Host.Win.Services;
 using System;
+using System.Diagnostics;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -36,12 +37,18 @@ namespace Host.Win.ViewModels
         private ICommand? _stopMessageCommand;
         private ICommand? _resetConversationCommand;
         private ICommand? _toggleShareCommand;
+        private ICommand? _startTalkCommand;
+        private ICommand? _replayTtsCommand;
         private HostSettings? _settings;
         private ICommand? _saveSettingsCommand;
         private ICommand? _toggleCollapseCommand;
         private readonly System.Collections.Generic.Dictionary<string, System.Threading.CancellationTokenSource> _inflightTurns = new();
         private string _sessionId = Guid.NewGuid().ToString();
         private bool _isSharing;
+        private bool _isListening;
+        private bool _isProcessing;
+        private bool _isSpeaking;
+        private bool _isContinuousListening;
         private bool _isCollapsed;
         private double _overlayWidth = ExpandedWidth;
         private double _overlayHeight = ExpandedHeight;
@@ -191,6 +198,18 @@ namespace Host.Win.ViewModels
             set => SetProperty(ref _toggleShareCommand, value);
         }
 
+        public ICommand? StartTalkCommand
+        {
+            get => _startTalkCommand;
+            set => SetProperty(ref _startTalkCommand, value);
+        }
+
+        public ICommand? ReplayTtsCommand
+        {
+            get => _replayTtsCommand;
+            set => SetProperty(ref _replayTtsCommand, value);
+        }
+
         public HostSettings? Settings
         {
             get => _settings;
@@ -223,6 +242,42 @@ namespace Host.Win.ViewModels
             set => SetProperty(ref _isSharing, value);
         }
 
+        public bool IsListening
+        {
+            get => _isListening;
+            set
+            {
+                if (SetProperty(ref _isListening, value))
+                {
+                    CommandManager.InvalidateRequerySuggested();
+                }
+            }
+        }
+
+        public bool IsProcessing
+        {
+            get => _isProcessing;
+            set
+            {
+                if (SetProperty(ref _isProcessing, value))
+                {
+                    CommandManager.InvalidateRequerySuggested();
+                }
+            }
+        }
+
+        public bool IsSpeaking
+        {
+            get => _isSpeaking;
+            set => SetProperty(ref _isSpeaking, value);
+        }
+
+        public bool IsContinuousListening
+        {
+            get => _isContinuousListening;
+            set => SetProperty(ref _isContinuousListening, value);
+        }
+
         public bool IsCollapsed
         {
             get => _isCollapsed;
@@ -247,6 +302,10 @@ namespace Host.Win.ViewModels
 
         public AgentClient? AgentClient { get; set; }
         public LoggingService? Logger { get; set; }
+        public AudioCaptureService? AudioCaptureService { get; set; }
+        public AudioPlaybackService? AudioPlaybackService { get; set; }
+        public TtsService? TtsService { get; set; }
+        public ContextCollector? ContextCollector { get; set; }
 
         public void ApplyTheme(AppTheme theme)
         {
@@ -303,109 +362,10 @@ namespace Host.Win.ViewModels
 
         public async Task SendChatAsync()
         {
-            if (_isSending) return;
             var text = ChatInput?.Trim();
             if (string.IsNullOrEmpty(text)) return;
 
-            _isSending = true;
-            System.Windows.Input.CommandManager.InvalidateRequerySuggested();
-            var turnId = Guid.NewGuid().ToString();
-            var cts = new System.Threading.CancellationTokenSource();
-            _inflightTurns[turnId] = cts;
-
-            try
-            {
-                var userMessage = new ChatMessage { Sender = "You", Text = text, IsAssistant = false };
-                ChatMessages.Add(userMessage);
-                ChatInput = string.Empty;
-
-                var streamingMessage = new ChatMessage
-                {
-                    Sender = "Lisa",
-                    Text = string.Empty,
-                    IsAssistant = true,
-                    IsStreaming = true,
-                    TurnId = turnId,
-                    IsRetryable = false,
-                    IsCancellable = true
-                };
-                SetRetryableMessage(null);
-                ChatMessages.Add(streamingMessage);
-                OnPropertyChanged(nameof(ChatMessages)); // notify for scroll refresh
-
-                var request = new TextInputRequest
-                {
-                    SessionId = SessionId,
-                    TurnId = turnId,
-                    Text = text,
-                    InputMeta = new InputMetadata()
-                };
-
-                Logger?.LogEvent("request.text.send", new
-                {
-                    request.SessionId,
-                    request.TurnId,
-                    input_type = "text",
-                    request.Text,
-                    request.InputMeta
-                });
-
-                AgentResponse? response = null;
-                if (AgentClient != null)
-                {
-                    response = await AgentClient.SendTextAsync(request, cts.Token);
-                }
-
-                if (response != null)
-                {
-                    ApplyToolLabel(streamingMessage, response.ToolCalls);
-                    ApplyReasoning(streamingMessage, response.Reasoning, response.ThinkingMs);
-                    foreach (var msg in response.Messages)
-                    {
-                        if (msg.Role == "assistant")
-                        {
-                            if (streamingMessage.HasContentStream)
-                            {
-                                if (string.IsNullOrEmpty(streamingMessage.Text))
-                                {
-                                    streamingMessage.Text = msg.Content;
-                                }
-                            }
-                            else
-                            {
-                                await StreamTextAsync(streamingMessage, msg.Content, cts.Token);
-                            }
-                        }
-                    }
-                    Logger?.LogEvent("response.text", new
-                    {
-                        response.SessionId,
-                        response.TurnId,
-                        input_type = "text",
-                        messages = response.Messages
-                    });
-                }
-                else
-                {
-                    streamingMessage.Text = "(no response)";
-                    Logger?.LogEvent("response.text.missing", new
-                    {
-                        request.SessionId,
-                        request.TurnId
-                    });
-                }
-
-                streamingMessage.IsStreaming = false;
-                streamingMessage.IsCancellable = false;
-                SetRetryableMessage(streamingMessage);
-                OnPropertyChanged(nameof(ChatMessages)); // ensure UI hooks update for autoscroll
-            }
-            finally
-            {
-                _inflightTurns.Remove(turnId);
-                _isSending = false;
-                System.Windows.Input.CommandManager.InvalidateRequerySuggested();
-            }
+            await SendTextInternalAsync(text, inputType: "text", markSending: true, addUserMessage: true);
         }
 
         public bool CanSendChat() => !_isSending && !string.IsNullOrWhiteSpace(ChatInput);
@@ -645,6 +605,219 @@ namespace Host.Win.ViewModels
             Logger?.LogEvent(IsSharing ? "share.start" : "share.stop", new { sessionId = SessionId });
         }
 
+        public async Task StartTalkAsync()
+        {
+            if (IsListening || IsProcessing) return;
+            if (AudioCaptureService == null)
+            {
+                StatusText = "Microphone unavailable";
+                return;
+            }
+
+            await RunOnUiAsync(() =>
+            {
+                IsListening = true;
+                IsProcessing = false;
+                StatusText = "Listening...";
+            }).ConfigureAwait(false);
+
+            do
+            {
+                var vad = new VadDetector();
+                AudioCaptureResult? captureResult = null;
+
+                try
+                {
+                    Trace.WriteLine("Talk: capture started.");
+                    captureResult = await AudioCaptureService.CaptureAsync(vad, System.Threading.CancellationToken.None).ConfigureAwait(false);
+                }
+                catch
+                {
+                    Trace.TraceWarning("Talk: capture failed.");
+                    await RunOnUiAsync(() => StatusText = "Microphone unavailable").ConfigureAwait(false);
+                }
+
+                await RunOnUiAsync(() => IsListening = false).ConfigureAwait(false);
+
+                if (captureResult == null)
+                {
+                    Trace.TraceWarning("Talk: capture result missing.");
+                    await RunOnUiAsync(() => IsProcessing = false).ConfigureAwait(false);
+                    return;
+                }
+
+                if (!captureResult.HadSpeech)
+                {
+                    Trace.WriteLine($"Talk: no speech detected. Duration={captureResult.Duration.TotalMilliseconds:0}ms");
+                    await RunOnUiAsync(() =>
+                    {
+                        StatusText = "No speech detected";
+                        IsProcessing = false;
+                    }).ConfigureAwait(false);
+
+                    if (IsContinuousListening)
+                    {
+                        await Task.Delay(250).ConfigureAwait(false);
+                        await RunOnUiAsync(() =>
+                        {
+                            IsListening = true;
+                            StatusText = "Listening...";
+                        }).ConfigureAwait(false);
+                        continue;
+                    }
+                    return;
+                }
+
+                await RunOnUiAsync(() =>
+                {
+                    IsProcessing = true;
+                    StatusText = "Processing...";
+                }).ConfigureAwait(false);
+                var processingStart = Stopwatch.StartNew();
+
+                AudioInputResponse? response = null;
+                if (AgentClient != null)
+                {
+                    var context = new AudioInputContext
+                    {
+                        ActiveWindowTitle = ContextCollector?.GetActiveWindowTitle(),
+                        ActiveProcessName = ContextCollector?.GetActiveProcessName()
+                    };
+                    var meta = new AudioInputMeta
+                    {
+                        SessionId = SessionId,
+                        ContinuousVad = IsContinuousListening,
+                        Timestamp = DateTimeOffset.UtcNow,
+                        Context = context
+                    };
+                    Trace.WriteLine($"Talk: sending audio ({captureResult.WavBytes.Length} bytes) to agent.");
+                    response = await AgentClient.SendAudioAsync(captureResult.WavBytes, meta, System.Threading.CancellationToken.None).ConfigureAwait(false);
+                }
+                else
+                {
+                    Trace.TraceWarning("Talk: agent client missing.");
+                }
+
+                var minProcessingMs = 500;
+                var remaining = minProcessingMs - (int)processingStart.ElapsedMilliseconds;
+                if (remaining > 0)
+                {
+                    await Task.Delay(remaining).ConfigureAwait(false);
+                }
+
+                string transcriptText = string.Empty;
+                bool hasTranscript = false;
+                await RunOnUiAsync(() =>
+                {
+                    if (response != null)
+                    {
+                        if (!string.IsNullOrWhiteSpace(response.SessionId))
+                        {
+                            SessionId = response.SessionId;
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(response.Transcript))
+                        {
+                            transcriptText = response.Transcript.Trim();
+                            hasTranscript = true;
+                            ChatMessages.Add(new ChatMessage
+                            {
+                                Sender = "You",
+                                Text = response.Transcript,
+                                IsAssistant = false
+                            });
+                        }
+                        else if (response.SttMs == 0)
+                        {
+                            StatusText = "STT unavailable";
+                        }
+                        var transcriptLog = response.Transcript ?? string.Empty;
+                        Trace.WriteLine($"Talk: response received. Session={response.SessionId} TranscriptLen={transcriptLog.Length} SttMs={response.SttMs} Transcript=\"{transcriptLog}\"");
+                    }
+                    else
+                    {
+                        StatusText = "Agent unavailable";
+                        Trace.TraceWarning("Talk: agent response null.");
+                    }
+
+                    if (!hasTranscript && StatusText == "Processing...")
+                    {
+                        StatusText = "Ready";
+                    }
+                }).ConfigureAwait(false);
+
+                if (hasTranscript)
+                {
+                    await SendTextInternalAsync(transcriptText, inputType: "talk", markSending: false, addUserMessage: false).ConfigureAwait(false);
+                }
+
+                await RunOnUiAsync(() =>
+                {
+                    IsProcessing = false;
+                    if (StatusText == "Processing...")
+                    {
+                        StatusText = "Ready";
+                    }
+                }).ConfigureAwait(false);
+
+                if (IsContinuousListening)
+                {
+                    await Task.Delay(250).ConfigureAwait(false);
+                    await RunOnUiAsync(() =>
+                    {
+                        IsListening = true;
+                        StatusText = "Listening...";
+                    }).ConfigureAwait(false);
+                }
+            } while (IsContinuousListening);
+        }
+
+        public bool CanStartTalk() => !IsListening && !IsProcessing;
+
+        public async Task ReplayLastTtsAsync()
+        {
+            if (AudioPlaybackService == null)
+            {
+                StatusText = "No audio yet";
+                return;
+            }
+
+            if (!AudioPlaybackService.HasAudio)
+            {
+                if (!string.IsNullOrWhiteSpace(AudioPlaybackService.LastText) && TtsService != null)
+                {
+                    if (SelectedMode == AssistantMode.Talk)
+                    {
+                        IsSpeaking = true;
+                    }
+                    var success = await TtsService.SpeakWithSapiAsync(AudioPlaybackService.LastText, Settings, System.Threading.CancellationToken.None)
+                        .ConfigureAwait(false);
+                    if (SelectedMode == AssistantMode.Talk)
+                    {
+                        await RunOnUiAsync(() => IsSpeaking = false).ConfigureAwait(false);
+                    }
+                    if (!success)
+                    {
+                        StatusText = "No audio yet";
+                    }
+                    return;
+                }
+
+                StatusText = "No audio yet";
+                return;
+            }
+
+            if (SelectedMode == AssistantMode.Talk)
+            {
+                IsSpeaking = true;
+            }
+            await AudioPlaybackService.PlayLastAsync(System.Threading.CancellationToken.None).ConfigureAwait(false);
+            if (SelectedMode == AssistantMode.Talk)
+            {
+                IsSpeaking = false;
+            }
+        }
+
         public void ToggleCollapsed()
         {
             IsCollapsed = !IsCollapsed;
@@ -670,6 +843,206 @@ namespace Host.Win.ViewModels
                 OverlayWidth = ExpandedWidth;
                 OverlayHeight = ExpandedHeight;
             }
+        }
+
+        private async Task SendTextInternalAsync(string text, string inputType, bool markSending, bool addUserMessage)
+        {
+            if (markSending && _isSending) return;
+            if (string.IsNullOrWhiteSpace(text)) return;
+
+            if (markSending)
+            {
+                _isSending = true;
+                await RunOnUiAsync(() => CommandManager.InvalidateRequerySuggested()).ConfigureAwait(false);
+            }
+
+            var turnId = Guid.NewGuid().ToString();
+            var cts = new System.Threading.CancellationTokenSource();
+            _inflightTurns[turnId] = cts;
+
+            ChatMessage streamingMessage = new ChatMessage
+            {
+                Sender = "Lisa",
+                Text = string.Empty,
+                IsAssistant = true,
+                IsStreaming = true,
+                TurnId = turnId,
+                IsRetryable = false,
+                IsCancellable = true
+            };
+
+            await RunOnUiAsync(() =>
+            {
+                if (addUserMessage)
+                {
+                    ChatMessages.Add(new ChatMessage { Sender = "You", Text = text, IsAssistant = false });
+                }
+
+                if (addUserMessage && inputType == "text")
+                {
+                    ChatInput = string.Empty;
+                }
+
+                SetRetryableMessage(null);
+                ChatMessages.Add(streamingMessage);
+                OnPropertyChanged(nameof(ChatMessages));
+            }).ConfigureAwait(false);
+
+            var request = new TextInputRequest
+            {
+                SessionId = SessionId,
+                TurnId = turnId,
+                Text = text,
+                InputMeta = new InputMetadata()
+            };
+
+            Logger?.LogEvent("request.text.send", new
+            {
+                request.SessionId,
+                request.TurnId,
+                input_type = inputType,
+                request.Text,
+                request.InputMeta
+            });
+
+            AgentResponse? response = null;
+            if (AgentClient != null)
+            {
+                response = await AgentClient.SendTextAsync(request, cts.Token).ConfigureAwait(false);
+            }
+
+            if (response != null)
+            {
+                await RunOnUiAsync(() =>
+                {
+                    ApplyToolLabel(streamingMessage, response.ToolCalls);
+                    ApplyReasoning(streamingMessage, response.Reasoning, response.ThinkingMs);
+                }).ConfigureAwait(false);
+
+                foreach (var msg in response.Messages)
+                {
+                    if (msg.Role == "assistant")
+                    {
+                        if (streamingMessage.HasContentStream)
+                        {
+                            if (string.IsNullOrEmpty(streamingMessage.Text))
+                            {
+                                await RunOnUiAsync(() => streamingMessage.Text = msg.Content).ConfigureAwait(false);
+                            }
+                        }
+                        else
+                        {
+                            await StreamTextAsync(streamingMessage, msg.Content, cts.Token);
+                        }
+                    }
+                }
+
+                Logger?.LogEvent("response.text", new
+                {
+                    response.SessionId,
+                    response.TurnId,
+                    input_type = inputType,
+                    messages = response.Messages
+                });
+            }
+            else
+            {
+                await RunOnUiAsync(() => streamingMessage.Text = "(no response)").ConfigureAwait(false);
+                Logger?.LogEvent("response.text.missing", new
+                {
+                    request.SessionId,
+                    request.TurnId
+                });
+            }
+
+            await HandleTtsAsync(response, streamingMessage, cts.Token).ConfigureAwait(false);
+
+            await RunOnUiAsync(() =>
+            {
+                streamingMessage.IsStreaming = false;
+                streamingMessage.IsCancellable = false;
+                SetRetryableMessage(streamingMessage);
+                OnPropertyChanged(nameof(ChatMessages));
+            }).ConfigureAwait(false);
+
+            _inflightTurns.Remove(turnId);
+            if (markSending)
+            {
+                _isSending = false;
+                await RunOnUiAsync(() => CommandManager.InvalidateRequerySuggested()).ConfigureAwait(false);
+            }
+        }
+
+        private async Task HandleTtsAsync(AgentResponse? response, ChatMessage streamingMessage, System.Threading.CancellationToken cancellationToken)
+        {
+            if (response == null || TtsService == null)
+            {
+                return;
+            }
+
+            var ttsText = response.TtsText;
+            if (string.IsNullOrWhiteSpace(ttsText) && !response.Speak)
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(ttsText))
+            {
+                ttsText = streamingMessage.Text;
+            }
+
+            if (string.IsNullOrWhiteSpace(ttsText))
+            {
+                return;
+            }
+
+            AudioPlaybackService?.SetLastText(ttsText);
+
+            try
+            {
+                var result = await TtsService.GenerateAsync(ttsText, Settings, cancellationToken).ConfigureAwait(false);
+                if (result.Success)
+                {
+                    if (result.AudioBytes != null && result.AudioBytes.Length > 0)
+                    {
+                        if (AudioPlaybackService != null)
+                        {
+                            AudioPlaybackService.SetLastAudio(result.AudioBytes);
+                            AudioPlaybackService.SetLastText(ttsText);
+                            if (SelectedMode == AssistantMode.Talk)
+                            {
+                                await RunOnUiAsync(() => IsSpeaking = true).ConfigureAwait(false);
+                            }
+                            await AudioPlaybackService.PlayAsync(result.AudioBytes, cancellationToken).ConfigureAwait(false);
+                            if (SelectedMode == AssistantMode.Talk)
+                            {
+                                await RunOnUiAsync(() => IsSpeaking = false).ConfigureAwait(false);
+                            }
+                        }
+                    }
+                }
+                else if (!string.IsNullOrWhiteSpace(result.Error))
+                {
+                    await RunOnUiAsync(() => StatusText = result.Error).ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning($"TTS failed: {ex.Message}");
+                await RunOnUiAsync(() => StatusText = "TTS unavailable").ConfigureAwait(false);
+            }
+            finally
+            {
+                if (SelectedMode == AssistantMode.Talk && IsSpeaking)
+                {
+                    await RunOnUiAsync(() => IsSpeaking = false).ConfigureAwait(false);
+                }
+            }
+        }
+
+        private static Task RunOnUiAsync(Action action)
+        {
+            return System.Windows.Application.Current.Dispatcher.InvokeAsync(action).Task;
         }
     }
 }
