@@ -16,5 +16,11 @@ namespace Host.Win.Models
 
         [JsonPropertyName("stt_ms")]
         public int SttMs { get; set; }
+
+        [JsonPropertyName("stt_device")]
+        public string? SttDevice { get; set; }
+
+        [JsonPropertyName("stt_compute")]
+        public string? SttCompute { get; set; }
     }
 }

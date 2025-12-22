@@ -14,14 +14,18 @@ namespace Host.Win.Services
     {
         private readonly int _port;
         private readonly Action<AgentToolCallback> _onCallback;
+        private readonly string _token;
+        private readonly int _maxPayloadBytes;
         private UdpClient? _udpClient;
         private CancellationTokenSource? _cts;
         private Task? _listenerTask;
 
-        public AgentCallbackServer(int port, Action<AgentToolCallback> onCallback)
+        public AgentCallbackServer(int port, string token, Action<AgentToolCallback> onCallback, int maxPayloadBytes = 8192)
         {
             _port = port;
+            _token = token;
             _onCallback = onCallback;
+            _maxPayloadBytes = maxPayloadBytes;
         }
 
         public void Start()
@@ -41,10 +45,17 @@ namespace Host.Win.Services
                 try
                 {
                     var result = await _udpClient.ReceiveAsync().ConfigureAwait(false);
-                    // No sender validation yet; add token + size guard when replacing UDP transport.
+                    if (!IPAddress.IsLoopback(result.RemoteEndPoint.Address))
+                    {
+                        continue;
+                    }
+                    if (result.Buffer.Length > _maxPayloadBytes)
+                    {
+                        continue;
+                    }
                     var json = Encoding.UTF8.GetString(result.Buffer);
                     var payload = JsonSerializer.Deserialize<AgentToolCallback>(json);
-                    if (payload != null)
+                    if (payload != null && string.Equals(payload.Token, _token, StringComparison.Ordinal))
                     {
                         _onCallback(payload);
                     }

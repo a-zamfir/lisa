@@ -732,7 +732,9 @@ namespace Host.Win.ViewModels
                             StatusText = "STT unavailable";
                         }
                         var transcriptLog = response.Transcript ?? string.Empty;
-                        Trace.WriteLine($"Talk: response received. Session={response.SessionId} TranscriptLen={transcriptLog.Length} SttMs={response.SttMs} Transcript=\"{transcriptLog}\"");
+                        var sttDevice = string.IsNullOrWhiteSpace(response.SttDevice) ? "unknown" : response.SttDevice;
+                        var sttCompute = string.IsNullOrWhiteSpace(response.SttCompute) ? "unknown" : response.SttCompute;
+                        Trace.WriteLine($"Talk: response received. Session={response.SessionId} TranscriptLen={transcriptLog.Length} SttMs={response.SttMs} Device={sttDevice} Compute={sttCompute} Transcript=\"{transcriptLog}\"");
                     }
                     else
                     {

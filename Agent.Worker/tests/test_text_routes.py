@@ -5,6 +5,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from agent_worker.routers import audio as audio_router
 from agent_worker.routers import text as text_router
 
 
@@ -12,6 +13,7 @@ from agent_worker.routers import text as text_router
 def app():
     app = FastAPI()
     app.include_router(text_router.router)
+    app.include_router(audio_router.router)
     return app
 
 
@@ -99,3 +101,22 @@ def test_retry_flow(client, monkeypatch):
     assert resp.status_code == 200
     data = resp.json()
     assert data["messages"][0]["content"] == "Retry ok"
+
+
+def test_audio_input_basic(client, monkeypatch):
+    def fake_transcribe_audio(_audio: bytes):
+        return ("hello", 1, 2, "cpu", "int8")
+
+    monkeypatch.setattr(audio_router, "transcribe_audio", fake_transcribe_audio)
+
+    resp = client.post(
+        "/input/audio",
+        data={"meta": '{"session_id":"s-audio"}'},
+        files={"audio": ("input.wav", b"\x00\x01", "audio/wav")},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["session_id"] == "s-audio"
+    assert data["transcript"] == "hello"
+    assert data["stt_device"] == "cpu"
+    assert data["stt_compute"] == "int8"

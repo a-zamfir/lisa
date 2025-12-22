@@ -15,6 +15,8 @@ namespace Host.Win.Services
         private readonly string _mcpPath;
         private readonly int _port;
         private readonly string _pidFile;
+        private readonly string _requirementsHashFile;
+        private readonly string _authToken;
         private IntPtr _jobHandle = IntPtr.Zero;
 
         public McpProcessHost(string mcpPath, int port)
@@ -24,7 +26,11 @@ namespace Host.Win.Services
             var localDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LISA");
             Directory.CreateDirectory(localDir);
             _pidFile = Path.Combine(localDir, "mcp.pid");
+            _requirementsHashFile = Path.Combine(localDir, "mcp-requirements.sha256");
+            _authToken = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
         }
+
+        public string AuthToken => _authToken;
 
         public void Start()
         {
@@ -36,12 +42,14 @@ namespace Host.Win.Services
             }
 
             var workingDir = Path.GetDirectoryName(_mcpPath) ?? Environment.CurrentDirectory;
+            Trace.WriteLine($"MCP working dir resolved: {workingDir}");
             var pythonPath = EnsureVenv(workingDir);
             if (pythonPath == null)
             {
                 Trace.TraceError("Unable to create or locate Python interpreter for MCP.");
                 return;
             }
+            Trace.WriteLine($"MCP python resolved: {pythonPath}");
 
             TryKillExistingPid();
 
@@ -57,6 +65,8 @@ namespace Host.Win.Services
             };
             psi.Environment["MCP_PORT"] = _port.ToString();
             psi.Environment["PYTHONPATH"] = workingDir;
+            psi.Environment["MCP_AUTH_TOKEN"] = _authToken;
+            Trace.WriteLine($"MCP env: MCP_PORT={_port}");
 
             try
             {
@@ -195,15 +205,24 @@ namespace Host.Win.Services
 
             if (File.Exists(requirements))
             {
-                Trace.WriteLine("Installing MCP requirements...");
-                RunSilently(pythonExe, "-m pip install --upgrade pip", workingDir);
-                RunSilently(pythonExe, "-m pip install -r requirements.txt", workingDir);
+                var hash = ComputeFileHash(requirements);
+                var existingHash = ReadHash(_requirementsHashFile);
+                Trace.WriteLine($"MCP requirements hash: {hash} (stored={existingHash ?? "none"})");
+                if (!string.Equals(hash, existingHash, StringComparison.OrdinalIgnoreCase))
+                {
+                    Trace.WriteLine("Installing MCP requirements...");
+                    RunSilently(pythonExe, "-m pip install --upgrade pip", workingDir);
+                    if (RunSilently(pythonExe, "-m pip install -r requirements.txt", workingDir))
+                    {
+                        WriteHash(_requirementsHashFile, hash);
+                    }
+                }
             }
 
             return pythonExe;
         }
 
-        private static void RunSilently(string fileName, string arguments, string workingDir)
+        private static bool RunSilently(string fileName, string arguments, string workingDir)
         {
             try
             {
@@ -231,12 +250,14 @@ namespace Host.Win.Services
                     {
                         Trace.TraceWarning($"[MCP cmd ERR] {fileName} {arguments} -> {stderr}");
                     }
+                    return proc.ExitCode == 0;
                 }
             }
             catch (Exception ex)
             {
                 Trace.TraceError($"Command failed: {fileName} {arguments} ({ex.Message})");
             }
+            return false;
         }
 
         private void TryKillExistingPid()
@@ -253,6 +274,38 @@ namespace Host.Win.Services
                     proc.Kill(entireProcessTree: true);
                     proc.WaitForExit(5000);
                 }
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+
+        private static string ComputeFileHash(string path)
+        {
+            using var stream = File.OpenRead(path);
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var hash = sha.ComputeHash(stream);
+            return Convert.ToHexString(hash);
+        }
+
+        private static string? ReadHash(string path)
+        {
+            try
+            {
+                return File.Exists(path) ? File.ReadAllText(path).Trim() : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static void WriteHash(string path, string hash)
+        {
+            try
+            {
+                File.WriteAllText(path, hash);
             }
             catch
             {

@@ -35,13 +35,15 @@ async def handle_audio(audio: UploadFile = File(...), meta: str = Form(...)) -> 
         return ORJSONResponse(payload)
 
     try:
-        transcript, _decode_ms, stt_ms = await run_in_threadpool(transcribe_audio, audio_bytes)
+        transcript, _decode_ms, stt_ms, device, compute = await run_in_threadpool(transcribe_audio, audio_bytes)
         print(f"[audio] done session={session_id} transcript_len={len(transcript)} stt_ms={stt_ms}")
         payload = {
             "session_id": session_id,
             "transcript": transcript,
             "assistant_message": "Got it.",
             "stt_ms": stt_ms,
+            "stt_device": device,
+            "stt_compute": compute,
         }
         return ORJSONResponse(payload)
     except Exception as exc:
