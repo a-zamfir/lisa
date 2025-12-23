@@ -9,6 +9,7 @@ class InputMeta(BaseModel):
     active_app: Optional[str] = None
     window_title: Optional[str] = None
     clipboard: Optional[str] = None
+    session_nonce: Optional[str] = None
 
 
 class TextInput(BaseModel):

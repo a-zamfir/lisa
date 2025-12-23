@@ -12,6 +12,8 @@ import numpy as np
 logger = logging.getLogger("agent_worker.stt")
 _MODEL = None
 _LOAD_ERROR: str | None = None
+_MODEL_DEVICE: str | None = None
+_MODEL_COMPUTE: str | None = None
 _MODEL_DIR = os.path.abspath(
     os.environ.get(
         "FASTER_WHISPER_MODEL_DIR",
@@ -21,7 +23,7 @@ _MODEL_DIR = os.path.abspath(
 
 
 def _load_model():
-    global _MODEL, _LOAD_ERROR
+    global _MODEL, _LOAD_ERROR, _MODEL_DEVICE, _MODEL_COMPUTE
     if _MODEL is not None:
         return _MODEL
     if _LOAD_ERROR is not None:
@@ -33,25 +35,75 @@ def _load_model():
 
     model_name = os.environ.get("FASTER_WHISPER_MODEL", "base")
     try:
+        if not _has_cudnn():
+            raise RuntimeError("cuDNN not found on PATH")
         from faster_whisper import WhisperModel  # type: ignore
 
-        print(f"[stt] loading model from {_MODEL_DIR} (gpu int8_float16)")
-        _MODEL = WhisperModel(_MODEL_DIR, device="cuda", compute_type="int8_float16")
-    except Exception:
+        device = "cuda"
+        compute = "int8_float16"
+        print(f"[stt] loading model from {_MODEL_DIR} ({device} {compute})")
+        _MODEL = WhisperModel(_MODEL_DIR, device=device, compute_type=compute)
+        _MODEL_DEVICE = device
+        _MODEL_COMPUTE = compute
+        logger.info("stt model_loaded device=%s compute_type=%s model_dir=%s", device, compute, _MODEL_DIR)
+    except Exception as exc:
+        logger.info("stt gpu init skipped (int8_float16): %s", exc)
         try:
+            if not _has_cudnn():
+                raise RuntimeError("cuDNN not found on PATH")
             from faster_whisper import WhisperModel  # type: ignore
 
-            print(f"[stt] loading model from {_MODEL_DIR} (gpu float16)")
-            _MODEL = WhisperModel(_MODEL_DIR, device="cuda", compute_type="float16")
-        except Exception:
+            device = "cuda"
+            compute = "float16"
+            print(f"[stt] loading model from {_MODEL_DIR} ({device} {compute})")
+            _MODEL = WhisperModel(_MODEL_DIR, device=device, compute_type=compute)
+            _MODEL_DEVICE = device
+            _MODEL_COMPUTE = compute
+            logger.info("stt model_loaded device=%s compute_type=%s model_dir=%s", device, compute, _MODEL_DIR)
+        except Exception as exc:
+            logger.info("stt gpu init skipped (float16): %s", exc)
             try:
+                if not _has_cudnn():
+                    raise RuntimeError("cuDNN not found on PATH")
                 from faster_whisper import WhisperModel  # type: ignore
 
-                print(f"[stt] loading model from {_MODEL_DIR} (cpu int8)")
-                _MODEL = WhisperModel(_MODEL_DIR, device="cpu", compute_type="int8")
+                device = "cuda"
+                compute = "int8"
+                print(f"[stt] loading model from {_MODEL_DIR} ({device} {compute})")
+                _MODEL = WhisperModel(_MODEL_DIR, device=device, compute_type=compute)
+                _MODEL_DEVICE = device
+                _MODEL_COMPUTE = compute
+                logger.info("stt model_loaded device=%s compute_type=%s model_dir=%s", device, compute, _MODEL_DIR)
             except Exception as exc:
-                _LOAD_ERROR = f"faster-whisper init failed for model '{model_name}': {exc}"
-                raise RuntimeError(_LOAD_ERROR) from exc
+                logger.info("stt gpu init skipped (int8): %s", exc)
+                try:
+                    if not _has_cudnn():
+                        raise RuntimeError("cuDNN not found on PATH")
+                    from faster_whisper import WhisperModel  # type: ignore
+
+                    device = "cuda"
+                    compute = "float32"
+                    print(f"[stt] loading model from {_MODEL_DIR} ({device} {compute})")
+                    _MODEL = WhisperModel(_MODEL_DIR, device=device, compute_type=compute)
+                    _MODEL_DEVICE = device
+                    _MODEL_COMPUTE = compute
+                    logger.info("stt model_loaded device=%s compute_type=%s model_dir=%s", device, compute, _MODEL_DIR)
+                except Exception as exc:
+                    logger.info("stt gpu init skipped (float32): %s", exc)
+                    try:
+                        from faster_whisper import WhisperModel  # type: ignore
+
+                        device = "cpu"
+                        compute = "int8"
+                        print(f"[stt] loading model from {_MODEL_DIR} ({device} {compute})")
+                        _MODEL = WhisperModel(_MODEL_DIR, device=device, compute_type=compute)
+                        _MODEL_DEVICE = device
+                        _MODEL_COMPUTE = compute
+                        logger.info("stt model_loaded device=%s compute_type=%s model_dir=%s", device, compute, _MODEL_DIR)
+                        logger.info("stt cpu fallback active")
+                    except Exception as exc:
+                        _LOAD_ERROR = f"faster-whisper init failed for model '{model_name}': {exc}"
+                        raise RuntimeError(_LOAD_ERROR) from exc
     return _MODEL
 
 
@@ -118,7 +170,7 @@ def _resample_audio(audio: np.ndarray, sample_rate: int, target_rate: int = 1600
     return np.interp(x_new, x_old, audio).astype(np.float32)
 
 
-def transcribe_audio(audio_bytes: bytes) -> Tuple[str, int, int]:
+def transcribe_audio(audio_bytes: bytes) -> Tuple[str, int, int, str | None, str | None]:
     decode_start = time.monotonic()
     audio, sample_rate = _decode_audio(audio_bytes)
     audio = _resample_audio(audio, sample_rate, 16000)
@@ -138,4 +190,14 @@ def transcribe_audio(audio_bytes: bytes) -> Tuple[str, int, int]:
     stt_ms = int((time.monotonic() - stt_start) * 1000)
 
     logger.info("stt decode_ms=%s stt_ms=%s sample_rate=%s", decode_ms, stt_ms, sample_rate)
-    return transcript, decode_ms, stt_ms
+    return transcript, decode_ms, stt_ms, _MODEL_DEVICE, _MODEL_COMPUTE
+def _has_cudnn() -> bool:
+    for key in ("cudnn_ops64_9.dll", "cudnn_ops64_8.dll"):
+        try:
+            import ctypes
+
+            ctypes.WinDLL(key)
+            return True
+        except Exception:
+            continue
+    return False

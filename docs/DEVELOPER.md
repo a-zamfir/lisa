@@ -46,8 +46,8 @@
   - UI: bubble list, rounded input, styled send button, slim scrollbar with padding gap.
   - Sending: `AsyncRelayCommand` bound to button/Enter; disables during in-flight send.
   - Request: POST `/input/text` JSON `{ session_id, turn_id, text, input_meta }` via `AgentClient.SendTextAsync` to agent on `AgentHost:AgentPort` (default 127.0.0.1:5050).
-  - Response: streamed content chunks (UDP) into the bubble live; reasoning/thinking streamed separately; inline typing dots while streaming; copy/retry/stop actions per message.
-  - Tool calls: agent sends UDP callbacks to `127.0.0.1:5052` with phase updates (`awaiting_tool`, `tool_response`, `tool_complete`). Overlay updates the tool label in the bubble header.
+  - Response: streamed content chunks (persistent TCP) into the bubble live; reasoning/thinking streamed separately; inline typing dots while streaming; copy/retry/stop actions per message.
+  - Tool calls: agent sends TCP callbacks with phase updates (`awaiting_tool`, `tool_response`, `tool_complete`) and validates token + per-session nonce. Overlay updates the tool label in the bubble header.
   - Content streaming: agent emits `content_chunk` / `content_done`; overlay appends to message live. Reasoning panel auto-collapses when done.
   - Autoscroll: message collection change in `OverlayWindow` scrolls to end on new/streamed messages.
   - Reset: chat includes a reset button that clears UI history and starts a fresh session ID.
@@ -56,7 +56,7 @@
 - **Logging & Observability**:
   - `LoggingService` writes JSONL to `%LOCALAPPDATA%/LISA/logs/host.log` and Trace. Each entry includes UTC timestamp, `event_type`, and payload.
   - Chat sends log `request.text.send` with `session_id`, `turn_id`, `input_type=text`, `text`, and `input_meta`; responses log `response.text` (or `response.text.missing` on fallback).
-  - Agent emits UDP callbacks for thinking, tool phases, and content streaming; overlay updates reasoning panel and tool labels live.
+  - Agent emits persistent TCP callbacks for thinking, tool phases, and content streaming; overlay updates reasoning panel and tool labels live.
   - `AgentClient` traces request/response lifecycle; extend similarly for audio/image endpoints when added.
 - **Settings**:
   - Stored at `%LOCALAPPDATA%/LISA/host-settings.json` via `SettingsService` (JSON, pretty printed; provider API key encrypted at rest via DPAPI CurrentUser).
@@ -103,7 +103,7 @@
 - **Agent Worker**:
   - FastAPI, endpoints /health, /input/text, /input/retry.
   - On startup: fetch MCP tools (cached); if unavailable, retry in background. Build system context (LISA prompt + system metadata: time, user/account, machine, OS, locale/region, home) once and prepend to every provider request.
-  - Tool calls: LLM uses tools property; server calls MCP /tools (list) and /call (execute). Tool phases send UDP callbacks.
-  - Streaming: uses Ollama /api/chat streaming; partial content and reasoning forwarded via UDP to Host.Win for live display. Tool calls parsed from stream; early exit to call MCP. Content streaming forwarded via content_chunk / content_done callbacks for UI.
+  - Tool calls: LLM uses tools property; server calls MCP /tools (list) and /call (execute). MCP auth token is injected into Agent.Worker at startup so tool cache warms immediately; tool phases send TCP callbacks.
+  - Streaming: uses Ollama /api/chat streaming; partial content and reasoning forwarded via TCP to Host.Win for live display. Tool calls parsed from stream; early exit to call MCP. Content streaming forwarded via content_chunk / content_done callbacks for UI.
   - Conversations: in-memory store with approximate token cap + max message count trimming.
   - Settings: read from %LOCALAPPDATA%/LISA/host-settings.json (agent/provider hosts, ports, provider mode, model, temperature, think flag, API key, voice params).

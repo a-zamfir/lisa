@@ -1,8 +1,12 @@
 // File: Host.Win/Services/LoggingService.cs
 using System;
 using System.Diagnostics;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Host.Win.Services
 {
@@ -14,6 +18,22 @@ namespace Host.Win.Services
         private readonly string _logFilePath;
         private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
         private readonly object _fileLock = new();
+        private static readonly HashSet<string> _redactedKeys = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "providerApiKey",
+            "provider_api_key",
+            "apiKey",
+            "api_key",
+            "authorization",
+            "bearer",
+            "token",
+            "mcp_auth_token",
+            "lisa_callback_token",
+            "x-mcp-token",
+            "x-provider-api-key",
+            "secret",
+            "password"
+        };
 
         public LoggingService()
         {
@@ -24,18 +44,103 @@ namespace Host.Win.Services
 
         public void LogEvent(string eventType, object payload)
         {
-            var record = new
+            string? line = null;
+            try
             {
-                ts = DateTime.UtcNow.ToString("o"),
-                event_type = eventType,
-                payload
-            };
+                using var stream = new MemoryStream();
+                using var writer = new Utf8JsonWriter(stream);
+                writer.WriteStartObject();
+                writer.WriteString("ts", DateTime.UtcNow.ToString("o"));
+                writer.WriteString("event_type", eventType);
+                writer.WritePropertyName("payload");
+                WriteRedactedPayload(writer, payload);
+                writer.WriteEndObject();
+                writer.Flush();
+                line = Encoding.UTF8.GetString(stream.ToArray());
+            }
+            catch
+            {
+                var fallback = new
+                {
+                    ts = DateTime.UtcNow.ToString("o"),
+                    event_type = eventType,
+                    payload = "(redacted)"
+                };
+                line = JsonSerializer.Serialize(fallback, _jsonOptions);
+            }
 
-            var line = JsonSerializer.Serialize(record, _jsonOptions);
             Trace.WriteLine(line);
             lock (_fileLock)
             {
                 File.AppendAllText(_logFilePath, line + Environment.NewLine);
+            }
+        }
+
+        private void WriteRedactedPayload(Utf8JsonWriter writer, object payload)
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(payload, _jsonOptions);
+                using var doc = JsonDocument.Parse(json);
+                WriteRedactedElement(writer, doc.RootElement);
+            }
+            catch
+            {
+                writer.WriteStringValue("(redacted)");
+            }
+        }
+
+        private void WriteRedactedElement(Utf8JsonWriter writer, JsonElement element)
+        {
+            switch (element.ValueKind)
+            {
+                case JsonValueKind.Object:
+                    writer.WriteStartObject();
+                    foreach (var prop in element.EnumerateObject())
+                    {
+                        writer.WritePropertyName(prop.Name);
+                        if (_redactedKeys.Contains(prop.Name))
+                        {
+                            writer.WriteStringValue("(redacted)");
+                        }
+                        else
+                        {
+                            WriteRedactedElement(writer, prop.Value);
+                        }
+                    }
+                    writer.WriteEndObject();
+                    break;
+                case JsonValueKind.Array:
+                    writer.WriteStartArray();
+                    foreach (var item in element.EnumerateArray())
+                    {
+                        WriteRedactedElement(writer, item);
+                    }
+                    writer.WriteEndArray();
+                    break;
+                case JsonValueKind.String:
+                    writer.WriteStringValue(element.GetString());
+                    break;
+                case JsonValueKind.Number:
+                    if (element.TryGetInt64(out var l))
+                    {
+                        writer.WriteNumberValue(l);
+                    }
+                    else
+                    {
+                        writer.WriteNumberValue(element.GetDouble());
+                    }
+                    break;
+                case JsonValueKind.True:
+                    writer.WriteBooleanValue(true);
+                    break;
+                case JsonValueKind.False:
+                    writer.WriteBooleanValue(false);
+                    break;
+                case JsonValueKind.Null:
+                default:
+                    writer.WriteNullValue();
+                    break;
             }
         }
     }

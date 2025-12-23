@@ -53,9 +53,11 @@ class McpClient:
             return self._cached_tools
         cfg = load_mcp_settings()
         url = f"http://{cfg.host}:{cfg.port}/tools"
+        token = os.environ.get("MCP_AUTH_TOKEN", "")
         client = self._get_client()
         try:
-            resp = await client.get(url, timeout=5)
+            headers = {"X-Mcp-Token": token} if token else None
+            resp = await client.get(url, timeout=5, headers=headers)
             resp.raise_for_status()
             payload = orjson.loads(resp.content)
             self._cached_tools = payload
@@ -72,12 +74,16 @@ class McpClient:
         cfg = load_mcp_settings()
         url = f"http://{cfg.host}:{cfg.port}/call"
         payload = {"tool": tool, "args": args or {}}
+        token = os.environ.get("MCP_AUTH_TOKEN", "")
         client = self._get_client()
         try:
+            headers = {"Content-Type": "application/json"}
+            if token:
+                headers["X-Mcp-Token"] = token
             resp = await client.post(
                 url,
                 content=orjson.dumps(payload),
-                headers={"Content-Type": "application/json"},
+                headers=headers,
                 timeout=15,
             )
             resp.raise_for_status()

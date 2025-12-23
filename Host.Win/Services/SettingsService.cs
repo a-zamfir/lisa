@@ -50,12 +50,17 @@ namespace Host.Win.Services
 
         public async Task SaveAsync(HostSettings settings)
         {
-            var toSave = NormalizeForSave(settings);
+            if (!TryEncryptApiKey(settings.ProviderApiKey, out var encryptedApiKey))
+            {
+                throw new InvalidOperationException("DPAPI encryption failed; settings not saved.");
+            }
+
+            var toSave = NormalizeForSave(settings, encryptedApiKey);
             await using var stream = File.Create(_settingsPath);
             await JsonSerializer.SerializeAsync(stream, toSave, _jsonOptions).ConfigureAwait(false);
         }
 
-        private static HostSettings NormalizeForSave(HostSettings settings)
+        private static HostSettings NormalizeForSave(HostSettings settings, string encryptedApiKey)
         {
             return new HostSettings
             {
@@ -66,7 +71,7 @@ namespace Host.Win.Services
                 ProviderMode = settings.ProviderMode,
                 ProviderHost = settings.ProviderHost,
                 ProviderPort = settings.ProviderPort,
-                ProviderApiKey = EncryptApiKey(settings.ProviderApiKey),
+                ProviderApiKey = encryptedApiKey,
                 ProviderModel = settings.ProviderModel,
                 ProviderTemperature = settings.ProviderTemperature,
                 ProviderThink = settings.ProviderThink,
@@ -82,27 +87,31 @@ namespace Host.Win.Services
             };
         }
 
-        private static string EncryptApiKey(string? apiKey)
+        private static bool TryEncryptApiKey(string? apiKey, out string encrypted)
         {
             if (string.IsNullOrWhiteSpace(apiKey))
             {
-                return string.Empty;
+                encrypted = string.Empty;
+                return true;
             }
 
             if (apiKey.StartsWith(ApiKeyPrefix, StringComparison.Ordinal))
             {
-                return apiKey;
+                encrypted = apiKey;
+                return true;
             }
 
             try
             {
                 var bytes = Encoding.UTF8.GetBytes(apiKey);
                 var protectedBytes = ProtectedData.Protect(bytes, null, DataProtectionScope.CurrentUser);
-                return $"{ApiKeyPrefix}{Convert.ToBase64String(protectedBytes)}";
+                encrypted = $"{ApiKeyPrefix}{Convert.ToBase64String(protectedBytes)}";
+                return true;
             }
             catch
             {
-                return apiKey;
+                encrypted = string.Empty;
+                return false;
             }
         }
 

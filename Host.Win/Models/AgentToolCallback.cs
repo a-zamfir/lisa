@@ -23,5 +23,11 @@ namespace Host.Win.Models
 
         [JsonPropertyName("content_delta")]
         public string? ContentDelta { get; set; }
+
+        [JsonPropertyName("token")]
+        public string? Token { get; set; }
+
+        [JsonPropertyName("session_nonce")]
+        public string? SessionNonce { get; set; }
     }
 }

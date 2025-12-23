@@ -17,13 +17,24 @@ namespace Host.Win.Services
         private readonly string _agentRoot;
         private readonly string _pidFile;
         private readonly string _requirementsHashFile;
+        private readonly string _callbackToken;
+        private readonly int _callbackPort;
+        private readonly string _mcpAuthToken;
         private IntPtr _jobHandle = IntPtr.Zero;
 
-        public AgentProcessHost(string agentPath, int port)
+        public AgentProcessHost(
+            string agentPath,
+            int port,
+            string? callbackToken = null,
+            int callbackPort = 0,
+            string? mcpAuthToken = null)
         {
             _agentPath = agentPath;
             _port = port;
             _agentRoot = Path.GetDirectoryName(agentPath) ?? Environment.CurrentDirectory;
+            _callbackToken = callbackToken ?? string.Empty;
+            _callbackPort = callbackPort;
+            _mcpAuthToken = mcpAuthToken ?? string.Empty;
             var localDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LISA");
             Directory.CreateDirectory(localDir);
             _pidFile = Path.Combine(localDir, "agent.pid");
@@ -40,12 +51,14 @@ namespace Host.Win.Services
             }
 
             var workingDir = Path.GetDirectoryName(_agentPath) ?? Environment.CurrentDirectory;
+            Trace.WriteLine($"Agent working dir resolved: {workingDir}");
             var pythonPath = EnsureVenv(workingDir);
             if (pythonPath == null)
             {
                 Trace.TraceError("Unable to create or locate Python interpreter for agent.");
                 return;
             }
+            Trace.WriteLine($"Agent python resolved: {pythonPath}");
 
             TryKillExistingPid();
 
@@ -68,10 +81,22 @@ namespace Host.Win.Services
                 "LISA",
                 "host-settings.json");
             psi.Environment["PYTHONPATH"] = workingDir;
-            psi.Environment["LISA_CALLBACK_UDP_PORT"] = "5052";
+            if (!string.IsNullOrWhiteSpace(_callbackToken))
+            {
+                psi.Environment["LISA_CALLBACK_TOKEN"] = _callbackToken;
+            }
+            if (_callbackPort > 0)
+            {
+                psi.Environment["LISA_CALLBACK_TCP_PORT"] = _callbackPort.ToString();
+            }
+            if (!string.IsNullOrWhiteSpace(_mcpAuthToken))
+            {
+                psi.Environment["MCP_AUTH_TOKEN"] = _mcpAuthToken;
+            }
             psi.Environment["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1";
             psi.Environment["HF_HUB_OFFLINE"] = "1";
             psi.Environment["FASTER_WHISPER_MODEL_DIR"] = Path.Combine(workingDir, "speech", "models", "whisper-small");
+            Trace.WriteLine($"Agent env: AGENT_PORT={_port} LISA_CALLBACK_TCP_PORT={_callbackPort}");
 
             try
             {
@@ -87,6 +112,18 @@ namespace Host.Win.Services
                         "LISA",
                         "host-settings.json");
                     psi.Environment["PYTHONPATH"] = workingDir;
+                    if (!string.IsNullOrWhiteSpace(_callbackToken))
+                    {
+                        psi.Environment["LISA_CALLBACK_TOKEN"] = _callbackToken;
+                    }
+                    if (_callbackPort > 0)
+                    {
+                        psi.Environment["LISA_CALLBACK_TCP_PORT"] = _callbackPort.ToString();
+                    }
+                    if (!string.IsNullOrWhiteSpace(_mcpAuthToken))
+                    {
+                        psi.Environment["MCP_AUTH_TOKEN"] = _mcpAuthToken;
+                    }
                     _process = Process.Start(psi);
                 }
 
@@ -189,6 +226,7 @@ namespace Host.Win.Services
             {
                 var hash = ComputeFileHash(requirements);
                 var existingHash = ReadHash(_requirementsHashFile);
+                Trace.WriteLine($"Agent requirements hash: {hash} (stored={existingHash ?? "none"})");
                 if (!string.Equals(hash, existingHash, StringComparison.OrdinalIgnoreCase))
                 {
                     Trace.WriteLine("Installing agent requirements...");

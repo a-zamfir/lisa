@@ -8,6 +8,7 @@ from fastapi import APIRouter, File, Form, UploadFile
 from fastapi.responses import ORJSONResponse
 from starlette.concurrency import run_in_threadpool
 
+from agent_worker.services.session_state import set_session_nonce
 from agent_worker.services.stt import transcribe_audio
 
 
@@ -23,6 +24,9 @@ async def handle_audio(audio: UploadFile = File(...), meta: str = Form(...)) -> 
         meta_payload = {}
 
     session_id = meta_payload.get("session_id") or str(uuid.uuid4())
+    session_nonce = meta_payload.get("session_nonce")
+    if session_nonce:
+        set_session_nonce(session_id, session_nonce)
     audio_bytes = await audio.read()
     print(f"[audio] request session={session_id} bytes={len(audio_bytes)}")
     if not audio_bytes:
@@ -35,13 +39,15 @@ async def handle_audio(audio: UploadFile = File(...), meta: str = Form(...)) -> 
         return ORJSONResponse(payload)
 
     try:
-        transcript, _decode_ms, stt_ms = await run_in_threadpool(transcribe_audio, audio_bytes)
+        transcript, _decode_ms, stt_ms, device, compute = await run_in_threadpool(transcribe_audio, audio_bytes)
         print(f"[audio] done session={session_id} transcript_len={len(transcript)} stt_ms={stt_ms}")
         payload = {
             "session_id": session_id,
             "transcript": transcript,
             "assistant_message": "Got it.",
             "stt_ms": stt_ms,
+            "stt_device": device,
+            "stt_compute": compute,
         }
         return ORJSONResponse(payload)
     except Exception as exc:

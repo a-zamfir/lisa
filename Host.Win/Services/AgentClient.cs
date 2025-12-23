@@ -20,6 +20,9 @@ namespace Host.Win.Services
         private static readonly HttpClient SharedClient = CreateClient();
         private Uri _baseUri;
         private string? _providerApiKey;
+        private string? _mcpAuthToken;
+        private readonly DateTime _createdAt = DateTime.UtcNow;
+        private readonly TimeSpan _healthErrorGrace = TimeSpan.FromSeconds(5);
 
         public AgentClient(Uri baseUri)
         {
@@ -36,6 +39,11 @@ namespace Host.Win.Services
             _providerApiKey = string.IsNullOrWhiteSpace(apiKey) ? null : apiKey;
         }
 
+        public void SetMcpAuthToken(string? token)
+        {
+            _mcpAuthToken = string.IsNullOrWhiteSpace(token) ? null : token;
+        }
+
         public async Task<bool> CheckHealthAsync(CancellationToken cancellationToken = default)
         {
             try
@@ -45,7 +53,10 @@ namespace Host.Win.Services
             }
             catch (Exception ex)
             {
-                Trace.TraceError($"Health check failed: {ex.Message}");
+                if (DateTime.UtcNow - _createdAt > _healthErrorGrace)
+                {
+                    Trace.TraceError($"Health check failed: {ex.Message}");
+                }
                 return false;
             }
         }
@@ -62,6 +73,10 @@ namespace Host.Win.Services
                 if (!string.IsNullOrWhiteSpace(_providerApiKey))
                 {
                     message.Headers.Add("X-Provider-Api-Key", _providerApiKey);
+                }
+                if (!string.IsNullOrWhiteSpace(_mcpAuthToken))
+                {
+                    message.Headers.Add("X-Mcp-Token", _mcpAuthToken);
                 }
 
                 var response = await SharedClient.SendAsync(message, cancellationToken).ConfigureAwait(false);
