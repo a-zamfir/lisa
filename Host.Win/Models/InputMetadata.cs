@@ -13,5 +13,8 @@ namespace Host.Win.Models
 
         [JsonPropertyName("clipboard")]
         public string? Clipboard { get; set; }
+
+        [JsonPropertyName("session_nonce")]
+        public string? SessionNonce { get; set; }
     }
 }

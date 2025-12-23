@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -43,18 +44,19 @@ namespace Host.Win.Services
 
         public void LogEvent(string eventType, object payload)
         {
-            var safePayload = RedactPayload(payload);
-            var record = new
-            {
-                ts = DateTime.UtcNow.ToString("o"),
-                event_type = eventType,
-                payload = safePayload
-            };
-
             string? line = null;
             try
             {
-                line = JsonSerializer.Serialize(record, _jsonOptions);
+                using var stream = new MemoryStream();
+                using var writer = new Utf8JsonWriter(stream);
+                writer.WriteStartObject();
+                writer.WriteString("ts", DateTime.UtcNow.ToString("o"));
+                writer.WriteString("event_type", eventType);
+                writer.WritePropertyName("payload");
+                WriteRedactedPayload(writer, payload);
+                writer.WriteEndObject();
+                writer.Flush();
+                line = Encoding.UTF8.GetString(stream.ToArray());
             }
             catch
             {
@@ -74,49 +76,72 @@ namespace Host.Win.Services
             }
         }
 
-        private JsonNode? RedactPayload(object payload)
+        private void WriteRedactedPayload(Utf8JsonWriter writer, object payload)
         {
             try
             {
-                var node = JsonSerializer.SerializeToNode(payload, _jsonOptions);
-                return RedactNode(node);
+                var json = JsonSerializer.Serialize(payload, _jsonOptions);
+                using var doc = JsonDocument.Parse(json);
+                WriteRedactedElement(writer, doc.RootElement);
             }
             catch
             {
-                return JsonValue.Create("(redacted)");
+                writer.WriteStringValue("(redacted)");
             }
         }
 
-        private JsonNode? RedactNode(JsonNode? node)
+        private void WriteRedactedElement(Utf8JsonWriter writer, JsonElement element)
         {
-            if (node is JsonObject obj)
+            switch (element.ValueKind)
             {
-                foreach (var entry in obj.ToList())
-                {
-                    var key = entry.Key;
-                    if (_redactedKeys.Contains(key))
+                case JsonValueKind.Object:
+                    writer.WriteStartObject();
+                    foreach (var prop in element.EnumerateObject())
                     {
-                        obj[key] = "(redacted)";
-                        continue;
+                        writer.WritePropertyName(prop.Name);
+                        if (_redactedKeys.Contains(prop.Name))
+                        {
+                            writer.WriteStringValue("(redacted)");
+                        }
+                        else
+                        {
+                            WriteRedactedElement(writer, prop.Value);
+                        }
                     }
-
-                    obj[key] = RedactNode(entry.Value);
-                }
-
-                return obj;
+                    writer.WriteEndObject();
+                    break;
+                case JsonValueKind.Array:
+                    writer.WriteStartArray();
+                    foreach (var item in element.EnumerateArray())
+                    {
+                        WriteRedactedElement(writer, item);
+                    }
+                    writer.WriteEndArray();
+                    break;
+                case JsonValueKind.String:
+                    writer.WriteStringValue(element.GetString());
+                    break;
+                case JsonValueKind.Number:
+                    if (element.TryGetInt64(out var l))
+                    {
+                        writer.WriteNumberValue(l);
+                    }
+                    else
+                    {
+                        writer.WriteNumberValue(element.GetDouble());
+                    }
+                    break;
+                case JsonValueKind.True:
+                    writer.WriteBooleanValue(true);
+                    break;
+                case JsonValueKind.False:
+                    writer.WriteBooleanValue(false);
+                    break;
+                case JsonValueKind.Null:
+                default:
+                    writer.WriteNullValue();
+                    break;
             }
-
-            if (node is JsonArray array)
-            {
-                for (var i = 0; i < array.Count; i++)
-                {
-                    array[i] = RedactNode(array[i]);
-                }
-
-                return array;
-            }
-
-            return node;
         }
     }
 }

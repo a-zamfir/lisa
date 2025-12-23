@@ -30,9 +30,9 @@ namespace Host.Win
         private HostSettings? _hostSettings;
         private AgentProcessHost? _agentProcessHost;
         private McpProcessHost? _mcpProcessHost;
-        private AgentCallbackServer? _agentCallbackServer;
-        private const int AgentCallbackPort = 5052;
+        private TcpCallbackServer? _agentCallbackServer;
         private readonly string _agentCallbackToken = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+        private const int AgentCallbackPort = 5052;
 
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -103,21 +103,28 @@ namespace Host.Win
 
             // From Host.Win/bin/Debug/... back to repo root then into Agent.Worker/main.py
             var agentScript = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "Agent.Worker", "main.py");
-            _agentProcessHost = new AgentProcessHost(Path.GetFullPath(agentScript), port: _hostSettings.AgentPort, callbackToken: _agentCallbackToken);
-            _agentCallbackServer = new AgentCallbackServer(AgentCallbackPort, _agentCallbackToken, callback =>
+            _agentProcessHost = new AgentProcessHost(Path.GetFullPath(agentScript), port: _hostSettings.AgentPort, callbackToken: _agentCallbackToken, callbackPort: AgentCallbackPort);
+            _agentCallbackServer = new TcpCallbackServer(AgentCallbackPort, _agentCallbackToken, callback =>
             {
-                if (callback.Phase == "thinking_chunk" || callback.Phase == "thinking_done")
+                Dispatcher.InvokeAsync(() =>
                 {
-                    overlayVm.UpdateThinkingStatus(callback.TurnId, callback.Phase, callback.ThinkingDelta);
-                }
-                else if (callback.Phase == "content_chunk" || callback.Phase == "content_done")
-                {
-                    overlayVm.UpdateContentStatus(callback.TurnId, callback.Phase, callback.ContentDelta);
-                }
-                else
-                {
-                    overlayVm.UpdateToolStatus(callback.TurnId, callback.Phase, callback.ToolCalls);
-                }
+                    if (!overlayVm.IsCallbackAuthorized(callback.SessionId, callback.SessionNonce))
+                    {
+                        return;
+                    }
+                    if (callback.Phase == "thinking_chunk" || callback.Phase == "thinking_done")
+                    {
+                        overlayVm.UpdateThinkingStatus(callback.TurnId, callback.Phase, callback.ThinkingDelta);
+                    }
+                    else if (callback.Phase == "content_chunk" || callback.Phase == "content_done")
+                    {
+                        overlayVm.UpdateContentStatus(callback.TurnId, callback.Phase, callback.ContentDelta);
+                    }
+                    else
+                    {
+                        overlayVm.UpdateToolStatus(callback.TurnId, callback.Phase, callback.ToolCalls);
+                    }
+                });
             });
             _agentCallbackServer.Start();
             _agentProcessHost.Start();
@@ -195,23 +202,30 @@ namespace Host.Win
                 // Restart agent process if needed (port change)
                 _agentProcessHost?.Dispose();
                 var agentScriptNew = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "Agent.Worker", "main.py");
-                _agentProcessHost = new AgentProcessHost(Path.GetFullPath(agentScriptNew), port: overlayVm.Settings.AgentPort, callbackToken: _agentCallbackToken);
+                _agentProcessHost = new AgentProcessHost(Path.GetFullPath(agentScriptNew), port: overlayVm.Settings.AgentPort, callbackToken: _agentCallbackToken, callbackPort: AgentCallbackPort);
                 _agentProcessHost.Start();
                 _agentCallbackServer?.Stop();
-                _agentCallbackServer = new AgentCallbackServer(AgentCallbackPort, _agentCallbackToken, callback =>
+                _agentCallbackServer = new TcpCallbackServer(AgentCallbackPort, _agentCallbackToken, callback =>
                 {
-                    if (callback.Phase == "thinking_chunk" || callback.Phase == "thinking_done")
+                    Dispatcher.InvokeAsync(() =>
                     {
-                        overlayVm.UpdateThinkingStatus(callback.TurnId, callback.Phase, callback.ThinkingDelta);
-                    }
-                    else if (callback.Phase == "content_chunk" || callback.Phase == "content_done")
-                    {
-                        overlayVm.UpdateContentStatus(callback.TurnId, callback.Phase, callback.ContentDelta);
-                    }
-                    else
-                    {
-                        overlayVm.UpdateToolStatus(callback.TurnId, callback.Phase, callback.ToolCalls);
-                    }
+                        if (!overlayVm.IsCallbackAuthorized(callback.SessionId, callback.SessionNonce))
+                        {
+                            return;
+                        }
+                        if (callback.Phase == "thinking_chunk" || callback.Phase == "thinking_done")
+                        {
+                            overlayVm.UpdateThinkingStatus(callback.TurnId, callback.Phase, callback.ThinkingDelta);
+                        }
+                        else if (callback.Phase == "content_chunk" || callback.Phase == "content_done")
+                        {
+                            overlayVm.UpdateContentStatus(callback.TurnId, callback.Phase, callback.ContentDelta);
+                        }
+                        else
+                        {
+                            overlayVm.UpdateToolStatus(callback.TurnId, callback.Phase, callback.ToolCalls);
+                        }
+                    });
                 });
                 _agentCallbackServer.Start();
                 _mcpProcessHost?.Dispose();

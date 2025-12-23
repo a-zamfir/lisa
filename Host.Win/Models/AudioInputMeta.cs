@@ -18,6 +18,9 @@ namespace Host.Win.Models
         [JsonPropertyName("session_id")]
         public string SessionId { get; set; } = string.Empty;
 
+        [JsonPropertyName("session_nonce")]
+        public string? SessionNonce { get; set; }
+
         [JsonPropertyName("continuous_vad")]
         public bool ContinuousVad { get; set; }
 

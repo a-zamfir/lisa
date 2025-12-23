@@ -26,5 +26,8 @@ namespace Host.Win.Models
 
         [JsonPropertyName("token")]
         public string? Token { get; set; }
+
+        [JsonPropertyName("session_nonce")]
+        public string? SessionNonce { get; set; }
     }
 }

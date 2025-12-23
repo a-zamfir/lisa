@@ -44,6 +44,7 @@ namespace Host.Win.ViewModels
         private ICommand? _toggleCollapseCommand;
         private readonly System.Collections.Generic.Dictionary<string, System.Threading.CancellationTokenSource> _inflightTurns = new();
         private string _sessionId = Guid.NewGuid().ToString();
+        private string _sessionNonce = GenerateSessionNonce();
         private bool _isSharing;
         private bool _isListening;
         private bool _isProcessing;
@@ -236,6 +237,12 @@ namespace Host.Win.ViewModels
             private set => SetProperty(ref _sessionId, value);
         }
 
+        public string SessionNonce
+        {
+            get => _sessionNonce;
+            private set => SetProperty(ref _sessionNonce, value);
+        }
+
         public bool IsSharing
         {
             get => _isSharing;
@@ -420,7 +427,7 @@ namespace Host.Win.ViewModels
             message.TurnId = request.TurnId;
             var cts = new System.Threading.CancellationTokenSource();
             _inflightTurns[request.TurnId] = cts;
-
+            
             Logger?.LogEvent("request.text.retry", new
             {
                 request.SessionId,
@@ -594,7 +601,7 @@ namespace Host.Win.ViewModels
             }
             _inflightTurns.Clear();
             ClearChatHistory();
-            SessionId = Guid.NewGuid().ToString();
+            UpdateSession(Guid.NewGuid().ToString());
             Logger?.LogEvent("conversation.reset", new { sessionId = SessionId });
             CommandManager.InvalidateRequerySuggested();
         }
@@ -686,6 +693,7 @@ namespace Host.Win.ViewModels
                     var meta = new AudioInputMeta
                     {
                         SessionId = SessionId,
+                        SessionNonce = SessionNonce,
                         ContinuousVad = IsContinuousListening,
                         Timestamp = DateTimeOffset.UtcNow,
                         Context = context
@@ -713,7 +721,7 @@ namespace Host.Win.ViewModels
                     {
                         if (!string.IsNullOrWhiteSpace(response.SessionId))
                         {
-                            SessionId = response.SessionId;
+                        UpdateSession(response.SessionId);
                         }
 
                         if (!string.IsNullOrWhiteSpace(response.Transcript))
@@ -895,7 +903,10 @@ namespace Host.Win.ViewModels
                 SessionId = SessionId,
                 TurnId = turnId,
                 Text = text,
-                InputMeta = new InputMetadata()
+                InputMeta = new InputMetadata
+                {
+                    SessionNonce = SessionNonce
+                }
             };
 
             Logger?.LogEvent("request.text.send", new
@@ -929,7 +940,7 @@ namespace Host.Win.ViewModels
                         {
                             if (string.IsNullOrEmpty(streamingMessage.Text))
                             {
-                                await RunOnUiAsync(() => streamingMessage.Text = msg.Content).ConfigureAwait(false);
+                                await StreamTextAsync(streamingMessage, msg.Content, cts.Token);
                             }
                         }
                         else
@@ -1045,6 +1056,28 @@ namespace Host.Win.ViewModels
         private static Task RunOnUiAsync(Action action)
         {
             return System.Windows.Application.Current.Dispatcher.InvokeAsync(action).Task;
+        }
+
+        private void UpdateSession(string newSessionId)
+        {
+            if (string.Equals(SessionId, newSessionId, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            SessionId = newSessionId;
+            SessionNonce = GenerateSessionNonce();
+        }
+
+        private static string GenerateSessionNonce()
+        {
+            return Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16));
+        }
+
+        public bool IsCallbackAuthorized(string sessionId, string? sessionNonce)
+        {
+            return string.Equals(SessionId, sessionId, StringComparison.Ordinal)
+                && string.Equals(SessionNonce, sessionNonce ?? string.Empty, StringComparison.Ordinal);
         }
     }
 }

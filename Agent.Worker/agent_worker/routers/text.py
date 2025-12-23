@@ -4,6 +4,7 @@ import asyncio
 import orjson
 import os
 import socket
+import threading
 import time
 from typing import Any, Dict, List, Optional
 
@@ -13,6 +14,7 @@ from agent_worker.models import AgentMessage, AgentResponse, RetryInput, TextInp
 from agent_worker.services.conversations import ConversationStore
 from agent_worker.services.mcp_client import McpClient
 from agent_worker.services.provider import call_provider, call_provider_stream, warm_provider_client
+from agent_worker.services.session_state import get_session_nonce, set_session_nonce
 from agent_worker.services.settings import load_settings
 from agent_worker.services.system_context import collect_system_context
 
@@ -23,6 +25,9 @@ _mcp_client = McpClient()
 _tool_context: Optional[str] = None
 _tool_context_version = 0
 _SYSTEM_CONTEXT = collect_system_context()
+_callback_socket: Optional[socket.socket] = None
+_callback_port: Optional[int] = None
+_callback_lock = threading.Lock()
 
 
 async def init_tool_cache() -> bool:
@@ -110,87 +115,114 @@ def _parse_tool_args(args: Any) -> Dict[str, Any]:
     return {}
 
 
-def _send_tool_callback(session_id: str, turn_id: str, phase: str, tool_names: List[str]) -> None:
-    port_text = os.environ.get("LISA_CALLBACK_UDP_PORT", "")
+def _close_callback_socket() -> None:
+    global _callback_socket, _callback_port
+    if _callback_socket is not None:
+        try:
+            _callback_socket.close()
+        except Exception:
+            pass
+    _callback_socket = None
+    _callback_port = None
+
+
+def _get_callback_socket(port: int) -> Optional[socket.socket]:
+    global _callback_socket, _callback_port
+    if _callback_socket is not None and _callback_port == port:
+        return _callback_socket
+    _close_callback_socket()
+    try:
+        sock = socket.create_connection(("127.0.0.1", port), timeout=0.5)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        _callback_socket = sock
+        _callback_port = port
+        return sock
+    except Exception:
+        _close_callback_socket()
+        return None
+
+
+def _write_callback_payload(payload: Dict[str, Any]) -> None:
+    port_text = os.environ.get("LISA_CALLBACK_TCP_PORT", "")
     token = os.environ.get("LISA_CALLBACK_TOKEN", "")
-    if not port_text.isdigit():
+    debug = os.environ.get("LISA_CALLBACK_DEBUG", "")
+    if not port_text.isdigit() or not token:
         return
-    if not token:
-        return
+    payload["token"] = token
+    session_nonce = get_session_nonce(payload.get("session_id", ""))
+    if session_nonce:
+        payload["session_nonce"] = session_nonce
+    data = orjson.dumps(payload)
+    length = len(data).to_bytes(4, "little", signed=False)
     port = int(port_text)
+    with _callback_lock:
+        sock = _get_callback_socket(port)
+        if sock is None:
+            return
+        try:
+            sock.sendall(length + data)
+            if debug:
+                print(f"[callback] sent phase={payload.get('phase')} turn_id={payload.get('turn_id')}")
+        except Exception as exc:
+            _close_callback_socket()
+            try:
+                sock = _get_callback_socket(port)
+                if sock is None:
+                    return
+                sock.sendall(length + data)
+                if debug:
+                    print(f"[callback] sent phase={payload.get('phase')} turn_id={payload.get('turn_id')}")
+            except Exception as exc2:
+                _close_callback_socket()
+                if debug:
+                    print(f"[callback] send failed: {exc2}")
+
+
+async def _send_pipe_payload(payload: Dict[str, Any]) -> None:
+    try:
+        await asyncio.to_thread(_write_callback_payload, payload)
+    except RuntimeError:
+        _write_callback_payload(payload)
+
+
+async def _send_tool_callback(session_id: str, turn_id: str, phase: str, tool_names: List[str]) -> None:
     payload = {
         "session_id": session_id,
         "turn_id": turn_id,
         "phase": phase,
         "tool_calls": tool_names,
-        "token": token,
     }
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.sendto(orjson.dumps(payload), ("127.0.0.1", port))
-    except Exception:
-        pass
-    finally:
-        try:
-            sock.close()
-        except Exception:
-            pass
+    await _send_pipe_payload(payload)
 
 
 def _send_thinking_callback(session_id: str, turn_id: str, phase: str, delta: Optional[str] = None) -> None:
-    port_text = os.environ.get("LISA_CALLBACK_UDP_PORT", "")
-    token = os.environ.get("LISA_CALLBACK_TOKEN", "")
-    if not port_text.isdigit():
-        return
-    if not token:
-        return
-    port = int(port_text)
     payload: Dict[str, Any] = {
         "session_id": session_id,
         "turn_id": turn_id,
         "phase": phase,
-        "token": token,
     }
     if delta:
         payload["thinking_delta"] = delta
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.sendto(orjson.dumps(payload), ("127.0.0.1", port))
-    except Exception:
-        pass
-    finally:
-        try:
-            sock.close()
-        except Exception:
-            pass
+        loop = asyncio.get_running_loop()
+        loop.run_in_executor(None, _write_callback_payload, payload)
+    except RuntimeError:
+        _write_callback_payload(payload)
 
 
 def _send_content_callback(session_id: str, turn_id: str, phase: str, delta: Optional[str] = None) -> None:
-    port_text = os.environ.get("LISA_CALLBACK_UDP_PORT", "")
-    token = os.environ.get("LISA_CALLBACK_TOKEN", "")
-    if not port_text.isdigit():
-        return
-    if not token:
-        return
-    port = int(port_text)
     payload: Dict[str, Any] = {
         "session_id": session_id,
         "turn_id": turn_id,
         "phase": phase,
-        "token": token,
     }
     if delta:
         payload["content_delta"] = delta
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.sendto(orjson.dumps(payload), ("127.0.0.1", port))
-    except Exception:
-        pass
-    finally:
-        try:
-            sock.close()
-        except Exception:
-            pass
+        loop = asyncio.get_running_loop()
+        loop.run_in_executor(None, _write_callback_payload, payload)
+    except RuntimeError:
+        _write_callback_payload(payload)
 
 
 @router.get("/health")
@@ -205,6 +237,8 @@ async def handle_text(req: TextInput, x_mcp_token: str | None = Header(default=N
         os.environ["MCP_AUTH_TOKEN"] = x_mcp_token
     start_time = time.monotonic()
     text = req.text.strip()
+    if req.input_meta and req.input_meta.session_nonce:
+        set_session_nonce(req.session_id, req.input_meta.session_nonce)
 
     history = _conversations.get_history(req.session_id)
 
@@ -247,7 +281,7 @@ async def handle_text(req: TextInput, x_mcp_token: str | None = Header(default=N
             tool_name = func.get("name") or tool_call.get("name")
             if tool_name:
                 used_tools.append(tool_name)
-        _send_tool_callback(req.session_id, req.turn_id, "awaiting_tool", used_tools)
+        await _send_tool_callback(req.session_id, req.turn_id, "awaiting_tool", used_tools)
         for tool_call in tool_calls:
             func = tool_call.get("function") or tool_call
             tool_name = func.get("name") or tool_call.get("name")
@@ -257,7 +291,7 @@ async def handle_text(req: TextInput, x_mcp_token: str | None = Header(default=N
                 provider_messages.append(
                     {"role": "tool", "name": tool_name, "content": orjson.dumps(tool_result, option=orjson.OPT_INDENT_2).decode("utf-8")}
                 )
-        _send_tool_callback(req.session_id, req.turn_id, "tool_response", used_tools)
+        await _send_tool_callback(req.session_id, req.turn_id, "tool_response", used_tools)
         follow_streamed = {"seen": False}
 
         def _on_follow_content(chunk: str) -> None:
@@ -273,7 +307,7 @@ async def handle_text(req: TextInput, x_mcp_token: str | None = Header(default=N
         if follow_streamed["seen"]:
             _send_content_callback(req.session_id, req.turn_id, "content_done")
         completion = follow.get("content") or follow.get("error", "")
-        _send_tool_callback(req.session_id, req.turn_id, "tool_complete", used_tools)
+        await _send_tool_callback(req.session_id, req.turn_id, "tool_complete", used_tools)
 
     thinking_ms = int((time.monotonic() - start_time) * 1000)
     reasoning = ""

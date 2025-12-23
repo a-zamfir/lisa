@@ -8,6 +8,7 @@ from fastapi import APIRouter, File, Form, UploadFile
 from fastapi.responses import ORJSONResponse
 from starlette.concurrency import run_in_threadpool
 
+from agent_worker.services.session_state import set_session_nonce
 from agent_worker.services.stt import transcribe_audio
 
 
@@ -23,6 +24,9 @@ async def handle_audio(audio: UploadFile = File(...), meta: str = Form(...)) -> 
         meta_payload = {}
 
     session_id = meta_payload.get("session_id") or str(uuid.uuid4())
+    session_nonce = meta_payload.get("session_nonce")
+    if session_nonce:
+        set_session_nonce(session_id, session_nonce)
     audio_bytes = await audio.read()
     print(f"[audio] request session={session_id} bytes={len(audio_bytes)}")
     if not audio_bytes:

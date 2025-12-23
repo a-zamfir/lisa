@@ -218,6 +218,7 @@ obj/
 
 # Internal Docs
 PENDING_IMPLEMENTATION.md
+FEATURES.md
 
 # Whisper model files
 Agent.Worker/speech/models/

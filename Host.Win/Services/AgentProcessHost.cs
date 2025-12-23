@@ -18,14 +18,16 @@ namespace Host.Win.Services
         private readonly string _pidFile;
         private readonly string _requirementsHashFile;
         private readonly string _callbackToken;
+        private readonly int _callbackPort;
         private IntPtr _jobHandle = IntPtr.Zero;
 
-        public AgentProcessHost(string agentPath, int port, string? callbackToken = null)
+        public AgentProcessHost(string agentPath, int port, string? callbackToken = null, int callbackPort = 0)
         {
             _agentPath = agentPath;
             _port = port;
             _agentRoot = Path.GetDirectoryName(agentPath) ?? Environment.CurrentDirectory;
             _callbackToken = callbackToken ?? string.Empty;
+            _callbackPort = callbackPort;
             var localDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LISA");
             Directory.CreateDirectory(localDir);
             _pidFile = Path.Combine(localDir, "agent.pid");
@@ -72,15 +74,18 @@ namespace Host.Win.Services
                 "LISA",
                 "host-settings.json");
             psi.Environment["PYTHONPATH"] = workingDir;
-            psi.Environment["LISA_CALLBACK_UDP_PORT"] = "5052";
             if (!string.IsNullOrWhiteSpace(_callbackToken))
             {
                 psi.Environment["LISA_CALLBACK_TOKEN"] = _callbackToken;
             }
+            if (_callbackPort > 0)
+            {
+                psi.Environment["LISA_CALLBACK_TCP_PORT"] = _callbackPort.ToString();
+            }
             psi.Environment["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1";
             psi.Environment["HF_HUB_OFFLINE"] = "1";
             psi.Environment["FASTER_WHISPER_MODEL_DIR"] = Path.Combine(workingDir, "speech", "models", "whisper-small");
-            Trace.WriteLine($"Agent env: AGENT_PORT={_port} LISA_CALLBACK_UDP_PORT=5052");
+            Trace.WriteLine($"Agent env: AGENT_PORT={_port} LISA_CALLBACK_TCP_PORT={_callbackPort}");
 
             try
             {
@@ -96,6 +101,14 @@ namespace Host.Win.Services
                         "LISA",
                         "host-settings.json");
                     psi.Environment["PYTHONPATH"] = workingDir;
+                    if (!string.IsNullOrWhiteSpace(_callbackToken))
+                    {
+                        psi.Environment["LISA_CALLBACK_TOKEN"] = _callbackToken;
+                    }
+                    if (_callbackPort > 0)
+                    {
+                        psi.Environment["LISA_CALLBACK_TCP_PORT"] = _callbackPort.ToString();
+                    }
                     _process = Process.Start(psi);
                 }
 

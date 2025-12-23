@@ -55,13 +55,13 @@ flowchart LR
   - Mic capture (WASAPI), VAD (WebRTC preferred), screen capture (WinRT).
   - Audio playback (NAudio), permission gates, clipboard/open-url enforcement.
   - Settings UI + storage (`%LOCALAPPDATA%/LISA/host-settings.json`).
-  - UI cache for messages; health indicators for MCP/Agent/Provider; UDP listener for streaming callbacks.
+  - UI cache for messages; health indicators for MCP/Agent/Provider; local TCP listener for streaming callbacks.
 - Agent (Python FastAPI):
   - Conversation state keyed by `session_id`.
   - LLM calls (Ollama/provider), tools via MCP client, orchestration.
   - System context injected every request: LISA prompt + metadata (time, user display/account, machine, OS, locale/region, home).
   - Tool registry: fetched on startup and cached; injected as tools property and first-system message once per session.
-  - Streaming callbacks (UDP): thinking, content chunks/done, tool phases.
+- Streaming callbacks (TCP, persistent connection): thinking, content chunks/done, tool phases with token + per-session nonce validation.
   - Memory: short-term in process; long-term planned in SQLite + optional embeddings.
   - STT/TTS: STT in agent (future); host plays TTS from agent text via external Piper process (GPL boundary; subprocess only).
 - Agent.MCP (Python FastAPI):
@@ -74,7 +74,7 @@ flowchart LR
 
 ## IPC Contract (Phase 1: localhost HTTP; Phase 2: optional pipes/gRPC)
 - Transport:
-  - Phase 1: FastAPI on 127.0.0.1 with JSON; multipart/octet-stream for audio/images; UDP callbacks for thinking/content/tool phases to host.
+  - Phase 1: FastAPI on 127.0.0.1 with JSON; multipart/octet-stream for audio/images; persistent TCP callbacks for thinking/content/tool phases to host.
   - Phase 2 option: named pipes or gRPC for tighter surface and typed contracts.
 - Core endpoints:
   - `GET /health`
@@ -126,7 +126,7 @@ sequenceDiagram
   Host->>Agent: POST /input/text {session_id, turn_id, text, meta}
   Agent->>LLM: Generate reply (with tools as needed)
   LLM-->>Agent: Streamed thinking/content/tool calls
-  Agent-->>Host: Response + UDP callbacks (thinking/content/tool phases)
+  Agent-->>Host: Response + TCP callbacks (thinking/content/tool phases)
   Host-->>User: Render reasoning + streamed content
 ```
 
@@ -169,7 +169,7 @@ sequenceDiagram
 
 ## Tech Stack
 - Host: .NET 8 WPF, MVVM; WASAPI capture; WebRTC VAD; WinRT Graphics Capture; NAudio playback; Piper via external process only (GPL, user-installed); JSON settings (SQLite later).
-- Agent Worker: FastAPI; Ollama/provider; MCP client; UDP callbacks; system context builder; prompts as markdown files.
+- Agent Worker: FastAPI; Ollama/provider; MCP client; TCP callbacks; system context builder; prompts as markdown files.
 - Agent.MCP: FastAPI tools server; PowerShell/WMI under the hood; read-only tools.
 
 ## State & Memory
@@ -191,15 +191,20 @@ sequenceDiagram
 - Redaction hooks for screen/clipboard; permission gates for mic/screen.
 - Actions are suggestions; host enforces confirmation/allowlist. Future: signed actions/tool scopes.
 
+## Security Improvements (ongoing)
+- IPC hardening: authenticated callbacks (token + per-session nonce) and MCP auth tokens; loopback binding enforcement next.
+- Secrets: DPAPI at-rest encryption, log redaction, and fail-closed settings saves.
+- Tooling: per-tool allowlists, audit logs, and explicit user confirmations (planned).
+
 ## Observability
 - Host logging + agent logging with correlation IDs (`session_id`, `turn_id`).
-- UDP callbacks mark thinking/content/tool phases for live UX.
+- TCP callbacks mark thinking/content/tool phases for live UX.
 - Minimal metrics: latency per turn, provider latency, payload sizes; event timeline per turn (planned in DB).
 
 ## Implementation Phases
 - Phase 0 (done): WPF shell, tray, overlay, hotkey, health indicator stub.
 - Phase 1 (done): Chat end-to-end with streaming (content + reasoning), tool calls via Agent.MCP, system prompt + metadata injection, copy/retry/stop, status chips (MCP/Agent/Provider).
-- Phase 2: Talk mode - mic capture, VAD, POST /input/audio, STT, host TTS playback.
+- Phase 2 (done): Talk mode - mic capture, VAD, POST /input/audio, STT, host TTS playback.
 - Phase 3: Screen share snapshots - capture, send images, vision summary in responses.
 - Phase 4: Settings UI + MCP management - sync settings, manage MCP servers, model/provider selection.
 - Phase 5: Memory + embeddings - long-term recall via SQLite + optional FAISS vectors.
