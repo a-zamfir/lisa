@@ -65,6 +65,8 @@ namespace Host.Win
             overlayVm.UpdateMcpStatus(false);
             overlayVm.UpdateAgentStatus(false);
             overlayVm.UpdateProviderStatus(false);
+            overlayVm.ProviderType = _hostSettings.ProviderType;
+            overlayVm.RefreshProviderModels();
 
             var initialTheme = _themeService.GetSystemTheme();
             _themeService.ApplyTheme(initialTheme);
@@ -98,6 +100,7 @@ namespace Host.Win
             overlayVm.StartTalkCommand = new Commands.AsyncRelayCommand(() => overlayVm.StartTalkAsync(), overlayVm.CanStartTalk);
             overlayVm.ReplayTtsCommand = new Commands.AsyncRelayCommand(() => overlayVm.ReplayLastTtsAsync());
             overlayVm.ToggleCollapseCommand = new Commands.RelayCommand(() => overlayVm.ToggleCollapsed());
+            overlayVm.BrowseProviderModelCommand = new Commands.RelayCommand(() => overlayVm.BrowseProviderModel());
 
             overlayVm.SelectedMode = AssistantMode.Chat;
 
@@ -113,7 +116,8 @@ namespace Host.Win
                 port: _hostSettings.AgentPort,
                 callbackToken: _agentCallbackToken,
                 callbackPort: AgentCallbackPort,
-                mcpAuthToken: _mcpProcessHost.AuthToken);
+                mcpAuthToken: _mcpProcessHost.AuthToken,
+                providerApiKey: _hostSettings.ProviderApiKey);
             _agentCallbackServer = new TcpCallbackServer(AgentCallbackPort, _agentCallbackToken, callback =>
             {
                 Dispatcher.InvokeAsync(() =>
@@ -218,7 +222,8 @@ namespace Host.Win
                     port: overlayVm.Settings.AgentPort,
                     callbackToken: _agentCallbackToken,
                     callbackPort: AgentCallbackPort,
-                    mcpAuthToken: _mcpProcessHost.AuthToken);
+                    mcpAuthToken: _mcpProcessHost.AuthToken,
+                    providerApiKey: overlayVm.Settings.ProviderApiKey);
                 _agentProcessHost.Start();
                 _agentCallbackServer?.Stop();
                 _agentCallbackServer = new TcpCallbackServer(AgentCallbackPort, _agentCallbackToken, callback =>

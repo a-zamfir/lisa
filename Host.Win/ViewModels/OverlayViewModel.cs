@@ -5,8 +5,12 @@ using Host.Win.Services;
 using System;
 using System.Diagnostics;
 using System.Collections.ObjectModel;
+using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using Microsoft.VisualBasic;
+using System.Text.Json;
 
 namespace Host.Win.ViewModels
 {
@@ -45,6 +49,7 @@ namespace Host.Win.ViewModels
         private readonly System.Collections.Generic.Dictionary<string, System.Threading.CancellationTokenSource> _inflightTurns = new();
         private string _sessionId = Guid.NewGuid().ToString();
         private string _sessionNonce = GenerateSessionNonce();
+        private string _providerType = "Ollama";
         private bool _isSharing;
         private bool _isListening;
         private bool _isProcessing;
@@ -214,7 +219,11 @@ namespace Host.Win.ViewModels
         public HostSettings? Settings
         {
             get => _settings;
-            set => SetProperty(ref _settings, value);
+            set
+            {
+                if (!SetProperty(ref _settings, value)) return;
+                ProviderType = _settings?.ProviderType ?? "Ollama";
+            }
         }
 
         public ICommand? SaveSettingsCommand
@@ -230,6 +239,13 @@ namespace Host.Win.ViewModels
         }
 
         public ObservableCollection<ChatMessage> ChatMessages { get; } = new();
+        public ObservableCollection<string> ProviderOptions { get; } = new()
+        {
+            "Ollama",
+            "LM Studio",
+            "OpenAI"
+        };
+        public ObservableCollection<string> ProviderModels { get; } = new();
 
         public string SessionId
         {
@@ -242,6 +258,23 @@ namespace Host.Win.ViewModels
             get => _sessionNonce;
             private set => SetProperty(ref _sessionNonce, value);
         }
+
+        public string ProviderType
+        {
+            get => _providerType;
+            set
+            {
+                if (!SetProperty(ref _providerType, value)) return;
+                if (Settings != null)
+                {
+                    Settings.ProviderType = value;
+                }
+                RefreshProviderModels();
+                OnPropertyChanged(nameof(IsOpenAiProvider));
+            }
+        }
+
+        public bool IsOpenAiProvider => string.Equals(ProviderType, "OpenAI", StringComparison.OrdinalIgnoreCase);
 
         public bool IsSharing
         {
@@ -313,6 +346,7 @@ namespace Host.Win.ViewModels
         public AudioPlaybackService? AudioPlaybackService { get; set; }
         public TtsService? TtsService { get; set; }
         public ContextCollector? ContextCollector { get; set; }
+        public ICommand? BrowseProviderModelCommand { get; set; }
 
         public void ApplyTheme(AppTheme theme)
         {
@@ -591,6 +625,86 @@ namespace Host.Win.ViewModels
         public void ClearChatHistory()
         {
             ChatMessages.Clear();
+        }
+
+        public void RefreshProviderModels()
+        {
+            ProviderModels.Clear();
+            var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (string.Equals(ProviderType, "Ollama", StringComparison.OrdinalIgnoreCase))
+            {
+                var manifestRoot = Path.Combine(userProfile, ".ollama", "models", "manifests", "registry.ollama.ai", "library");
+                if (Directory.Exists(manifestRoot))
+                {
+                    foreach (var modelDir in Directory.GetDirectories(manifestRoot))
+                    {
+                        var modelName = Path.GetFileName(modelDir);
+                        var tagFiles = Directory.GetFiles(modelDir);
+                        if (tagFiles.Length == 0)
+                        {
+                            ProviderModels.Add(modelName);
+                            continue;
+                        }
+                        foreach (var tag in tagFiles.Select(Path.GetFileName))
+                        {
+                            if (!string.IsNullOrWhiteSpace(tag))
+                            {
+                                ProviderModels.Add($"{modelName}:{tag}");
+                            }
+                        }
+                    }
+                }
+            }
+            else if (string.Equals(ProviderType, "LM Studio", StringComparison.OrdinalIgnoreCase))
+            {
+                var lmRoot = Path.Combine(userProfile, ".lmstudio", "hub", "models");
+                if (Directory.Exists(lmRoot))
+                {
+                    foreach (var manifestPath in Directory.EnumerateFiles(lmRoot, "manifest.json", SearchOption.AllDirectories))
+                    {
+                        try
+                        {
+                            using var doc = JsonDocument.Parse(File.ReadAllText(manifestPath));
+                            if (doc.RootElement.TryGetProperty("owner", out var ownerEl)
+                                && doc.RootElement.TryGetProperty("name", out var nameEl)
+                                && ownerEl.ValueKind == JsonValueKind.String
+                                && nameEl.ValueKind == JsonValueKind.String)
+                            {
+                                var owner = ownerEl.GetString();
+                                var name = nameEl.GetString();
+                                if (!string.IsNullOrWhiteSpace(owner) && !string.IsNullOrWhiteSpace(name))
+                                {
+                                    ProviderModels.Add($"{owner}/{name}");
+                                }
+                                continue;
+                            }
+                        }
+                        catch
+                        {
+                            // ignore malformed manifests
+                        }
+                    }
+                }
+            }
+        }
+
+        public void BrowseProviderModel()
+        {
+            if (!IsOpenAiProvider || Settings == null)
+            {
+                return;
+            }
+
+            var current = Settings.ProviderModel ?? string.Empty;
+            var input = Interaction.InputBox("Enter the OpenAI model id.", "OpenAI Model", current);
+            var value = input?.Trim();
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return;
+            }
+
+            Settings.ProviderModel = value;
+            OnPropertyChanged(nameof(Settings));
         }
 
         public void ResetConversation()

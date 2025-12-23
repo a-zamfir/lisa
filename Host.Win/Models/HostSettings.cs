@@ -7,6 +7,7 @@ namespace Host.Win.Models
         public int McpPort { get; set; } = 8123;
         public string AgentHost { get; set; } = "127.0.0.1";
         public int AgentPort { get; set; } = 5050;
+        public string ProviderType { get; set; } = "Ollama"; // Ollama | LMStudio | OpenAI
         public string ProviderMode { get; set; } = "Local"; // Local | Hosted
         public string ProviderHost { get; set; } = "127.0.0.1";
         public int ProviderPort { get; set; } = 11434;
@@ -17,6 +18,7 @@ namespace Host.Win.Models
         public string VoiceType { get; set; } = "default";
         public double VoiceRate { get; set; } = 1.0;
         public double VoiceVolume { get; set; } = 1.0;
+        public bool TtsEnabledInChat { get; set; } = true;
         public string PiperExePath { get; set; } = string.Empty;
         public string PiperMode { get; set; } = "exe"; // exe | python
         public string PiperPythonPath { get; set; } = "python";

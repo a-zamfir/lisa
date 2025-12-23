@@ -20,6 +20,7 @@ namespace Host.Win.Services
         private readonly string _callbackToken;
         private readonly int _callbackPort;
         private readonly string _mcpAuthToken;
+        private readonly string _providerApiKey;
         private IntPtr _jobHandle = IntPtr.Zero;
 
         public AgentProcessHost(
@@ -27,7 +28,8 @@ namespace Host.Win.Services
             int port,
             string? callbackToken = null,
             int callbackPort = 0,
-            string? mcpAuthToken = null)
+            string? mcpAuthToken = null,
+            string? providerApiKey = null)
         {
             _agentPath = agentPath;
             _port = port;
@@ -35,6 +37,7 @@ namespace Host.Win.Services
             _callbackToken = callbackToken ?? string.Empty;
             _callbackPort = callbackPort;
             _mcpAuthToken = mcpAuthToken ?? string.Empty;
+            _providerApiKey = providerApiKey ?? string.Empty;
             var localDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LISA");
             Directory.CreateDirectory(localDir);
             _pidFile = Path.Combine(localDir, "agent.pid");
@@ -93,6 +96,10 @@ namespace Host.Win.Services
             {
                 psi.Environment["MCP_AUTH_TOKEN"] = _mcpAuthToken;
             }
+            if (!string.IsNullOrWhiteSpace(_providerApiKey))
+            {
+                psi.Environment["PROVIDER_API_KEY"] = _providerApiKey;
+            }
             psi.Environment["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1";
             psi.Environment["HF_HUB_OFFLINE"] = "1";
             psi.Environment["FASTER_WHISPER_MODEL_DIR"] = Path.Combine(workingDir, "speech", "models", "whisper-small");
@@ -123,6 +130,10 @@ namespace Host.Win.Services
                     if (!string.IsNullOrWhiteSpace(_mcpAuthToken))
                     {
                         psi.Environment["MCP_AUTH_TOKEN"] = _mcpAuthToken;
+                    }
+                    if (!string.IsNullOrWhiteSpace(_providerApiKey))
+                    {
+                        psi.Environment["PROVIDER_API_KEY"] = _providerApiKey;
                     }
                     _process = Process.Start(psi);
                 }

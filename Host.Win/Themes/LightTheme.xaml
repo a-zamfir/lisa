@@ -14,6 +14,7 @@
     <Color x:Key="PrimaryButtonBackgroundColor">#2563EB</Color>
     <Color x:Key="PrimaryButtonHoverColor">#1D4ED8</Color>
     <Color x:Key="PrimaryButtonTextColor">#FFFFFF</Color>
+    <Color x:Key="RadioCheckedFillColor">#2563EB</Color>
     <Color x:Key="AssistantBubbleBackgroundColor">#F3F4F6</Color>
     <Color x:Key="AssistantBubbleForegroundColor">#111827</Color>
     <Color x:Key="AssistantBubbleBorderColor">#E5E7EB</Color>
@@ -35,6 +36,7 @@
     <SolidColorBrush x:Key="PrimaryButtonBackground" Color="{StaticResource PrimaryButtonBackgroundColor}"/>
     <SolidColorBrush x:Key="PrimaryButtonHover" Color="{StaticResource PrimaryButtonHoverColor}"/>
     <SolidColorBrush x:Key="PrimaryButtonForeground" Color="{StaticResource PrimaryButtonTextColor}"/>
+    <SolidColorBrush x:Key="RadioCheckedFill" Color="{StaticResource RadioCheckedFillColor}"/>
     <SolidColorBrush x:Key="AssistantBubbleBackground" Color="{StaticResource AssistantBubbleBackgroundColor}"/>
     <SolidColorBrush x:Key="AssistantBubbleForeground" Color="{StaticResource AssistantBubbleForegroundColor}"/>
     <SolidColorBrush x:Key="AssistantBubbleBorder" Color="{StaticResource AssistantBubbleBorderColor}"/>

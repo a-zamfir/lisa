@@ -50,7 +50,7 @@
         </Style>
         <Style x:Key="ChipRadioStyle" TargetType="RadioButton">
             <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
+            <Setter Property="Foreground" Value="{DynamicResource SubtleText}"/>
             <Setter Property="Padding" Value="4"/>
             <Setter Property="Margin" Value="0 0 8 0"/>
             <Setter Property="Cursor" Value="Hand"/>
@@ -72,7 +72,7 @@
                                     VerticalAlignment="Center"/>
                             <Ellipse x:Name="BulletFill"
                                      Width="8" Height="8"
-                                     Fill="{DynamicResource ButtonActiveBackground}"
+                                     Fill="{DynamicResource RadioCheckedFill}"
                                      VerticalAlignment="Center"
                                      HorizontalAlignment="Center"
                                      Grid.Column="0"
@@ -92,6 +92,126 @@
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="BulletBorder" Property="Opacity" Value="0.6"/>
                                 <Setter TargetName="BulletFill" Property="Opacity" Value="0.3"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="SettingsComboBoxItemStyle" TargetType="ComboBoxItem">
+            <Setter Property="Background" Value="{DynamicResource ButtonBackground}"/>
+            <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
+            <Setter Property="Padding" Value="8 6"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Style.Triggers>
+                <Trigger Property="IsHighlighted" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource ButtonHoverBackground}"/>
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource ButtonHoverBackground}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="SettingsComboBoxStyle" TargetType="ComboBox">
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Padding" Value="8 4"/>
+            <Setter Property="Background" Value="{DynamicResource ButtonBackground}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ButtonBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="ItemContainerStyle" Value="{StaticResource SettingsComboBoxItemStyle}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton x:Name="DropDownToggle"
+                                          Focusable="False"
+                                          IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                                          ClickMode="Press"
+                                          Background="{TemplateBinding Background}"
+                                          BorderBrush="{TemplateBinding BorderBrush}"
+                                          BorderThickness="{TemplateBinding BorderThickness}"
+                                          Foreground="{TemplateBinding Foreground}"
+                                          Padding="{TemplateBinding Padding}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="OuterBorder"
+                                                Background="{TemplateBinding Background}"
+                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                BorderThickness="{TemplateBinding BorderThickness}"
+                                                CornerRadius="10"
+                                                Padding="{TemplateBinding Padding}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <ContentPresenter x:Name="ContentSite"
+                                                                  Grid.Column="0"
+                                                                  Margin="2 0 8 0"
+                                                                  HorizontalAlignment="Stretch"
+                                                                  VerticalAlignment="Center"
+                                                                  Content="{TemplateBinding Content}"
+                                                                  TextElement.Foreground="{TemplateBinding Foreground}"
+                                                                  TextElement.FontFamily="{TemplateBinding FontFamily}"
+                                                                  TextElement.FontSize="{TemplateBinding FontSize}"/>
+                                                <Path Grid.Column="1"
+                                                      Data="M 0 0 L 6 0 L 3 4 Z"
+                                                      Fill="{DynamicResource SubtleText}"
+                                                      HorizontalAlignment="Right"
+                                                      VerticalAlignment="Center"
+                                                      Margin="6 0 4 0"/>
+                                            </Grid>
+                                        </Border>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                                <ContentPresenter x:Name="SelectionPresenter"
+                                                  Content="{TemplateBinding SelectionBoxItem}"
+                                                  ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                                  ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                                  TextElement.Foreground="{TemplateBinding Foreground}"
+                                                  TextElement.FontFamily="{TemplateBinding FontFamily}"
+                                                  TextElement.FontSize="{TemplateBinding FontSize}"/>
+                            </ToggleButton>
+                            <TextBox x:Name="PART_EditableTextBox"
+                                     Margin="10 0 24 0"
+                                     VerticalAlignment="Center"
+                                     Background="Transparent"
+                                     Foreground="{TemplateBinding Foreground}"
+                                     FontFamily="{TemplateBinding FontFamily}"
+                                     FontSize="{TemplateBinding FontSize}"
+                                     BorderThickness="0"
+                                     Visibility="Hidden"/>
+                            <Popup x:Name="Popup"
+                                   Placement="Bottom"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   PopupAnimation="Fade">
+                                <Border Background="{DynamicResource ButtonBackground}"
+                                        BorderBrush="{DynamicResource ButtonBorder}"
+                                        BorderThickness="1"
+                                        CornerRadius="8"
+                                        Padding="2"
+                                        Margin="0 4 0 0">
+                                    <ScrollViewer CanContentScroll="True">
+                                        <StackPanel IsItemsHost="True"/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEditable" Value="True">
+                                <Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Visible"/>
+                                <Setter TargetName="SelectionPresenter" Property="Visibility" Value="Hidden"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.6"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -1543,119 +1663,163 @@
                                       Margin="0 12 0 0"
                                       Padding="0 0 4 8">
                             <StackPanel Margin="0">
-                                <Border Background="{DynamicResource PanelBackground}" Padding="10" CornerRadius="10" Margin="0 0 0 12">
-                                    <StackPanel Margin="0">
-                                        <TextBlock Text="MCP Endpoint" Foreground="{DynamicResource SubtleText}" FontWeight="SemiBold" FontSize="13"/>
-                                        <StackPanel Orientation="Horizontal" Margin="0 8 0 0">
-                                            <TextBox Width="210"
-                                                     FontSize="13"
-                                                     Margin="0 0 10 0"
-                                                     Text="{Binding Settings.McpHost, UpdateSourceTrigger=PropertyChanged}"
-                                                     Style="{StaticResource RoundedTextBoxStyle}"/>
-                                            <TextBox Width="90"
-                                                     FontSize="13"
-                                                     Text="{Binding Settings.McpPort, UpdateSourceTrigger=PropertyChanged}"
-                                                     Style="{StaticResource RoundedTextBoxStyle}"/>
-                                        </StackPanel>
+                                <TextBlock Text="LLM Provider" Foreground="{DynamicResource OverlayForeground}" FontWeight="SemiBold" FontSize="13"/>
+                                <StackPanel Orientation="Horizontal" Margin="0 10 0 0" VerticalAlignment="Center">
+                                    <TextBlock Text="Provider Mode" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <RadioButton Content="Local"
+                                                     GroupName="ProviderMode"
+                                                     Style="{StaticResource ChipRadioStyle}"
+                                                     IsChecked="{Binding Settings.ProviderMode, Converter={StaticResource EqualityConverter}, ConverterParameter=Local}"/>
+                                        <RadioButton Content="Hosted"
+                                                     GroupName="ProviderMode"
+                                                     Style="{StaticResource ChipRadioStyle}"
+                                                     IsChecked="{Binding Settings.ProviderMode, Converter={StaticResource EqualityConverter}, ConverterParameter=Hosted}"/>
                                     </StackPanel>
-                                </Border>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0 8 0 0" VerticalAlignment="Center">
+                                    <TextBlock Text="Provider" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                    <ComboBox Width="210"
+                                              FontSize="13"
+                                              ItemsSource="{Binding ProviderOptions}"
+                                              SelectedItem="{Binding ProviderType, UpdateSourceTrigger=PropertyChanged}"
+                                              Style="{StaticResource SettingsComboBoxStyle}"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0 8 0 0" VerticalAlignment="Center">
+                                    <TextBlock Text="Model" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                    <ComboBox Width="210"
+                                              FontSize="13"
+                                              ItemsSource="{Binding ProviderModels}"
+                                              IsEditable="True"
+                                              IsTextSearchEnabled="True"
+                                              Text="{Binding Settings.ProviderModel, UpdateSourceTrigger=PropertyChanged}"
+                                              Style="{StaticResource SettingsComboBoxStyle}"/>
+                                    <Button Command="{Binding BrowseProviderModelCommand}"
+                                            Margin="10 0 0 0"
+                                            Padding="10 6"
+                                            Height="34">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource ModeButtonStyle}">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ProviderType}" Value="OpenAI">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                        <TextBlock Text="Browse"/>
+                                    </Button>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0 8 0 0">
+                                    <TextBlock Text="Provider Endpoint" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                    <TextBox Width="210"
+                                             FontSize="13"
+                                             Margin="0 0 10 0"
+                                             Text="{Binding Settings.ProviderHost, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource RoundedTextBoxStyle}"/>
+                                    <TextBox Width="90"
+                                             FontSize="13"
+                                             Text="{Binding Settings.ProviderPort, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource RoundedTextBoxStyle}"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Vertical" Margin="0 8 0 0">
+                                    <TextBlock Text="API Key (Hosted only)" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 0 4"/>
+                                    <TextBox Width="240"
+                                             FontSize="13"
+                                             Text="{Binding Settings.ProviderApiKey, UpdateSourceTrigger=PropertyChanged}">
+                                        <TextBox.Style>
+                                            <Style TargetType="TextBox" BasedOn="{StaticResource RoundedTextBoxStyle}">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Settings.ProviderMode}" Value="Local">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBox.Style>
+                                    </TextBox>
+                                </StackPanel>
 
-                                    <Border Background="{DynamicResource PanelBackground}" Padding="10" CornerRadius="10" Margin="0 0 0 12">
-                                        <StackPanel Margin="0">
-                                            <TextBlock Text="Provider Endpoint" Foreground="{DynamicResource SubtleText}" FontWeight="SemiBold" FontSize="13"/>
-                                            <StackPanel Orientation="Horizontal" Margin="0 8 0 0">
-                                                <TextBox Width="210"
-                                                         FontSize="13"
-                                                         Margin="0 0 10 0"
-                                                         Text="{Binding Settings.ProviderHost, UpdateSourceTrigger=PropertyChanged}"
-                                                         Style="{StaticResource RoundedTextBoxStyle}"/>
-                                                <TextBox Width="90"
-                                                         FontSize="13"
-                                                         Text="{Binding Settings.ProviderPort, UpdateSourceTrigger=PropertyChanged}"
-                                                         Style="{StaticResource RoundedTextBoxStyle}"/>
-                                            </StackPanel>
-                                            <StackPanel Orientation="Horizontal" Margin="0 8 0 0" VerticalAlignment="Center" >
-                                                <TextBlock Text="Mode:" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
-                                                <StackPanel Orientation="Horizontal">
-                                                    <RadioButton Content="Local"
-                                                                 GroupName="ProviderMode"
-                                                                 Style="{StaticResource ChipRadioStyle}"
-                                                                 IsChecked="{Binding Settings.ProviderMode, Converter={StaticResource EqualityConverter}, ConverterParameter=Local}"/>
-                                                    <RadioButton Content="Hosted"
-                                                                 GroupName="ProviderMode"
-                                                                 Style="{StaticResource ChipRadioStyle}"
-                                                                 IsChecked="{Binding Settings.ProviderMode, Converter={StaticResource EqualityConverter}, ConverterParameter=Hosted}"/>
-                                                </StackPanel>
-                                            </StackPanel>
-                                            <StackPanel Orientation="Vertical" Margin="0 8 0 0">
-                                                <TextBlock Text="Model" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 0 4"/>
-                                                <TextBox Width="210"
-                                                         FontSize="13"
-                                                         Text="{Binding Settings.ProviderModel, UpdateSourceTrigger=PropertyChanged}"
-                                                         Style="{StaticResource RoundedTextBoxStyle}"/>
-                                            </StackPanel>
-                                            <StackPanel Orientation="Horizontal" Margin="0 8 0 0">
-                                                <StackPanel Width="140">
-                                                    <TextBlock Text="Temperature" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 0 4"/>
-                                                    <TextBox FontSize="13"
-                                                             Text="{Binding Settings.ProviderTemperature, UpdateSourceTrigger=PropertyChanged}"
-                                                             Style="{StaticResource RoundedTextBoxStyle}"/>
-                                                </StackPanel>
-                                            </StackPanel>
-                                            <StackPanel Orientation="Horizontal" Margin="0 8 0 0" VerticalAlignment="Center">
-                                                <TextBlock Text="Thinking (reasoning)" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
-                                                <StackPanel Orientation="Horizontal">
-                                                    <RadioButton Content="Enabled"
-                                                                 GroupName="ProviderThink"
-                                                                 Style="{StaticResource ChipRadioStyle}"
-                                                                 IsChecked="{Binding Settings.ProviderThink, Converter={StaticResource BoolEqualityConverter}, ConverterParameter=True}"/>
-                                                    <RadioButton Content="Disabled"
-                                                                 GroupName="ProviderThink"
-                                                                 Style="{StaticResource ChipRadioStyle}"
-                                                                 IsChecked="{Binding Settings.ProviderThink, Converter={StaticResource BoolEqualityConverter}, ConverterParameter=False}"/>
-                                                </StackPanel>
-                                            </StackPanel>
-                                            <StackPanel Orientation="Vertical" Margin="0 8 0 0">
-                                                <TextBlock Text="API Key (Hosted only)" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 0 4"/>
-                                                <TextBox Width="240"
-                                                         FontSize="13"
-                                                         Text="{Binding Settings.ProviderApiKey, UpdateSourceTrigger=PropertyChanged}">
-                                                    <TextBox.Style>
-                                                        <Style TargetType="TextBox" BasedOn="{StaticResource RoundedTextBoxStyle}">
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding Settings.ProviderMode}" Value="Local">
-                                                                    <Setter Property="IsEnabled" Value="False"/>
-                                                                    <Setter Property="Opacity" Value="0.6"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </TextBox.Style>
-                                                </TextBox>
-                                            </StackPanel>
-                                        </StackPanel>
-                                    </Border>
+                                <Border Height="1" Background="{DynamicResource ButtonBorder}" Margin="0 14 0 14"/>
 
-                                <Border Background="{DynamicResource PanelBackground}" Padding="10" CornerRadius="10" Margin="0 0 0 12">
-                                    <StackPanel Margin="0">
-                                        <TextBlock Text="Voice" Foreground="{DynamicResource SubtleText}" FontWeight="SemiBold" FontSize="13"/>
-                                        <StackPanel Orientation="Horizontal" Margin="0 8 0 0">
-                                            <TextBox Width="170"
-                                                     FontSize="13"
-                                                     Margin="0 0 10 0"
-                                                     Text="{Binding Settings.VoiceType, UpdateSourceTrigger=PropertyChanged}"
-                                                     Style="{StaticResource RoundedTextBoxStyle}"/>
-                                            <TextBox Width="90"
-                                                     FontSize="13"
-                                                     Margin="0 0 10 0"
-                                                     Text="{Binding Settings.VoiceRate, UpdateSourceTrigger=PropertyChanged}"
-                                                     Style="{StaticResource RoundedTextBoxStyle}"/>
-                                            <TextBox Width="90"
-                                                     FontSize="13"
-                                                     Text="{Binding Settings.VoiceVolume, UpdateSourceTrigger=PropertyChanged}"
-                                                     Style="{StaticResource RoundedTextBoxStyle}"/>
-                                        </StackPanel>
+                                <TextBlock Text="Model" Foreground="{DynamicResource OverlayForeground}" FontWeight="SemiBold" FontSize="13"/>
+                                <StackPanel Orientation="Horizontal" Margin="0 10 0 0">
+                                    <TextBlock Text="Temperature" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                    <TextBox Width="90"
+                                             FontSize="13"
+                                             Text="{Binding Settings.ProviderTemperature, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource RoundedTextBoxStyle}"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0 8 0 0" VerticalAlignment="Center">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ProviderType}" Value="Ollama">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <TextBlock Text="Thinking" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <RadioButton Content="Enabled"
+                                                     GroupName="ProviderThink"
+                                                     Style="{StaticResource ChipRadioStyle}"
+                                                     IsChecked="{Binding Settings.ProviderThink, Converter={StaticResource BoolEqualityConverter}, ConverterParameter=True}"/>
+                                        <RadioButton Content="Disabled"
+                                                     GroupName="ProviderThink"
+                                                     Style="{StaticResource ChipRadioStyle}"
+                                                     IsChecked="{Binding Settings.ProviderThink, Converter={StaticResource BoolEqualityConverter}, ConverterParameter=False}"/>
                                     </StackPanel>
-                                </Border>
+                                </StackPanel>
+
+                                <Border Height="1" Background="{DynamicResource ButtonBorder}" Margin="0 14 0 14"/>
+
+                                <TextBlock Text="MCP" Foreground="{DynamicResource OverlayForeground}" FontWeight="SemiBold" FontSize="13"/>
+                                <StackPanel Orientation="Horizontal" Margin="0 10 0 0">
+                                    <TextBlock Text="MCP Endpoint" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                    <TextBox Width="210"
+                                             FontSize="13"
+                                             Margin="0 0 10 0"
+                                             Text="{Binding Settings.McpHost, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource RoundedTextBoxStyle}"/>
+                                    <TextBox Width="90"
+                                             FontSize="13"
+                                             Text="{Binding Settings.McpPort, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource RoundedTextBoxStyle}"/>
+                                </StackPanel>
+
+                                <Border Height="1" Background="{DynamicResource ButtonBorder}" Margin="0 14 0 14"/>
+
+                                <TextBlock Text="Voice" Foreground="{DynamicResource OverlayForeground}" FontWeight="SemiBold" FontSize="13"/>
+                                <StackPanel Orientation="Horizontal" Margin="0 10 0 0">
+                                    <TextBlock Text="TTS Volume" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                    <TextBox Width="90"
+                                             FontSize="13"
+                                             Margin="0 0 10 0"
+                                             Text="{Binding Settings.VoiceVolume, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource RoundedTextBoxStyle}"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0 8 0 0">
+                                    <TextBlock Text="TTS Playback speed" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                    <TextBox Width="90"
+                                             FontSize="13"
+                                             Text="{Binding Settings.VoiceRate, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource RoundedTextBoxStyle}"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0 8 0 0" VerticalAlignment="Center">
+                                    <TextBlock Text="TTS Enabled in chat" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                    <CheckBox IsChecked="{Binding Settings.TtsEnabledInChat}"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0 8 0 0">
+                                    <TextBlock Text="TTS Voice Actor" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                    <TextBox Width="210"
+                                             FontSize="13"
+                                             Text="{Binding Settings.VoiceType, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource RoundedTextBoxStyle}"/>
+                                </StackPanel>
 
                                 <Button Content="Save Settings"
                                         Width="170"
@@ -1663,7 +1827,7 @@
                                         HorizontalAlignment="Left"
                                         Command="{Binding SaveSettingsCommand}"
                                         Style="{StaticResource SendButtonStyle}"
-                                        Margin="0 2 0 0"/>
+                                        Margin="0 14 0 0"/>
                             </StackPanel>
                         </ScrollViewer>
                     </Grid>

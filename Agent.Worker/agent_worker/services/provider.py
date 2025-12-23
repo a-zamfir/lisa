@@ -11,6 +11,91 @@ from .settings import ProviderConfig, load_settings
 _shared_client: Optional[httpx.AsyncClient] = None
 
 
+class BaseProvider:
+    def __init__(self, cfg: ProviderConfig) -> None:
+        self.cfg = cfg
+
+    @property
+    def is_sse(self) -> bool:
+        return False
+
+    def endpoint_path(self) -> str:
+        return "/api/chat"
+
+    def build_url(self) -> str:
+        return f"http://{self.cfg.host}:{self.cfg.port}{self.endpoint_path()}"
+
+    def build_headers(self) -> Dict[str, str]:
+        return {"Content-Type": "application/json"}
+
+    def build_payload(self, messages: List[dict], tools: Optional[List[Dict[str, Any]]], stream: bool) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            "model": self.cfg.model,
+            "messages": messages,
+            "stream": stream,
+        }
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
+        return payload
+
+
+class OllamaProvider(BaseProvider):
+    def endpoint_path(self) -> str:
+        return "/api/chat"
+
+    def build_payload(self, messages: List[dict], tools: Optional[List[Dict[str, Any]]], stream: bool) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            "model": self.cfg.model,
+            "messages": messages,
+            "options": {"temperature": self.cfg.temperature},
+            "stream": stream,
+            "think": self.cfg.think,
+        }
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
+        return payload
+
+
+class LmStudioProvider(BaseProvider):
+    @property
+    def is_sse(self) -> bool:
+        return True
+
+    def endpoint_path(self) -> str:
+        return "/v1/chat/completions"
+
+    def build_payload(self, messages: List[dict], tools: Optional[List[Dict[str, Any]]], stream: bool) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            "model": self.cfg.model,
+            "messages": messages,
+            "temperature": self.cfg.temperature,
+            "stream": stream,
+        }
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
+        return payload
+
+
+class OpenAiProvider(LmStudioProvider):
+    def build_headers(self) -> Dict[str, str]:
+        headers = super().build_headers()
+        if self.cfg.api_key:
+            headers["Authorization"] = f"Bearer {self.cfg.api_key}"
+        return headers
+
+
+def _get_provider(cfg: ProviderConfig) -> BaseProvider:
+    kind = (cfg.provider_type or "ollama").strip().lower()
+    if kind in {"lmstudio", "lm studio", "lm-studio"}:
+        return LmStudioProvider(cfg)
+    if kind in {"openai", "open ai"}:
+        return OpenAiProvider(cfg)
+    return OllamaProvider(cfg)
+
+
 def _get_client() -> httpx.AsyncClient:
     global _shared_client
     if _shared_client is None:
@@ -189,32 +274,20 @@ def _tool_calls_ready(tool_calls: List[Dict[str, Any]]) -> bool:
 
 async def call_provider(messages: List[dict], tools: Optional[List[Dict[str, Any]]] = None, attempts: int = 3) -> Dict[str, Any]:
     provider_cfg: ProviderConfig = load_settings()
-    payload = {
-        "model": provider_cfg.model,
-        "messages": messages,
-        "options": {
-            "temperature": provider_cfg.temperature,
-        },
-        "stream": provider_cfg.stream,
-        "think": provider_cfg.think,
-    }
-    if tools:
-        payload["tools"] = tools
-        payload["tool_choice"] = "auto"
+    provider = _get_provider(provider_cfg)
+    payload = provider.build_payload(messages, tools, stream=False)
 
     last_error: Optional[str] = None
     timeout = httpx.Timeout(60.0, connect=10.0)
     for _ in range(attempts):
         try:
             client = _get_client()
-            url = f"http://{provider_cfg.host}:{provider_cfg.port}/api/chat"
-            headers = {}
-            if provider_cfg.api_key:
-                headers["X-Provider-Api-Key"] = provider_cfg.api_key
+            url = provider.build_url()
+            headers = provider.build_headers()
             resp = await client.post(
                 url,
                 content=orjson.dumps(payload),
-                headers={**headers, "Content-Type": "application/json"},
+                headers=headers,
                 timeout=timeout,
             )
             resp.raise_for_status()
@@ -251,24 +324,11 @@ async def call_provider_stream(
     on_content_chunk: Optional[Callable[[str], None]] = None,
 ) -> Dict[str, Any]:
     provider_cfg: ProviderConfig = load_settings()
-    payload = {
-        "model": provider_cfg.model,
-        "messages": messages,
-        "options": {
-            "temperature": provider_cfg.temperature,
-        },
-        "stream": True,
-        "think": provider_cfg.think,
-    }
-    if tools:
-        payload["tools"] = tools
-        payload["tool_choice"] = "auto"
-
+    provider = _get_provider(provider_cfg)
+    payload = provider.build_payload(messages, tools, stream=True)
     timeout = httpx.Timeout(60.0, connect=10.0)
-    url = f"http://{provider_cfg.host}:{provider_cfg.port}/api/chat"
-    headers = {}
-    if provider_cfg.api_key:
-        headers["X-Provider-Api-Key"] = provider_cfg.api_key
+    url = provider.build_url()
+    headers = provider.build_headers()
 
     content_parts: List[str] = []
     tool_calls: List[Dict[str, Any]] = []
@@ -279,13 +339,19 @@ async def call_provider_stream(
             "POST",
             url,
             content=orjson.dumps(payload),
-            headers={**headers, "Content-Type": "application/json"},
+            headers=headers,
             timeout=timeout,
         ) as resp:
             resp.raise_for_status()
             async for line in resp.aiter_lines():
                 if not line:
                     continue
+                if provider.is_sse:
+                    if not line.startswith("data:"):
+                        continue
+                    line = line[5:].strip()
+                    if not line or line == "[DONE]":
+                        break
                 try:
                     data = orjson.loads(line)
                 except orjson.JSONDecodeError:
