@@ -169,7 +169,7 @@ sequenceDiagram
 
 ## Tech Stack
 - Host: .NET 8 WPF, MVVM; WASAPI capture; WebRTC VAD; WinRT Graphics Capture; NAudio playback; Piper via external process only (GPL, user-installed); JSON settings (SQLite later).
-- Agent Worker: FastAPI; Ollama/provider; MCP client; TCP callbacks; system context builder; prompts as markdown files.
+- Agent Worker: FastAPI; Ollama/provider; MCP client; TCP callbacks; system context builder; prompts as markdown files; MCP auth token injected at startup to warm tool cache.
 - Agent.MCP: FastAPI tools server; PowerShell/WMI under the hood; read-only tools.
 
 ## State & Memory

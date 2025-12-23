@@ -19,15 +19,22 @@ namespace Host.Win.Services
         private readonly string _requirementsHashFile;
         private readonly string _callbackToken;
         private readonly int _callbackPort;
+        private readonly string _mcpAuthToken;
         private IntPtr _jobHandle = IntPtr.Zero;
 
-        public AgentProcessHost(string agentPath, int port, string? callbackToken = null, int callbackPort = 0)
+        public AgentProcessHost(
+            string agentPath,
+            int port,
+            string? callbackToken = null,
+            int callbackPort = 0,
+            string? mcpAuthToken = null)
         {
             _agentPath = agentPath;
             _port = port;
             _agentRoot = Path.GetDirectoryName(agentPath) ?? Environment.CurrentDirectory;
             _callbackToken = callbackToken ?? string.Empty;
             _callbackPort = callbackPort;
+            _mcpAuthToken = mcpAuthToken ?? string.Empty;
             var localDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LISA");
             Directory.CreateDirectory(localDir);
             _pidFile = Path.Combine(localDir, "agent.pid");
@@ -82,6 +89,10 @@ namespace Host.Win.Services
             {
                 psi.Environment["LISA_CALLBACK_TCP_PORT"] = _callbackPort.ToString();
             }
+            if (!string.IsNullOrWhiteSpace(_mcpAuthToken))
+            {
+                psi.Environment["MCP_AUTH_TOKEN"] = _mcpAuthToken;
+            }
             psi.Environment["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1";
             psi.Environment["HF_HUB_OFFLINE"] = "1";
             psi.Environment["FASTER_WHISPER_MODEL_DIR"] = Path.Combine(workingDir, "speech", "models", "whisper-small");
@@ -108,6 +119,10 @@ namespace Host.Win.Services
                     if (_callbackPort > 0)
                     {
                         psi.Environment["LISA_CALLBACK_TCP_PORT"] = _callbackPort.ToString();
+                    }
+                    if (!string.IsNullOrWhiteSpace(_mcpAuthToken))
+                    {
+                        psi.Environment["MCP_AUTH_TOKEN"] = _mcpAuthToken;
                     }
                     _process = Process.Start(psi);
                 }

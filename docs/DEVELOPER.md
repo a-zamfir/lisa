@@ -103,7 +103,7 @@
 - **Agent Worker**:
   - FastAPI, endpoints /health, /input/text, /input/retry.
   - On startup: fetch MCP tools (cached); if unavailable, retry in background. Build system context (LISA prompt + system metadata: time, user/account, machine, OS, locale/region, home) once and prepend to every provider request.
-  - Tool calls: LLM uses tools property; server calls MCP /tools (list) and /call (execute). Tool phases send TCP callbacks.
+  - Tool calls: LLM uses tools property; server calls MCP /tools (list) and /call (execute). MCP auth token is injected into Agent.Worker at startup so tool cache warms immediately; tool phases send TCP callbacks.
   - Streaming: uses Ollama /api/chat streaming; partial content and reasoning forwarded via TCP to Host.Win for live display. Tool calls parsed from stream; early exit to call MCP. Content streaming forwarded via content_chunk / content_done callbacks for UI.
   - Conversations: in-memory store with approximate token cap + max message count trimming.
   - Settings: read from %LOCALAPPDATA%/LISA/host-settings.json (agent/provider hosts, ports, provider mode, model, temperature, think flag, API key, voice params).

@@ -103,7 +103,17 @@ namespace Host.Win
 
             // From Host.Win/bin/Debug/... back to repo root then into Agent.Worker/main.py
             var agentScript = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "Agent.Worker", "main.py");
-            _agentProcessHost = new AgentProcessHost(Path.GetFullPath(agentScript), port: _hostSettings.AgentPort, callbackToken: _agentCallbackToken, callbackPort: AgentCallbackPort);
+            var mcpScript = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "Agent.MCP", "main.py");
+            _mcpProcessHost = new McpProcessHost(Path.GetFullPath(mcpScript), port: _hostSettings.McpPort);
+            _mcpProcessHost.Start();
+            _agentClient?.SetMcpAuthToken(_mcpProcessHost.AuthToken);
+
+            _agentProcessHost = new AgentProcessHost(
+                Path.GetFullPath(agentScript),
+                port: _hostSettings.AgentPort,
+                callbackToken: _agentCallbackToken,
+                callbackPort: AgentCallbackPort,
+                mcpAuthToken: _mcpProcessHost.AuthToken);
             _agentCallbackServer = new TcpCallbackServer(AgentCallbackPort, _agentCallbackToken, callback =>
             {
                 Dispatcher.InvokeAsync(() =>
@@ -128,10 +138,6 @@ namespace Host.Win
             });
             _agentCallbackServer.Start();
             _agentProcessHost.Start();
-            var mcpScript = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "Agent.MCP", "main.py");
-            _mcpProcessHost = new McpProcessHost(Path.GetFullPath(mcpScript), port: _hostSettings.McpPort);
-            _mcpProcessHost.Start();
-            _agentClient?.SetMcpAuthToken(_mcpProcessHost.AuthToken);
             AppDomain.CurrentDomain.ProcessExit += (_, _) => _agentProcessHost?.Stop();
             DispatcherUnhandledException += (_, _) => _agentProcessHost?.Stop();
             Exit += (_, _) => _agentProcessHost?.Stop();
@@ -200,9 +206,19 @@ namespace Host.Win
                 _agentClient?.SetProviderApiKey(overlayVm.Settings.ProviderApiKey);
 
                 // Restart agent process if needed (port change)
+                _mcpProcessHost?.Dispose();
+                var mcpScriptNew = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "Agent.MCP", "main.py");
+                _mcpProcessHost = new McpProcessHost(Path.GetFullPath(mcpScriptNew), port: overlayVm.Settings.McpPort);
+                _mcpProcessHost.Start();
+                _agentClient?.SetMcpAuthToken(_mcpProcessHost.AuthToken);
                 _agentProcessHost?.Dispose();
                 var agentScriptNew = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "Agent.Worker", "main.py");
-                _agentProcessHost = new AgentProcessHost(Path.GetFullPath(agentScriptNew), port: overlayVm.Settings.AgentPort, callbackToken: _agentCallbackToken, callbackPort: AgentCallbackPort);
+                _agentProcessHost = new AgentProcessHost(
+                    Path.GetFullPath(agentScriptNew),
+                    port: overlayVm.Settings.AgentPort,
+                    callbackToken: _agentCallbackToken,
+                    callbackPort: AgentCallbackPort,
+                    mcpAuthToken: _mcpProcessHost.AuthToken);
                 _agentProcessHost.Start();
                 _agentCallbackServer?.Stop();
                 _agentCallbackServer = new TcpCallbackServer(AgentCallbackPort, _agentCallbackToken, callback =>
@@ -228,11 +244,6 @@ namespace Host.Win
                     });
                 });
                 _agentCallbackServer.Start();
-                _mcpProcessHost?.Dispose();
-                var mcpScriptNew = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "Agent.MCP", "main.py");
-                _mcpProcessHost = new McpProcessHost(Path.GetFullPath(mcpScriptNew), port: overlayVm.Settings.McpPort);
-                _mcpProcessHost.Start();
-                _agentClient?.SetMcpAuthToken(_mcpProcessHost.AuthToken);
                 _mcpHealthChecker?.Dispose();
                 _mcpHealthChecker = new PortHealthChecker(overlayVm.Settings.McpHost, overlayVm.Settings.McpPort, ready =>
                 {
