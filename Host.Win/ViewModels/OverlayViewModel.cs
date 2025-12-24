@@ -22,7 +22,7 @@ namespace Host.Win.ViewModels
         private AssistantMode _selectedMode;
         private string? _modeContent;
         private bool _isLightTheme;
-        private AppTheme _currentTheme = AppTheme.Dark;
+        private AppTheme _currentTheme = AppTheme.Glass;
         private string _themeIcon = "\uE708"; // Sun by default
         private bool _isMcpReady;
         private bool _isAgentReady;

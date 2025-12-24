@@ -627,6 +627,8 @@
                             Height="32"
                             HorizontalAlignment="Right"
                             Padding="0"
+                            BorderBrush="Transparent"
+                            BorderThickness="0"
                             ToolTip="Toggle theme"
                             Cursor="Hand"
                             Style="{StaticResource IconButtonStyle}">
@@ -642,6 +644,8 @@
                             Height="32"
                             Padding="0"
                             Margin="8 0 0 0"
+                            BorderBrush="Transparent"
+                            BorderThickness="0"
                             ToolTip="Toggle size"
                             Cursor="Hand"
                             Style="{StaticResource IconButtonStyle}">
@@ -1025,17 +1029,18 @@
                                                                             </TextBlock.Style>
                                                                         </TextBlock>
                                                                         <Border CornerRadius="8"
-                                                                                Padding="8 6"
-                                                                                Margin="0 0 0 6">
+                                                                                Padding="8 6">
                                                                             <Border.Style>
                                                                                 <Style TargetType="Border">
                                                                                     <Setter Property="Visibility" Value="Collapsed"/>
                                                                                     <Setter Property="Background" Value="{DynamicResource ApprovalAcceptedBackground}"/>
                                                                                     <Setter Property="BorderBrush" Value="{DynamicResource ApprovalAcceptedBorder}"/>
                                                                                     <Setter Property="BorderThickness" Value="1"/>
+                                                                                    <Setter Property="Margin" Value="0 0 0 6"/>
                                                                                     <Style.Triggers>
                                                                                         <DataTrigger Binding="{Binding IsApproval}" Value="True">
                                                                                             <Setter Property="Visibility" Value="Visible"/>
+                                                                                            <Setter Property="Margin" Value="0 6 0 6"/>
                                                                                         </DataTrigger>
                                                                                         <DataTrigger Binding="{Binding Approved}" Value="False">
                                                                                             <Setter Property="Background" Value="{DynamicResource ApprovalRejectedBackground}"/>

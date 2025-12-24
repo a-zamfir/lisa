@@ -74,7 +74,7 @@ namespace Host.Win
             overlayVm.ProviderType = _hostSettings.ProviderType;
             overlayVm.RefreshProviderModels();
 
-            var initialTheme = _themeService.GetSystemTheme();
+            var initialTheme = AppTheme.Glass;
             _themeService.ApplyTheme(initialTheme);
             overlayVm.ApplyTheme(initialTheme);
 
@@ -85,9 +85,9 @@ namespace Host.Win
             {
                 var newTheme = overlayVm.CurrentTheme switch
                 {
+                    AppTheme.Glass => AppTheme.Dark,
                     AppTheme.Dark => AppTheme.Light,
-                    AppTheme.Light => AppTheme.Glass,
-                    _ => AppTheme.Dark
+                    _ => AppTheme.Glass
                 };
                 _themeService.ApplyTheme(newTheme);
                 overlayVm.ApplyTheme(newTheme);
