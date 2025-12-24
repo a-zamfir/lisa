@@ -1,4 +1,4 @@
-from .models import AgentMessage, AgentResponse, InputMeta, RetryInput, TextInput
+from .models import AgentMessage, AgentResponse, InputMeta, RetryInput, TextInput, ToolApprovalDecision
 
 __all__ = [
     "AgentMessage",
@@ -6,4 +6,5 @@ __all__ = [
     "InputMeta",
     "RetryInput",
     "TextInput",
+    "ToolApprovalDecision",
 ]

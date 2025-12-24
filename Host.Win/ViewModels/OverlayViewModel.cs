@@ -2,6 +2,7 @@
 using Host.Win.Commands;
 using Host.Win.Models;
 using Host.Win.Services;
+using Host.Win.Views;
 using System;
 using System.Diagnostics;
 using System.Collections.ObjectModel;
@@ -21,6 +22,7 @@ namespace Host.Win.ViewModels
         private AssistantMode _selectedMode;
         private string? _modeContent;
         private bool _isLightTheme;
+        private AppTheme _currentTheme = AppTheme.Dark;
         private string _themeIcon = "\uE708"; // Sun by default
         private bool _isMcpReady;
         private bool _isAgentReady;
@@ -98,6 +100,16 @@ namespace Host.Win.ViewModels
             set
             {
                 if (!SetProperty(ref _isLightTheme, value)) return;
+                UpdateThemeIcon();
+            }
+        }
+
+        public AppTheme CurrentTheme
+        {
+            get => _currentTheme;
+            set
+            {
+                if (!SetProperty(ref _currentTheme, value)) return;
                 UpdateThemeIcon();
             }
         }
@@ -350,6 +362,7 @@ namespace Host.Win.ViewModels
 
         public void ApplyTheme(AppTheme theme)
         {
+            CurrentTheme = theme;
             IsLightTheme = theme == AppTheme.Light;
             UpdateMcpStatus(_isMcpReady);
             UpdateAgentStatus(_isAgentReady);
@@ -385,8 +398,7 @@ namespace Host.Win.ViewModels
 
         private void UpdateThemeIcon()
         {
-            // Sun for light, moon for dark (Segoe MDL2 Assets glyphs)
-            ThemeIcon = IsLightTheme ? "\uE708" : "\uE9D4";
+            ThemeIcon = CurrentTheme == AppTheme.Light ? "\uE708" : "\uE706";
         }
 
         private void UpdateModeContent()
@@ -421,10 +433,14 @@ namespace Host.Win.ViewModels
                     break;
                 }
                 buffer += ch;
-                target.Text = buffer;
-                await Task.Delay(12, cancellationToken).ConfigureAwait(true);
+                await RunOnUiAsync(() =>
+                {
+                    target.Text = buffer;
+                    target.AppendContentChunk(ch.ToString());
+                }).ConfigureAwait(false);
+                await Task.Delay(12, cancellationToken).ConfigureAwait(false);
             }
-            target.IsStreaming = false;
+            await RunOnUiAsync(() => target.IsStreaming = false).ConfigureAwait(false);
         }
 
         public void CopyMessage(ChatMessage? message)
@@ -448,6 +464,7 @@ namespace Host.Win.ViewModels
             message.IsStreaming = true;
             message.IsRetryable = false;
             message.Text = string.Empty;
+            message.ResetContentSegments();
             message.ToolLabel = string.Empty;
             message.HasToolLabel = false;
             message.IsCancellable = true;
@@ -552,60 +569,71 @@ namespace Host.Win.ViewModels
 
         public void UpdateToolStatus(string turnId, string phase, System.Collections.Generic.List<string> toolCalls)
         {
-            foreach (var message in ChatMessages)
+            _ = RunOnUiAsync(() =>
             {
-                if (!message.IsAssistant || message.TurnId != turnId) continue;
-                var names = toolCalls.Count > 0 ? string.Join(", ", toolCalls) : "tool";
-                message.ToolLabel = phase switch
+                foreach (var message in ChatMessages)
                 {
-                    "awaiting_tool" => $"Awaiting tool: {names}",
-                    "tool_response" => $"Processing tool: {names}",
-                    "tool_complete" => $"Tool: {names}",
-                    _ => $"Tool: {names}"
-                };
-                message.HasToolLabel = true;
-                break;
-            }
+                    if (!message.IsAssistant || message.TurnId != turnId) continue;
+                    var names = toolCalls.Count > 0 ? string.Join(", ", toolCalls) : "tool";
+                    message.ToolLabel = phase switch
+                    {
+                        "awaiting_tool" => $"Awaiting tool: {names}",
+                        "tool_response" => $"Processing tool: {names}",
+                        "tool_complete" => $"Tool: {names}",
+                        "tool_rejected" => $"Tool rejected: {names}",
+                        _ => $"Tool: {names}"
+                    };
+                    message.HasToolLabel = true;
+                    break;
+                }
+            });
         }
 
         public void UpdateThinkingStatus(string turnId, string phase, string? delta)
         {
-            foreach (var message in ChatMessages)
+            _ = RunOnUiAsync(() =>
             {
-                if (!message.IsAssistant || message.TurnId != turnId) continue;
-                if (phase == "thinking_chunk" && !string.IsNullOrEmpty(delta))
+                foreach (var message in ChatMessages)
                 {
-                    message.Reasoning += delta;
-                    message.HasReasoning = true;
-                    message.IsReasoningExpanded = true;
+                    if (!message.IsAssistant || message.TurnId != turnId) continue;
+                    if (phase == "thinking_chunk" && !string.IsNullOrEmpty(delta))
+                    {
+                        message.Reasoning += delta;
+                        message.HasReasoning = true;
+                        message.IsReasoningExpanded = true;
+                    }
+                    else if (phase == "thinking_done")
+                    {
+                        message.IsReasoningExpanded = false;
+                    }
+                    break;
                 }
-                else if (phase == "thinking_done")
-                {
-                    message.IsReasoningExpanded = false;
-                }
-                break;
-            }
+            });
         }
 
         public void UpdateContentStatus(string turnId, string phase, string? delta)
         {
-            foreach (var message in ChatMessages)
+            _ = RunOnUiAsync(() =>
             {
-                if (!message.IsAssistant || message.TurnId != turnId) continue;
-                if (phase == "content_chunk" && !string.IsNullOrEmpty(delta))
+                foreach (var message in ChatMessages)
                 {
-                    message.HasContentStream = true;
-                    message.IsStreaming = true;
-                    message.Text += delta;
+                    if (!message.IsAssistant || message.TurnId != turnId) continue;
+                    if (phase == "content_chunk" && !string.IsNullOrEmpty(delta))
+                    {
+                        message.HasContentStream = true;
+                        message.IsStreaming = true;
+                        message.Text += delta;
+                        message.AppendContentChunk(delta);
+                    }
+                    else if (phase == "content_done")
+                    {
+                        message.HasContentStream = true;
+                        message.IsStreaming = false;
+                        message.IsCancellable = false;
+                    }
+                    break;
                 }
-                else if (phase == "content_done")
-                {
-                    message.HasContentStream = true;
-                    message.IsStreaming = false;
-                    message.IsCancellable = false;
-                }
-                break;
-            }
+            });
         }
 
         public void StopMessage(ChatMessage? message)
@@ -1192,6 +1220,77 @@ namespace Host.Win.ViewModels
         {
             return string.Equals(SessionId, sessionId, StringComparison.Ordinal)
                 && string.Equals(SessionNonce, sessionNonce ?? string.Empty, StringComparison.Ordinal);
+        }
+
+        public async Task HandleToolApprovalAsync(AgentToolCallback callback)
+        {
+            if (AgentClient == null || string.IsNullOrWhiteSpace(callback.ApprovalId))
+            {
+                return;
+            }
+
+            var toolName = callback.ToolName;
+            if (string.IsNullOrWhiteSpace(toolName) && callback.ToolCalls.Count > 0)
+            {
+                toolName = callback.ToolCalls[0];
+            }
+            toolName ??= "tool";
+
+            var friendly = callback.FriendlyDescription ?? $"would like to run {toolName}.";
+            var description = $"Lisa {friendly}";
+            var argsText = string.IsNullOrWhiteSpace(callback.ToolArgs) ? "None" : callback.ToolArgs;
+            var timeout = callback.TimeoutSeconds.HasValue && callback.TimeoutSeconds.Value > 0
+                ? callback.TimeoutSeconds.Value
+                : 30;
+
+            ToolApprovalWindow? dialog = null;
+            await RunOnUiAsync(() =>
+            {
+                dialog = new ToolApprovalWindow(description, argsText)
+                {
+                    Owner = System.Windows.Application.Current.Windows.OfType<System.Windows.Window>().FirstOrDefault(w => w.IsActive)
+                        ?? System.Windows.Application.Current.MainWindow
+                };
+                dialog.Show();
+            }).ConfigureAwait(false);
+
+            if (dialog == null)
+            {
+                return;
+            }
+
+            var decisionTask = dialog.WaitForDecisionAsync();
+            var completed = await Task.WhenAny(decisionTask, Task.Delay(TimeSpan.FromSeconds(timeout))).ConfigureAwait(false);
+            var approved = completed == decisionTask && decisionTask.Result;
+            if (completed != decisionTask)
+            {
+                await RunOnUiAsync(() => dialog.Close()).ConfigureAwait(false);
+            }
+
+            await RunOnUiAsync(() => AppendToolApprovalLabel(callback.TurnId, toolName ?? "tool", approved)).ConfigureAwait(false);
+
+            await AgentClient.SendToolApprovalAsync(new ToolApprovalRequest
+            {
+                ApprovalId = callback.ApprovalId,
+                Approved = approved
+            }).ConfigureAwait(false);
+        }
+
+        private void AppendToolApprovalLabel(string turnId, string toolName, bool approved)
+        {
+            ChatMessage? target = null;
+            foreach (var message in ChatMessages)
+            {
+                if (!message.IsAssistant) continue;
+                if (message.TurnId == turnId)
+                {
+                    target = message;
+                    break;
+                }
+            }
+
+            target ??= ChatMessages.LastOrDefault(message => message.IsAssistant);
+            target?.AddToolApprovalLabel(toolName, approved);
         }
     }
 }

@@ -18,6 +18,21 @@ namespace Host.Win.Models
         [JsonPropertyName("tool_calls")]
         public List<string> ToolCalls { get; set; } = new();
 
+        [JsonPropertyName("tool_name")]
+        public string? ToolName { get; set; }
+
+        [JsonPropertyName("tool_args")]
+        public string? ToolArgs { get; set; }
+
+        [JsonPropertyName("friendly_desc")]
+        public string? FriendlyDescription { get; set; }
+
+        [JsonPropertyName("approval_id")]
+        public string? ApprovalId { get; set; }
+
+        [JsonPropertyName("timeout_s")]
+        public int? TimeoutSeconds { get; set; }
+
         [JsonPropertyName("thinking_delta")]
         public string? ThinkingDelta { get; set; }
 

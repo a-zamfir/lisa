@@ -6,17 +6,19 @@ import os
 import socket
 import threading
 import time
+import uuid
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Header
 
-from agent_worker.models import AgentMessage, AgentResponse, RetryInput, TextInput
+from agent_worker.models import AgentMessage, AgentResponse, RetryInput, TextInput, ToolApprovalDecision
 from agent_worker.services.conversations import ConversationStore
 from agent_worker.services.mcp_client import McpClient
 from agent_worker.services.provider import call_provider, call_provider_stream, warm_provider_client
 from agent_worker.services.session_state import get_session_nonce, set_session_nonce
 from agent_worker.services.settings import load_settings
 from agent_worker.services.system_context import collect_system_context
+from agent_worker.services.tool_approval import approval_manager
 
 
 router = APIRouter()
@@ -28,11 +30,13 @@ _SYSTEM_CONTEXT = collect_system_context()
 _callback_socket: Optional[socket.socket] = None
 _callback_port: Optional[int] = None
 _callback_lock = threading.Lock()
+_APPROVAL_TIMEOUT_S = 30
 
 
 async def init_tool_cache() -> bool:
     global _tool_context, _tool_context_version
     tools_payload = await _mcp_client.list_tools(force_refresh=True)
+    await _mcp_client.list_tool_docs(force_refresh=True)
     if isinstance(tools_payload, dict) and not tools_payload.get("error"):
         _update_tool_context(tools_payload)
         return True
@@ -42,6 +46,7 @@ async def init_tool_cache() -> bool:
 async def _retry_tool_cache() -> None:
     while True:
         tools_payload = await _mcp_client.list_tools(force_refresh=True)
+        await _mcp_client.list_tool_docs(force_refresh=True)
         if isinstance(tools_payload, dict) and not tools_payload.get("error"):
             _update_tool_context(tools_payload)
             return
@@ -195,6 +200,44 @@ async def _send_tool_callback(session_id: str, turn_id: str, phase: str, tool_na
     await _send_pipe_payload(payload)
 
 
+async def _send_tool_approval_callback(
+    session_id: str,
+    turn_id: str,
+    approval_id: str,
+    tool_name: str,
+    tool_args: Dict[str, Any],
+    friendly_desc: str,
+) -> None:
+    args_text = "None"
+    if tool_args:
+        args_text = orjson.dumps(tool_args, option=orjson.OPT_INDENT_2).decode("utf-8")
+    payload = {
+        "session_id": session_id,
+        "turn_id": turn_id,
+        "phase": "tool_approval_required",
+        "tool_name": tool_name,
+        "tool_args": args_text,
+        "friendly_desc": friendly_desc,
+        "approval_id": approval_id,
+        "timeout_s": _APPROVAL_TIMEOUT_S,
+    }
+    await _send_pipe_payload(payload)
+
+
+async def _await_tool_approval(session_id: str, turn_id: str, tool_name: str, tool_args: Dict[str, Any]) -> bool:
+    meta = _mcp_client.get_tool_meta(tool_name) or {}
+    if not meta:
+        await _mcp_client.list_tool_docs(force_refresh=True)
+        meta = _mcp_client.get_tool_meta(tool_name) or {}
+    if meta and not meta.get("approval_required"):
+        return True
+    approval_id = str(uuid.uuid4())
+    friendly_desc = meta.get("friendly_desc") or f"would like to run {tool_name}."
+    approval_manager.create(approval_id)
+    await _send_tool_approval_callback(session_id, turn_id, approval_id, tool_name, tool_args, friendly_desc)
+    return await approval_manager.wait_for(approval_id, _APPROVAL_TIMEOUT_S)
+
+
 def _send_thinking_callback(session_id: str, turn_id: str, phase: str, delta: Optional[str] = None) -> None:
     payload: Dict[str, Any] = {
         "session_id": session_id,
@@ -281,17 +324,42 @@ async def handle_text(req: TextInput, x_mcp_token: str | None = Header(default=N
             tool_name = func.get("name") or tool_call.get("name")
             if tool_name:
                 used_tools.append(tool_name)
-        await _send_tool_callback(req.session_id, req.turn_id, "awaiting_tool", used_tools)
+
+        approved_tools: List[str] = []
+        rejected_tools: List[str] = []
+        approved_calls: List[tuple[str, Dict[str, Any]]] = []
+
         for tool_call in tool_calls:
             func = tool_call.get("function") or tool_call
             tool_name = func.get("name") or tool_call.get("name")
             tool_args = _parse_tool_args(func.get("arguments") or tool_call.get("args"))
-            if tool_name:
+            if not tool_name:
+                continue
+            approved = await _await_tool_approval(req.session_id, req.turn_id, tool_name, tool_args)
+            if not approved:
+                rejected_tools.append(tool_name)
+                provider_messages.append(
+                    {
+                        "role": "tool",
+                        "name": tool_name,
+                        "content": "Tool call rejected by the user or timed out. Do not proceed; ask for clarification or an alternative.",
+                    }
+                )
+                continue
+            approved_tools.append(tool_name)
+            approved_calls.append((tool_name, tool_args))
+
+        if approved_tools:
+            await _send_tool_callback(req.session_id, req.turn_id, "awaiting_tool", approved_tools)
+            for tool_name, tool_args in approved_calls:
                 tool_result = await _mcp_client.call_tool(tool_name, tool_args)
                 provider_messages.append(
                     {"role": "tool", "name": tool_name, "content": orjson.dumps(tool_result, option=orjson.OPT_INDENT_2).decode("utf-8")}
                 )
-        await _send_tool_callback(req.session_id, req.turn_id, "tool_response", used_tools)
+            await _send_tool_callback(req.session_id, req.turn_id, "tool_response", approved_tools)
+        if rejected_tools:
+            await _send_tool_callback(req.session_id, req.turn_id, "tool_rejected", rejected_tools)
+
         follow_streamed = {"seen": False}
 
         def _on_follow_content(chunk: str) -> None:
@@ -413,3 +481,9 @@ async def handle_retry(req: RetryInput, x_mcp_token: str | None = Header(default
         speak=False,
         tts_text=completion or None,
     )
+
+
+@router.post("/tool/approval")
+async def handle_tool_approval(decision: ToolApprovalDecision):
+    handled = approval_manager.resolve(decision.approval_id, decision.approved)
+    return {"ok": handled}

@@ -156,6 +156,21 @@ namespace Host.Win.Services
             }
         }
 
+        public async Task<bool> SendToolApprovalAsync(ToolApprovalRequest request, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var response = await SharedClient.PostAsJsonAsync(new Uri(_baseUri, "/tool/approval"), request, cancellationToken).ConfigureAwait(false);
+                response.EnsureSuccessStatusCode();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning($"Tool approval send failed: {ex.Message}");
+                return false;
+            }
+        }
+
         public void Dispose()
         {
             // Shared HttpClient intentionally not disposed; process scoped.

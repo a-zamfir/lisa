@@ -9,17 +9,29 @@
     <Color x:Key="ContentBackgroundColor">#FFFFFF</Color>
     <Color x:Key="ButtonBackgroundColor">#F3F4F6</Color>
     <Color x:Key="ButtonBorderColor">#E5E7EB</Color>
+    <Color x:Key="TabBorderColor">#E5E7EB</Color>
+    <Color x:Key="ActionButtonBorderColor">#E5E7EB</Color>
+    <Color x:Key="IconButtonBorderColor">#E5E7EB</Color>
+    <Color x:Key="InputBorderColor">#E5E7EB</Color>
     <Color x:Key="ButtonActiveBackgroundColor">#EFF6FF</Color>
     <Color x:Key="ButtonActiveBorderColor">#2563EB</Color>
     <Color x:Key="PrimaryButtonBackgroundColor">#2563EB</Color>
     <Color x:Key="PrimaryButtonHoverColor">#1D4ED8</Color>
     <Color x:Key="PrimaryButtonTextColor">#FFFFFF</Color>
+    <Color x:Key="InputFocusBorderColor">#2563EB</Color>
     <Color x:Key="RadioCheckedFillColor">#2563EB</Color>
     <Color x:Key="AssistantBubbleBackgroundColor">#F3F4F6</Color>
     <Color x:Key="AssistantBubbleForegroundColor">#111827</Color>
     <Color x:Key="AssistantBubbleBorderColor">#E5E7EB</Color>
     <Color x:Key="UserBubbleBackgroundColor">#2563EB</Color>
     <Color x:Key="UserBubbleForegroundColor">#FFFFFF</Color>
+    <Color x:Key="PopupBackgroundColor">#F3F4F6</Color>
+    <Color x:Key="ApprovalAcceptedBackgroundColor">#4FAE91</Color>
+    <Color x:Key="ApprovalAcceptedBorderColor">#4FAE91</Color>
+    <Color x:Key="ApprovalAcceptedForegroundColor">#166534</Color>
+    <Color x:Key="ApprovalRejectedBackgroundColor">#A96A6A</Color>
+    <Color x:Key="ApprovalRejectedBorderColor">#A96A6A</Color>
+    <Color x:Key="ApprovalRejectedForegroundColor">#991B1B</Color>
     <Color x:Key="StatusReadyColor">#FF22C55E</Color>
     <Color x:Key="StatusOfflineColor">#FFEF4444</Color>
 
@@ -31,17 +43,29 @@
     <SolidColorBrush x:Key="ContentBackground" Color="{StaticResource ContentBackgroundColor}"/>
     <SolidColorBrush x:Key="ButtonBackground" Color="{StaticResource ButtonBackgroundColor}"/>
     <SolidColorBrush x:Key="ButtonBorder" Color="{StaticResource ButtonBorderColor}"/>
+    <SolidColorBrush x:Key="TabBorder" Color="{StaticResource TabBorderColor}"/>
+    <SolidColorBrush x:Key="ActionButtonBorder" Color="{StaticResource ActionButtonBorderColor}"/>
+    <SolidColorBrush x:Key="IconButtonBorder" Color="{StaticResource IconButtonBorderColor}"/>
+    <SolidColorBrush x:Key="InputBorder" Color="{StaticResource InputBorderColor}"/>
     <SolidColorBrush x:Key="ButtonActiveBackground" Color="{StaticResource ButtonActiveBackgroundColor}"/>
     <SolidColorBrush x:Key="ButtonActiveBorder" Color="{StaticResource ButtonActiveBorderColor}"/>
     <SolidColorBrush x:Key="PrimaryButtonBackground" Color="{StaticResource PrimaryButtonBackgroundColor}"/>
     <SolidColorBrush x:Key="PrimaryButtonHover" Color="{StaticResource PrimaryButtonHoverColor}"/>
     <SolidColorBrush x:Key="PrimaryButtonForeground" Color="{StaticResource PrimaryButtonTextColor}"/>
+    <SolidColorBrush x:Key="InputFocusBorder" Color="{StaticResource InputFocusBorderColor}"/>
     <SolidColorBrush x:Key="RadioCheckedFill" Color="{StaticResource RadioCheckedFillColor}"/>
     <SolidColorBrush x:Key="AssistantBubbleBackground" Color="{StaticResource AssistantBubbleBackgroundColor}"/>
     <SolidColorBrush x:Key="AssistantBubbleForeground" Color="{StaticResource AssistantBubbleForegroundColor}"/>
     <SolidColorBrush x:Key="AssistantBubbleBorder" Color="{StaticResource AssistantBubbleBorderColor}"/>
     <SolidColorBrush x:Key="UserBubbleBackground" Color="{StaticResource UserBubbleBackgroundColor}"/>
     <SolidColorBrush x:Key="UserBubbleForeground" Color="{StaticResource UserBubbleForegroundColor}"/>
+    <SolidColorBrush x:Key="PopupBackground" Color="{StaticResource PopupBackgroundColor}"/>
+    <SolidColorBrush x:Key="ApprovalAcceptedBackground" Color="{StaticResource ApprovalAcceptedBackgroundColor}"/>
+    <SolidColorBrush x:Key="ApprovalAcceptedBorder" Color="{StaticResource ApprovalAcceptedBorderColor}"/>
+    <SolidColorBrush x:Key="ApprovalAcceptedForeground" Color="{StaticResource ApprovalAcceptedForegroundColor}"/>
+    <SolidColorBrush x:Key="ApprovalRejectedBackground" Color="{StaticResource ApprovalRejectedBackgroundColor}"/>
+    <SolidColorBrush x:Key="ApprovalRejectedBorder" Color="{StaticResource ApprovalRejectedBorderColor}"/>
+    <SolidColorBrush x:Key="ApprovalRejectedForeground" Color="{StaticResource ApprovalRejectedForegroundColor}"/>
     <SolidColorBrush x:Key="ModeButtonActiveForeground" Color="{StaticResource ButtonActiveBorderColor}"/>
     <SolidColorBrush x:Key="StatusReadyBrush" Color="{StaticResource StatusReadyColor}"/>
     <SolidColorBrush x:Key="StatusOfflineBrush" Color="{StaticResource StatusOfflineColor}"/>

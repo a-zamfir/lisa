@@ -5,6 +5,9 @@ using System.Windows.Forms;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Collections.Specialized;
+using System.Windows.Interop;
+using Host.Win.Models;
+using Host.Win.Services;
 using Host.Win.ViewModels;
 
 namespace Host.Win.Views
@@ -19,6 +22,7 @@ namespace Host.Win.Views
         private Storyboard? _listeningStoryboard;
         private Storyboard? _processingStoryboard;
         private Storyboard? _speakingStoryboard;
+        private IntPtr _hwnd;
 
         public OverlayWindow()
         {
@@ -108,6 +112,8 @@ namespace Host.Win.Views
         {
             base.OnSourceInitialized(e);
             Topmost = true;
+            _hwnd = new WindowInteropHelper(this).Handle;
+            UpdateBackdrop();
         }
 
         private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
@@ -126,6 +132,7 @@ namespace Host.Win.Views
                 Width = _viewModel.OverlayWidth;
                 Height = _viewModel.OverlayHeight;
                 UpdateVoiceState();
+                UpdateBackdrop();
             }
         }
 
@@ -136,6 +143,12 @@ namespace Host.Win.Views
                 || e.PropertyName == nameof(OverlayViewModel.OverlayHeight))
             {
                 ApplyResize(_viewModel.OverlayWidth, _viewModel.OverlayHeight);
+                return;
+            }
+
+            if (e.PropertyName == nameof(OverlayViewModel.CurrentTheme))
+            {
+                UpdateBackdrop();
                 return;
             }
 
@@ -202,6 +215,12 @@ namespace Host.Win.Views
             {
                 ApplyVoiceVisuals(showListening: false, showProcessing: false, showSpeaking: false);
             }
+        }
+
+        private void UpdateBackdrop()
+        {
+            var useGlass = _viewModel?.CurrentTheme == AppTheme.Glass;
+            WindowBackdropService.ApplyGlass(_hwnd, useGlass);
         }
 
         private void EnsureVoiceStoryboards()

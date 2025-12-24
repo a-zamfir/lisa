@@ -77,7 +77,12 @@ namespace Host.Win
 
             overlayVm.ToggleThemeCommand = new Commands.RelayCommand(() =>
             {
-                var newTheme = overlayVm.IsLightTheme ? AppTheme.Dark : AppTheme.Light;
+                var newTheme = overlayVm.CurrentTheme switch
+                {
+                    AppTheme.Dark => AppTheme.Light,
+                    AppTheme.Light => AppTheme.Glass,
+                    _ => AppTheme.Dark
+                };
                 _themeService.ApplyTheme(newTheme);
                 overlayVm.ApplyTheme(newTheme);
             });
@@ -126,7 +131,11 @@ namespace Host.Win
                     {
                         return;
                     }
-                    if (callback.Phase == "thinking_chunk" || callback.Phase == "thinking_done")
+                    if (callback.Phase == "tool_approval_required")
+                    {
+                        _ = overlayVm.HandleToolApprovalAsync(callback);
+                    }
+                    else if (callback.Phase == "thinking_chunk" || callback.Phase == "thinking_done")
                     {
                         overlayVm.UpdateThinkingStatus(callback.TurnId, callback.Phase, callback.ThinkingDelta);
                     }

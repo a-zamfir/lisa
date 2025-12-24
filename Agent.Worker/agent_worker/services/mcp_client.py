@@ -37,6 +37,8 @@ def load_mcp_settings() -> McpConfig:
 class McpClient:
     def __init__(self) -> None:
         self._cached_tools: Optional[Dict[str, Any]] = None
+        self._cached_tool_docs: Optional[Dict[str, Any]] = None
+        self._tool_meta: Dict[str, Dict[str, Any]] = {}
         self._last_status_ok: Optional[bool] = None
         self._client: Optional[httpx.AsyncClient] = None
 
@@ -69,6 +71,27 @@ class McpClient:
 
     def get_cached_tools(self) -> Optional[Dict[str, Any]]:
         return self._cached_tools
+
+    def get_tool_meta(self, name: str) -> Optional[Dict[str, Any]]:
+        return self._tool_meta.get(name)
+
+    async def list_tool_docs(self, force_refresh: bool = False) -> Dict[str, Any]:
+        if not force_refresh and self._cached_tool_docs is not None:
+            return self._cached_tool_docs
+        cfg = load_mcp_settings()
+        url = f"http://{cfg.host}:{cfg.port}/tools/docs"
+        token = os.environ.get("MCP_AUTH_TOKEN", "")
+        client = self._get_client()
+        try:
+            headers = {"X-Mcp-Token": token} if token else None
+            resp = await client.get(url, timeout=5, headers=headers)
+            resp.raise_for_status()
+            payload = orjson.loads(resp.content)
+            self._cached_tool_docs = payload
+            self._tool_meta = {tool.get("name"): tool for tool in payload.get("tools", []) if tool.get("name")}
+            return payload
+        except httpx.HTTPError as ex:
+            return {"error": f"MCP docs unavailable: {ex}"}
 
     async def call_tool(self, tool: str, args: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         cfg = load_mcp_settings()

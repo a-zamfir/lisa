@@ -5,8 +5,8 @@
         xmlns:conv="clr-namespace:Host.Win.Converters"
         xmlns:models="clr-namespace:Host.Win.Models"
         Title="LISA Overlay"
-        Width="640"
-        Height="420"
+        Width="740"
+        Height="480"
         WindowStyle="None"
         AllowsTransparency="True"
         ResizeMode="NoResize"
@@ -21,6 +21,42 @@
         <QuadraticEase x:Key="QuadraticEaseIn" EasingMode="EaseIn"/>
         <conv:StringEqualsConverter x:Key="EqualityConverter"/>
         <conv:BoolEqualsConverter x:Key="BoolEqualityConverter"/>
+        <Style x:Key="ModeButtonStyle" TargetType="Button">
+            <Setter Property="Margin" Value="6 0"/>
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Background" Value="{DynamicResource ButtonBackground}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource TabBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="12"
+                                Padding="10 6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="FadeInOutOnVisibility" TargetType="FrameworkElement">
             <Setter Property="Opacity" Value="0"/>
             <Style.Triggers>
@@ -116,7 +152,7 @@
             <Setter Property="Height" Value="34"/>
             <Setter Property="Padding" Value="8 4"/>
             <Setter Property="Background" Value="{DynamicResource ButtonBackground}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource ButtonBorder}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ActionButtonBorder}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
@@ -258,7 +294,7 @@
             <Setter Property="Height" Value="26"/>
             <Setter Property="Padding" Value="0"/>
             <Setter Property="Background" Value="{DynamicResource ButtonBackground}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource ButtonBorder}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource IconButtonBorder}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Foreground" Value="{DynamicResource SubtleText}"/>
             <Setter Property="FontSize" Value="12"/>
@@ -428,7 +464,7 @@
         <Style x:Key="RoundedTextBoxStyle" TargetType="TextBox">
             <Setter Property="Background" Value="{DynamicResource ButtonBackground}"/>
             <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource InputBorder}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="12"/>
             <Setter Property="Template">
@@ -446,7 +482,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}"/>
+                                <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource InputFocusBorder}"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Border" Property="Opacity" Value="0.6"/>
@@ -520,33 +556,33 @@
                     <StackPanel x:Name="ExpandedHeader" Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="{Binding AppName}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource OverlayForeground}"/>
                         <StackPanel Orientation="Horizontal" Margin="12 0 0 0" VerticalAlignment="Center">
-                            <Border Background="{DynamicResource ButtonBackground}" CornerRadius="10" Padding="8 4" Margin="0 0 8 0">
+                            <Border Background="{DynamicResource ButtonBackground}" CornerRadius="10" Padding="6 2" Margin="0 0 8 0">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Ellipse Width="10" Height="10" Fill="{Binding McpStatusBrush}" VerticalAlignment="Center"/>
+                                    <Ellipse Width="8" Height="8" Fill="{Binding McpStatusBrush}" VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding McpStatusText}"
-                                               FontSize="13"
+                                               FontSize="12"
                                                Foreground="{DynamicResource SubtleText}"
-                                               Margin="6 0 0 0"
+                                               Margin="4 0 0 0"
                                                VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Border>
-                            <Border Background="{DynamicResource ButtonBackground}" CornerRadius="10" Padding="8 4" Margin="0 0 8 0">
+                            <Border Background="{DynamicResource ButtonBackground}" CornerRadius="10" Padding="6 2" Margin="0 0 8 0">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Ellipse Width="10" Height="10" Fill="{Binding AgentStatusBrush}" VerticalAlignment="Center"/>
+                                    <Ellipse Width="8" Height="8" Fill="{Binding AgentStatusBrush}" VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding AgentStatusText}"
-                                               FontSize="13"
+                                               FontSize="12"
                                                Foreground="{DynamicResource SubtleText}"
-                                               Margin="6 0 0 0"
+                                               Margin="4 0 0 0"
                                                VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Border>
-                            <Border Background="{DynamicResource ButtonBackground}" CornerRadius="10" Padding="8 4">
+                            <Border Background="{DynamicResource ButtonBackground}" CornerRadius="10" Padding="6 2">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Ellipse Width="10" Height="10" Fill="{Binding ProviderStatusBrush}" VerticalAlignment="Center"/>
+                                    <Ellipse Width="8" Height="8" Fill="{Binding ProviderStatusBrush}" VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding ProviderStatusText}"
-                                               FontSize="13"
+                                               FontSize="12"
                                                Foreground="{DynamicResource SubtleText}"
-                                               Margin="6 0 0 0"
+                                               Margin="4 0 0 0"
                                                VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Border>
@@ -567,18 +603,8 @@
                                    FontSize="16"
                                    Foreground="{DynamicResource OverlayForeground}"
                                    VerticalAlignment="Center"
-                                   HorizontalAlignment="Center">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Text" Value="&#xE708;"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding DataContext.IsLightTheme, RelativeSource={RelativeSource AncestorType=Window}}" Value="False">
-                                            <Setter Property="Text" Value="&#xE706;"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
+                                   HorizontalAlignment="Center"
+                                   Text="{Binding ThemeIcon}"/>
                     </Button>
                     <Button Command="{Binding ToggleCollapseCommand}"
                             Width="32"
@@ -656,9 +682,9 @@
                                 <Style TargetType="Button" BasedOn="{StaticResource ModeButtonStyle}">
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding SelectedMode}" Value="{x:Static models:AssistantMode.Talk}">
-                                            <Setter Property="Background" Value="{StaticResource ButtonActiveBackground}"/>
-                                            <Setter Property="BorderBrush" Value="{StaticResource ButtonActiveBorder}"/>
-                                            <Setter Property="Foreground" Value="{StaticResource ModeButtonActiveForeground}"/>
+                                            <Setter Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
+                                            <Setter Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource ModeButtonActiveForeground}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -678,9 +704,9 @@
                                 <Style TargetType="Button" BasedOn="{StaticResource ModeButtonStyle}">
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding SelectedMode}" Value="{x:Static models:AssistantMode.Chat}">
-                                            <Setter Property="Background" Value="{StaticResource ButtonActiveBackground}"/>
-                                            <Setter Property="BorderBrush" Value="{StaticResource ButtonActiveBorder}"/>
-                                            <Setter Property="Foreground" Value="{StaticResource ModeButtonActiveForeground}"/>
+                                            <Setter Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
+                                            <Setter Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource ModeButtonActiveForeground}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -700,9 +726,9 @@
                                 <Style TargetType="Button" BasedOn="{StaticResource ModeButtonStyle}">
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding SelectedMode}" Value="{x:Static models:AssistantMode.Share}">
-                                            <Setter Property="Background" Value="{StaticResource ButtonActiveBackground}"/>
-                                            <Setter Property="BorderBrush" Value="{StaticResource ButtonActiveBorder}"/>
-                                            <Setter Property="Foreground" Value="{StaticResource ModeButtonActiveForeground}"/>
+                                            <Setter Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
+                                            <Setter Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource ModeButtonActiveForeground}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -722,9 +748,9 @@
                                 <Style TargetType="Button" BasedOn="{StaticResource ModeButtonStyle}">
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding SelectedMode}" Value="{x:Static models:AssistantMode.Settings}">
-                                            <Setter Property="Background" Value="{StaticResource ButtonActiveBackground}"/>
-                                            <Setter Property="BorderBrush" Value="{StaticResource ButtonActiveBorder}"/>
-                                            <Setter Property="Foreground" Value="{StaticResource ModeButtonActiveForeground}"/>
+                                            <Setter Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
+                                            <Setter Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource ModeButtonActiveForeground}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -794,6 +820,7 @@
                                                         MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ScrollViewer}}">
                                                     <Grid>
                                                         <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto"/>
                                                             <RowDefinition Height="Auto"/>
                                                             <RowDefinition Height="Auto"/>
                                                             <RowDefinition Height="Auto"/>
@@ -926,7 +953,88 @@
                                                                 </TextBlock>
                                                             </StackPanel>
                                                         </ToggleButton>
-                                                        <TextBlock Grid.Row="2"
+                                                        <ItemsControl x:Name="AssistantSegments"
+                                                                      Grid.Row="2"
+                                                                      ItemsSource="{Binding ContentSegments}"
+                                                                      Margin="0 8 0 0">
+                                                            <ItemsControl.ItemsPanel>
+                                                                <ItemsPanelTemplate>
+                                                                    <StackPanel/>
+                                                                </ItemsPanelTemplate>
+                                                            </ItemsControl.ItemsPanel>
+                                                            <ItemsControl.Style>
+                                                                <Style TargetType="ItemsControl">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    <Style.Triggers>
+                                                                        <MultiDataTrigger>
+                                                                            <MultiDataTrigger.Conditions>
+                                                                                <Condition Binding="{Binding IsAssistant}" Value="True"/>
+                                                                                <Condition Binding="{Binding HasToolApprovals}" Value="True"/>
+                                                                            </MultiDataTrigger.Conditions>
+                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                        </MultiDataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </ItemsControl.Style>
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <Grid>
+                                                                        <TextBlock Text="{Binding Text}"
+                                                                                   TextWrapping="Wrap"
+                                                                                   Foreground="{DynamicResource AssistantBubbleForeground}">
+                                                                            <TextBlock.Style>
+                                                                                <Style TargetType="TextBlock">
+                                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                                    <Style.Triggers>
+                                                                                        <DataTrigger Binding="{Binding IsApproval}" Value="True">
+                                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                        </DataTrigger>
+                                                                                    </Style.Triggers>
+                                                                                </Style>
+                                                                            </TextBlock.Style>
+                                                                        </TextBlock>
+                                                                        <Border CornerRadius="8"
+                                                                                Padding="8 6"
+                                                                                Margin="0 0 0 6">
+                                                                            <Border.Style>
+                                                                                <Style TargetType="Border">
+                                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                    <Setter Property="Background" Value="{DynamicResource ApprovalAcceptedBackground}"/>
+                                                                                    <Setter Property="BorderBrush" Value="{DynamicResource ApprovalAcceptedBorder}"/>
+                                                                                    <Setter Property="BorderThickness" Value="1"/>
+                                                                                    <Style.Triggers>
+                                                                                        <DataTrigger Binding="{Binding IsApproval}" Value="True">
+                                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                                        </DataTrigger>
+                                                                                        <DataTrigger Binding="{Binding Approved}" Value="False">
+                                                                                            <Setter Property="Background" Value="{DynamicResource ApprovalRejectedBackground}"/>
+                                                                                            <Setter Property="BorderBrush" Value="{DynamicResource ApprovalRejectedBorder}"/>
+                                                                                        </DataTrigger>
+                                                                                    </Style.Triggers>
+                                                                                </Style>
+                                                                            </Border.Style>
+                                                                            <TextBlock FontSize="12" TextWrapping="Wrap">
+                                                                                <TextBlock.Style>
+                                                                                    <Style TargetType="TextBlock">
+                                                                                        <Setter Property="Foreground" Value="{DynamicResource ApprovalAcceptedForeground}"/>
+                                                                                        <Style.Triggers>
+                                                                                            <DataTrigger Binding="{Binding Approved}" Value="False">
+                                                                                                <Setter Property="Foreground" Value="{DynamicResource ApprovalRejectedForeground}"/>
+                                                                                            </DataTrigger>
+                                                                                        </Style.Triggers>
+                                                                                    </Style>
+                                                                                </TextBlock.Style>
+                                                                                <Run Text="Tool request: "/>
+                                                                                <Run Text="{Binding ToolName}"/>
+                                                                                <Run Text=" - "/>
+                                                                                <Run Text="{Binding StatusText, Mode=OneWay}" FontWeight="SemiBold"/>
+                                                                            </TextBlock>
+                                                                        </Border>
+                                                                    </Grid>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                        <TextBlock Grid.Row="3"
                                                                    Text="{Binding Reasoning}"
                                                                    TextWrapping="Wrap"
                                                                    Foreground="{DynamicResource SubtleText}"
@@ -944,7 +1052,7 @@
                                                             </TextBlock.Style>
                                                         </TextBlock>
                                                         <TextBlock x:Name="UserMessageText"
-                                                                   Grid.Row="3"
+                                                                   Grid.Row="4"
                                                                    Text="{Binding Text}"
                                                                    TextWrapping="Wrap"
                                                                    Margin="0 10 0 0"
@@ -962,7 +1070,7 @@
                                                             </TextBlock.Style>
                                                         </TextBlock>
                                                         <TextBlock x:Name="AssistantPlainText"
-                                                                   Grid.Row="3"
+                                                                   Grid.Row="4"
                                                                    Text="{Binding Text}"
                                                                    TextWrapping="Wrap"
                                                                    Margin="0 10 0 0"
@@ -985,13 +1093,16 @@
                                                                         <Condition Binding="{Binding HasMarkdown}" Value="False"/>
                                                                     </MultiDataTrigger.Conditions>
                                                                             <Setter Property="Visibility" Value="Visible"/>
-                                                                        </MultiDataTrigger>
+                                                                </MultiDataTrigger>
+                                                                <DataTrigger Binding="{Binding HasToolApprovals}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                </DataTrigger>
                                                                     </Style.Triggers>
                                                                 </Style>
                                                             </TextBlock.Style>
                                                         </TextBlock>
                                                         <RichTextBox x:Name="MessageText"
-                                                                     Grid.Row="3"
+                                                                     Grid.Row="4"
                                                                      IsReadOnly="True"
                                                                      BorderThickness="0"
                                                                      Background="Transparent"
@@ -1015,11 +1126,14 @@
                                                                     <DataTrigger Binding="{Binding IsStreaming}" Value="True">
                                                                         <Setter Property="Visibility" Value="Collapsed"/>
                                                                     </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding HasToolApprovals}" Value="True">
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    </DataTrigger>
                                                                 </Style.Triggers>
                                                             </Style>
                                                             </RichTextBox.Style>
                                                         </RichTextBox>
-                                                        <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0 10 0 0">
+                                                        <StackPanel Grid.Row="5" Orientation="Horizontal" Margin="0 10 0 0">
                                                             <StackPanel.Style>
                                                                 <Style TargetType="StackPanel">
                                                                     <Setter Property="Visibility" Value="Collapsed"/>
@@ -1834,22 +1948,6 @@
                 </Grid>
             </Border>
 
-                <TextBlock Grid.Row="2"
-                           Text="Ctrl+Space to toggle"
-                           Foreground="{DynamicResource SubtleText}"
-                           FontSize="12"
-                           HorizontalAlignment="Right"
-                           Margin="0 10 4 0">
-                    <TextBlock.Style>
-                        <Style TargetType="TextBlock">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding DataContext.IsCollapsed, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </TextBlock.Style>
-                </TextBlock>
             </Grid>
 
             <Grid x:Name="CollapsedLayout">
@@ -1958,9 +2056,9 @@
                             <Style TargetType="Button" BasedOn="{StaticResource ModeButtonStyle}">
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding SelectedMode}" Value="{x:Static models:AssistantMode.Talk}">
-                                        <Setter Property="Background" Value="{StaticResource ButtonActiveBackground}"/>
-                                        <Setter Property="BorderBrush" Value="{StaticResource ButtonActiveBorder}"/>
-                                        <Setter Property="Foreground" Value="{StaticResource ModeButtonActiveForeground}"/>
+                                        <Setter Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
+                                        <Setter Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource ModeButtonActiveForeground}"/>
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
@@ -1972,9 +2070,9 @@
                             <Style TargetType="Button" BasedOn="{StaticResource ModeButtonStyle}">
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding SelectedMode}" Value="{x:Static models:AssistantMode.Chat}">
-                                        <Setter Property="Background" Value="{StaticResource ButtonActiveBackground}"/>
-                                        <Setter Property="BorderBrush" Value="{StaticResource ButtonActiveBorder}"/>
-                                        <Setter Property="Foreground" Value="{StaticResource ModeButtonActiveForeground}"/>
+                                        <Setter Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
+                                        <Setter Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource ModeButtonActiveForeground}"/>
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
@@ -1986,9 +2084,9 @@
                             <Style TargetType="Button" BasedOn="{StaticResource ModeButtonStyle}">
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding SelectedMode}" Value="{x:Static models:AssistantMode.Share}">
-                                        <Setter Property="Background" Value="{StaticResource ButtonActiveBackground}"/>
-                                        <Setter Property="BorderBrush" Value="{StaticResource ButtonActiveBorder}"/>
-                                        <Setter Property="Foreground" Value="{StaticResource ModeButtonActiveForeground}"/>
+                                        <Setter Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
+                                        <Setter Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource ModeButtonActiveForeground}"/>
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
@@ -2000,9 +2098,9 @@
                             <Style TargetType="Button" BasedOn="{StaticResource ModeButtonStyle}">
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding SelectedMode}" Value="{x:Static models:AssistantMode.Settings}">
-                                        <Setter Property="Background" Value="{StaticResource ButtonActiveBackground}"/>
-                                        <Setter Property="BorderBrush" Value="{StaticResource ButtonActiveBorder}"/>
-                                        <Setter Property="Foreground" Value="{StaticResource ModeButtonActiveForeground}"/>
+                                        <Setter Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
+                                        <Setter Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource ModeButtonActiveForeground}"/>
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
