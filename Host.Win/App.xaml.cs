@@ -50,10 +50,16 @@ namespace Host.Win
             _agentClient.SetProviderApiKey(_hostSettings.ProviderApiKey);
             _themeService = new ThemeService();
             _loggingService = new LoggingService();
+            var displayName = _contextCollector.GetDisplayName();
+            var greetingName = string.IsNullOrWhiteSpace(displayName)
+                ? Environment.UserName
+                : displayName.Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
             var overlayVm = new OverlayViewModel
             {
                 AppName = "LISA",
                 StatusText = "Checking...",
+                GreetingName = greetingName,
+                ShowGreeting = true,
                 AgentClient = _agentClient,
                 Logger = _loggingService,
                 Settings = _hostSettings,

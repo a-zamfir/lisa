@@ -28,6 +28,7 @@ namespace Host.Win.Views
         {
             InitializeComponent();
             DataContextChanged += OnDataContextChanged;
+            SizeChanged += (_, _) => UpdateWindowRegion();
         }
 
         public void ShowAtBottomRight(Screen screen, double margin)
@@ -114,6 +115,7 @@ namespace Host.Win.Views
             Topmost = true;
             _hwnd = new WindowInteropHelper(this).Handle;
             UpdateBackdrop();
+            UpdateWindowRegion();
         }
 
         private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
@@ -172,6 +174,7 @@ namespace Host.Win.Views
             {
                 ShowAtBottomRight(Screen.PrimaryScreen, 16);
             }
+            UpdateWindowRegion();
         }
 
 
@@ -221,6 +224,17 @@ namespace Host.Win.Views
         {
             var useGlass = _viewModel?.CurrentTheme == AppTheme.Glass;
             WindowBackdropService.ApplyGlass(_hwnd, useGlass);
+        }
+
+        private void UpdateWindowRegion()
+        {
+            if (_hwnd == IntPtr.Zero)
+            {
+                return;
+            }
+
+            var dpi = VisualTreeHelper.GetDpi(this);
+            WindowBackdropService.ApplyRoundedCorners(_hwnd, ActualWidth, ActualHeight, 18, dpi.DpiScaleX, dpi.DpiScaleY);
         }
 
         private void EnsureVoiceStoryboards()

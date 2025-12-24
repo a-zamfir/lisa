@@ -36,6 +36,8 @@ namespace Host.Win.ViewModels
         private System.Windows.Media.Brush? _agentStatusBrush;
         private System.Windows.Media.Brush? _providerStatusBrush;
         private string _chatInput = string.Empty;
+        private string _greetingName = Environment.UserName;
+        private bool _showGreeting = true;
         private bool _isSending;
         private ICommand? _sendChatCommand;
         private ICommand? _copyMessageCommand;
@@ -76,6 +78,18 @@ namespace Host.Win.ViewModels
         {
             get => _statusText;
             set => SetProperty(ref _statusText, value);
+        }
+
+        public string GreetingName
+        {
+            get => _greetingName;
+            set => SetProperty(ref _greetingName, value);
+        }
+
+        public bool ShowGreeting
+        {
+            get => _showGreeting;
+            set => SetProperty(ref _showGreeting, value);
         }
 
         public AssistantMode SelectedMode
@@ -175,6 +189,10 @@ namespace Host.Win.ViewModels
             {
                 if (SetProperty(ref _chatInput, value))
                 {
+                    if (ShowGreeting && !string.IsNullOrWhiteSpace(value))
+                    {
+                        ShowGreeting = false;
+                    }
                     CommandManager.InvalidateRequerySuggested();
                 }
             }
@@ -418,6 +436,7 @@ namespace Host.Win.ViewModels
             var text = ChatInput?.Trim();
             if (string.IsNullOrEmpty(text)) return;
 
+            ShowGreeting = false;
             await SendTextInternalAsync(text, inputType: "text", markSending: true, addUserMessage: true);
         }
 
@@ -743,6 +762,7 @@ namespace Host.Win.ViewModels
             }
             _inflightTurns.Clear();
             ClearChatHistory();
+            ShowGreeting = true;
             UpdateSession(Guid.NewGuid().ToString());
             Logger?.LogEvent("conversation.reset", new { sessionId = SessionId });
             CommandManager.InvalidateRequerySuggested();
@@ -765,6 +785,7 @@ namespace Host.Win.ViewModels
 
             await RunOnUiAsync(() =>
             {
+                ShowGreeting = false;
                 IsListening = true;
                 IsProcessing = false;
                 StatusText = "Listening...";
