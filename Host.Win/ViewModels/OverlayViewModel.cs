@@ -2,11 +2,16 @@
 using Host.Win.Commands;
 using Host.Win.Models;
 using Host.Win.Services;
+using Host.Win.Views;
 using System;
 using System.Diagnostics;
 using System.Collections.ObjectModel;
+using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using Microsoft.VisualBasic;
+using System.Text.Json;
 
 namespace Host.Win.ViewModels
 {
@@ -17,6 +22,7 @@ namespace Host.Win.ViewModels
         private AssistantMode _selectedMode;
         private string? _modeContent;
         private bool _isLightTheme;
+        private AppTheme _currentTheme = AppTheme.Glass;
         private string _themeIcon = "\uE708"; // Sun by default
         private bool _isMcpReady;
         private bool _isAgentReady;
@@ -30,6 +36,8 @@ namespace Host.Win.ViewModels
         private System.Windows.Media.Brush? _agentStatusBrush;
         private System.Windows.Media.Brush? _providerStatusBrush;
         private string _chatInput = string.Empty;
+        private string _greetingName = Environment.UserName;
+        private bool _showGreeting = true;
         private bool _isSending;
         private ICommand? _sendChatCommand;
         private ICommand? _copyMessageCommand;
@@ -45,6 +53,7 @@ namespace Host.Win.ViewModels
         private readonly System.Collections.Generic.Dictionary<string, System.Threading.CancellationTokenSource> _inflightTurns = new();
         private string _sessionId = Guid.NewGuid().ToString();
         private string _sessionNonce = GenerateSessionNonce();
+        private string _providerType = "Ollama";
         private bool _isSharing;
         private bool _isListening;
         private bool _isProcessing;
@@ -71,6 +80,18 @@ namespace Host.Win.ViewModels
             set => SetProperty(ref _statusText, value);
         }
 
+        public string GreetingName
+        {
+            get => _greetingName;
+            set => SetProperty(ref _greetingName, value);
+        }
+
+        public bool ShowGreeting
+        {
+            get => _showGreeting;
+            set => SetProperty(ref _showGreeting, value);
+        }
+
         public AssistantMode SelectedMode
         {
             get => _selectedMode;
@@ -93,6 +114,16 @@ namespace Host.Win.ViewModels
             set
             {
                 if (!SetProperty(ref _isLightTheme, value)) return;
+                UpdateThemeIcon();
+            }
+        }
+
+        public AppTheme CurrentTheme
+        {
+            get => _currentTheme;
+            set
+            {
+                if (!SetProperty(ref _currentTheme, value)) return;
                 UpdateThemeIcon();
             }
         }
@@ -158,6 +189,10 @@ namespace Host.Win.ViewModels
             {
                 if (SetProperty(ref _chatInput, value))
                 {
+                    if (ShowGreeting && !string.IsNullOrWhiteSpace(value))
+                    {
+                        ShowGreeting = false;
+                    }
                     CommandManager.InvalidateRequerySuggested();
                 }
             }
@@ -214,7 +249,11 @@ namespace Host.Win.ViewModels
         public HostSettings? Settings
         {
             get => _settings;
-            set => SetProperty(ref _settings, value);
+            set
+            {
+                if (!SetProperty(ref _settings, value)) return;
+                ProviderType = _settings?.ProviderType ?? "Ollama";
+            }
         }
 
         public ICommand? SaveSettingsCommand
@@ -230,6 +269,13 @@ namespace Host.Win.ViewModels
         }
 
         public ObservableCollection<ChatMessage> ChatMessages { get; } = new();
+        public ObservableCollection<string> ProviderOptions { get; } = new()
+        {
+            "Ollama",
+            "LM Studio",
+            "OpenAI"
+        };
+        public ObservableCollection<string> ProviderModels { get; } = new();
 
         public string SessionId
         {
@@ -242,6 +288,23 @@ namespace Host.Win.ViewModels
             get => _sessionNonce;
             private set => SetProperty(ref _sessionNonce, value);
         }
+
+        public string ProviderType
+        {
+            get => _providerType;
+            set
+            {
+                if (!SetProperty(ref _providerType, value)) return;
+                if (Settings != null)
+                {
+                    Settings.ProviderType = value;
+                }
+                RefreshProviderModels();
+                OnPropertyChanged(nameof(IsOpenAiProvider));
+            }
+        }
+
+        public bool IsOpenAiProvider => string.Equals(ProviderType, "OpenAI", StringComparison.OrdinalIgnoreCase);
 
         public bool IsSharing
         {
@@ -313,9 +376,11 @@ namespace Host.Win.ViewModels
         public AudioPlaybackService? AudioPlaybackService { get; set; }
         public TtsService? TtsService { get; set; }
         public ContextCollector? ContextCollector { get; set; }
+        public ICommand? BrowseProviderModelCommand { get; set; }
 
         public void ApplyTheme(AppTheme theme)
         {
+            CurrentTheme = theme;
             IsLightTheme = theme == AppTheme.Light;
             UpdateMcpStatus(_isMcpReady);
             UpdateAgentStatus(_isAgentReady);
@@ -351,8 +416,7 @@ namespace Host.Win.ViewModels
 
         private void UpdateThemeIcon()
         {
-            // Sun for light, moon for dark (Segoe MDL2 Assets glyphs)
-            ThemeIcon = IsLightTheme ? "\uE708" : "\uE9D4";
+            ThemeIcon = CurrentTheme == AppTheme.Light ? "\uE708" : "\uE706";
         }
 
         private void UpdateModeContent()
@@ -372,6 +436,7 @@ namespace Host.Win.ViewModels
             var text = ChatInput?.Trim();
             if (string.IsNullOrEmpty(text)) return;
 
+            ShowGreeting = false;
             await SendTextInternalAsync(text, inputType: "text", markSending: true, addUserMessage: true);
         }
 
@@ -387,10 +452,14 @@ namespace Host.Win.ViewModels
                     break;
                 }
                 buffer += ch;
-                target.Text = buffer;
-                await Task.Delay(12, cancellationToken).ConfigureAwait(true);
+                await RunOnUiAsync(() =>
+                {
+                    target.Text = buffer;
+                    target.AppendContentChunk(ch.ToString());
+                }).ConfigureAwait(false);
+                await Task.Delay(12, cancellationToken).ConfigureAwait(false);
             }
-            target.IsStreaming = false;
+            await RunOnUiAsync(() => target.IsStreaming = false).ConfigureAwait(false);
         }
 
         public void CopyMessage(ChatMessage? message)
@@ -414,6 +483,7 @@ namespace Host.Win.ViewModels
             message.IsStreaming = true;
             message.IsRetryable = false;
             message.Text = string.Empty;
+            message.ResetContentSegments();
             message.ToolLabel = string.Empty;
             message.HasToolLabel = false;
             message.IsCancellable = true;
@@ -518,60 +588,71 @@ namespace Host.Win.ViewModels
 
         public void UpdateToolStatus(string turnId, string phase, System.Collections.Generic.List<string> toolCalls)
         {
-            foreach (var message in ChatMessages)
+            _ = RunOnUiAsync(() =>
             {
-                if (!message.IsAssistant || message.TurnId != turnId) continue;
-                var names = toolCalls.Count > 0 ? string.Join(", ", toolCalls) : "tool";
-                message.ToolLabel = phase switch
+                foreach (var message in ChatMessages)
                 {
-                    "awaiting_tool" => $"Awaiting tool: {names}",
-                    "tool_response" => $"Processing tool: {names}",
-                    "tool_complete" => $"Tool: {names}",
-                    _ => $"Tool: {names}"
-                };
-                message.HasToolLabel = true;
-                break;
-            }
+                    if (!message.IsAssistant || message.TurnId != turnId) continue;
+                    var names = toolCalls.Count > 0 ? string.Join(", ", toolCalls) : "tool";
+                    message.ToolLabel = phase switch
+                    {
+                        "awaiting_tool" => $"Awaiting tool: {names}",
+                        "tool_response" => $"Processing tool: {names}",
+                        "tool_complete" => $"Tool: {names}",
+                        "tool_rejected" => $"Tool rejected: {names}",
+                        _ => $"Tool: {names}"
+                    };
+                    message.HasToolLabel = true;
+                    break;
+                }
+            });
         }
 
         public void UpdateThinkingStatus(string turnId, string phase, string? delta)
         {
-            foreach (var message in ChatMessages)
+            _ = RunOnUiAsync(() =>
             {
-                if (!message.IsAssistant || message.TurnId != turnId) continue;
-                if (phase == "thinking_chunk" && !string.IsNullOrEmpty(delta))
+                foreach (var message in ChatMessages)
                 {
-                    message.Reasoning += delta;
-                    message.HasReasoning = true;
-                    message.IsReasoningExpanded = true;
+                    if (!message.IsAssistant || message.TurnId != turnId) continue;
+                    if (phase == "thinking_chunk" && !string.IsNullOrEmpty(delta))
+                    {
+                        message.Reasoning += delta;
+                        message.HasReasoning = true;
+                        message.IsReasoningExpanded = true;
+                    }
+                    else if (phase == "thinking_done")
+                    {
+                        message.IsReasoningExpanded = false;
+                    }
+                    break;
                 }
-                else if (phase == "thinking_done")
-                {
-                    message.IsReasoningExpanded = false;
-                }
-                break;
-            }
+            });
         }
 
         public void UpdateContentStatus(string turnId, string phase, string? delta)
         {
-            foreach (var message in ChatMessages)
+            _ = RunOnUiAsync(() =>
             {
-                if (!message.IsAssistant || message.TurnId != turnId) continue;
-                if (phase == "content_chunk" && !string.IsNullOrEmpty(delta))
+                foreach (var message in ChatMessages)
                 {
-                    message.HasContentStream = true;
-                    message.IsStreaming = true;
-                    message.Text += delta;
+                    if (!message.IsAssistant || message.TurnId != turnId) continue;
+                    if (phase == "content_chunk" && !string.IsNullOrEmpty(delta))
+                    {
+                        message.HasContentStream = true;
+                        message.IsStreaming = true;
+                        message.Text += delta;
+                        message.AppendContentChunk(delta);
+                    }
+                    else if (phase == "content_done")
+                    {
+                        message.HasContentStream = true;
+                        message.IsStreaming = false;
+                        message.IsCancellable = false;
+                    }
+                    break;
                 }
-                else if (phase == "content_done")
-                {
-                    message.HasContentStream = true;
-                    message.IsStreaming = false;
-                    message.IsCancellable = false;
-                }
-                break;
-            }
+            });
         }
 
         public void StopMessage(ChatMessage? message)
@@ -593,6 +674,86 @@ namespace Host.Win.ViewModels
             ChatMessages.Clear();
         }
 
+        public void RefreshProviderModels()
+        {
+            ProviderModels.Clear();
+            var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (string.Equals(ProviderType, "Ollama", StringComparison.OrdinalIgnoreCase))
+            {
+                var manifestRoot = Path.Combine(userProfile, ".ollama", "models", "manifests", "registry.ollama.ai", "library");
+                if (Directory.Exists(manifestRoot))
+                {
+                    foreach (var modelDir in Directory.GetDirectories(manifestRoot))
+                    {
+                        var modelName = Path.GetFileName(modelDir);
+                        var tagFiles = Directory.GetFiles(modelDir);
+                        if (tagFiles.Length == 0)
+                        {
+                            ProviderModels.Add(modelName);
+                            continue;
+                        }
+                        foreach (var tag in tagFiles.Select(Path.GetFileName))
+                        {
+                            if (!string.IsNullOrWhiteSpace(tag))
+                            {
+                                ProviderModels.Add($"{modelName}:{tag}");
+                            }
+                        }
+                    }
+                }
+            }
+            else if (string.Equals(ProviderType, "LM Studio", StringComparison.OrdinalIgnoreCase))
+            {
+                var lmRoot = Path.Combine(userProfile, ".lmstudio", "hub", "models");
+                if (Directory.Exists(lmRoot))
+                {
+                    foreach (var manifestPath in Directory.EnumerateFiles(lmRoot, "manifest.json", SearchOption.AllDirectories))
+                    {
+                        try
+                        {
+                            using var doc = JsonDocument.Parse(File.ReadAllText(manifestPath));
+                            if (doc.RootElement.TryGetProperty("owner", out var ownerEl)
+                                && doc.RootElement.TryGetProperty("name", out var nameEl)
+                                && ownerEl.ValueKind == JsonValueKind.String
+                                && nameEl.ValueKind == JsonValueKind.String)
+                            {
+                                var owner = ownerEl.GetString();
+                                var name = nameEl.GetString();
+                                if (!string.IsNullOrWhiteSpace(owner) && !string.IsNullOrWhiteSpace(name))
+                                {
+                                    ProviderModels.Add($"{owner}/{name}");
+                                }
+                                continue;
+                            }
+                        }
+                        catch
+                        {
+                            // ignore malformed manifests
+                        }
+                    }
+                }
+            }
+        }
+
+        public void BrowseProviderModel()
+        {
+            if (!IsOpenAiProvider || Settings == null)
+            {
+                return;
+            }
+
+            var current = Settings.ProviderModel ?? string.Empty;
+            var input = Interaction.InputBox("Enter the OpenAI model id.", "OpenAI Model", current);
+            var value = input?.Trim();
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return;
+            }
+
+            Settings.ProviderModel = value;
+            OnPropertyChanged(nameof(Settings));
+        }
+
         public void ResetConversation()
         {
             foreach (var kvp in _inflightTurns)
@@ -601,6 +762,7 @@ namespace Host.Win.ViewModels
             }
             _inflightTurns.Clear();
             ClearChatHistory();
+            ShowGreeting = true;
             UpdateSession(Guid.NewGuid().ToString());
             Logger?.LogEvent("conversation.reset", new { sessionId = SessionId });
             CommandManager.InvalidateRequerySuggested();
@@ -623,6 +785,7 @@ namespace Host.Win.ViewModels
 
             await RunOnUiAsync(() =>
             {
+                ShowGreeting = false;
                 IsListening = true;
                 IsProcessing = false;
                 StatusText = "Listening...";
@@ -1078,6 +1241,77 @@ namespace Host.Win.ViewModels
         {
             return string.Equals(SessionId, sessionId, StringComparison.Ordinal)
                 && string.Equals(SessionNonce, sessionNonce ?? string.Empty, StringComparison.Ordinal);
+        }
+
+        public async Task HandleToolApprovalAsync(AgentToolCallback callback)
+        {
+            if (AgentClient == null || string.IsNullOrWhiteSpace(callback.ApprovalId))
+            {
+                return;
+            }
+
+            var toolName = callback.ToolName;
+            if (string.IsNullOrWhiteSpace(toolName) && callback.ToolCalls.Count > 0)
+            {
+                toolName = callback.ToolCalls[0];
+            }
+            toolName ??= "tool";
+
+            var friendly = callback.FriendlyDescription ?? $"would like to run {toolName}.";
+            var description = $"Lisa {friendly}";
+            var argsText = string.IsNullOrWhiteSpace(callback.ToolArgs) ? "None" : callback.ToolArgs;
+            var timeout = callback.TimeoutSeconds.HasValue && callback.TimeoutSeconds.Value > 0
+                ? callback.TimeoutSeconds.Value
+                : 30;
+
+            ToolApprovalWindow? dialog = null;
+            await RunOnUiAsync(() =>
+            {
+                dialog = new ToolApprovalWindow(description, argsText)
+                {
+                    Owner = System.Windows.Application.Current.Windows.OfType<System.Windows.Window>().FirstOrDefault(w => w.IsActive)
+                        ?? System.Windows.Application.Current.MainWindow
+                };
+                dialog.Show();
+            }).ConfigureAwait(false);
+
+            if (dialog == null)
+            {
+                return;
+            }
+
+            var decisionTask = dialog.WaitForDecisionAsync();
+            var completed = await Task.WhenAny(decisionTask, Task.Delay(TimeSpan.FromSeconds(timeout))).ConfigureAwait(false);
+            var approved = completed == decisionTask && decisionTask.Result;
+            if (completed != decisionTask)
+            {
+                await RunOnUiAsync(() => dialog.Close()).ConfigureAwait(false);
+            }
+
+            await RunOnUiAsync(() => AppendToolApprovalLabel(callback.TurnId, toolName ?? "tool", approved)).ConfigureAwait(false);
+
+            await AgentClient.SendToolApprovalAsync(new ToolApprovalRequest
+            {
+                ApprovalId = callback.ApprovalId,
+                Approved = approved
+            }).ConfigureAwait(false);
+        }
+
+        private void AppendToolApprovalLabel(string turnId, string toolName, bool approved)
+        {
+            ChatMessage? target = null;
+            foreach (var message in ChatMessages)
+            {
+                if (!message.IsAssistant) continue;
+                if (message.TurnId == turnId)
+                {
+                    target = message;
+                    break;
+                }
+            }
+
+            target ??= ChatMessages.LastOrDefault(message => message.IsAssistant);
+            target?.AddToolApprovalLabel(toolName, approved);
         }
     }
 }

@@ -18,6 +18,7 @@ SETTINGS_PATH = Path(
 
 
 class ProviderConfig(BaseModel):
+    provider_type: str = "Ollama"
     host: str = "127.0.0.1"
     port: int = 11434
     api_key: Optional[str] = None
@@ -39,9 +40,10 @@ def load_settings() -> ProviderConfig:
                 return default
 
             return ProviderConfig(
+                provider_type=pick("provider_type", "providerType", default="Ollama"),
                 host=pick("provider_host", "providerHost", default="127.0.0.1"),
                 port=int(pick("provider_port", "providerPort", default=11434)),
-                api_key=pick("provider_api_key", "providerApiKey") or None,
+                api_key=os.environ.get("PROVIDER_API_KEY") or pick("provider_api_key", "providerApiKey") or None,
                 model=pick("provider_model", "providerModel", default="llama3.2"),
                 temperature=float(pick("provider_temperature", "providerTemperature", default=0.7)),
                 think=bool(pick("provider_think", "providerThink", default=True)),

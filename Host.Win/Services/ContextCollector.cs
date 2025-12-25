@@ -48,6 +48,32 @@ namespace Host.Win.Services
             return null;
         }
 
+        public string? GetDisplayName()
+        {
+            const int NameDisplay = 3;
+            try
+            {
+                uint size = 0;
+                NativeMethods.GetUserNameEx(NameDisplay, IntPtr.Zero, ref size);
+                if (size == 0)
+                {
+                    return null;
+                }
+
+                var sb = new StringBuilder((int)size);
+                if (NativeMethods.GetUserNameEx(NameDisplay, sb, ref size))
+                {
+                    var value = sb.ToString().Trim();
+                    return string.IsNullOrWhiteSpace(value) ? null : value;
+                }
+            }
+            catch
+            {
+                // ignore display name failures
+            }
+            return null;
+        }
+
         public Screen? GetActiveScreen()
         {
             var handle = NativeMethods.GetForegroundWindow();
@@ -83,6 +109,12 @@ namespace Host.Win.Services
 
             [DllImport("user32.dll", SetLastError = true)]
             internal static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+            [DllImport("secur32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+            internal static extern bool GetUserNameEx(int nameFormat, IntPtr userName, ref uint userNameSize);
+
+            [DllImport("secur32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+            internal static extern bool GetUserNameEx(int nameFormat, StringBuilder userName, ref uint userNameSize);
         }
     }
 }

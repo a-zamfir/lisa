@@ -1,0 +1,105 @@
+<!-- File: Host.Win/Views/ToolApprovalWindow.xaml -->
+<Window x:Class="Host.Win.Views.ToolApprovalWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Tool call request"
+        Width="420"
+        Height="220"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        ShowInTaskbar="False"
+        Background="Transparent"
+        Opacity="0">
+    <Window.Resources>
+        <Style x:Key="ApprovalButtonStyle" TargetType="Button">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="10"
+                                Padding="10 6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"/>
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.9"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.6"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+    <Border CornerRadius="14"
+            Background="{DynamicResource PopupBackground}"
+            BorderBrush="{DynamicResource ButtonBorder}"
+            BorderThickness="1"
+            Padding="0">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <Border Background="{DynamicResource OverlayBackground}" CornerRadius="14,14,0,0" Padding="12 10">
+                <TextBlock Text="Tool call request"
+                           Foreground="{DynamicResource OverlayForeground}"
+                           FontSize="13"
+                           FontWeight="SemiBold"/>
+            </Border>
+            <Grid Grid.Row="1" Margin="16 12 16 14">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <TextBlock Text="{Binding DescriptionText}"
+                           Foreground="{DynamicResource OverlayForeground}"
+                           FontSize="13"
+                           TextWrapping="Wrap"/>
+                <StackPanel Grid.Row="1" Margin="0 10 0 0">
+                    <TextBlock Text="Request parameters"
+                               Foreground="{DynamicResource SubtleText}"
+                               FontSize="12"/>
+                    <TextBlock Text="{Binding ParamsText}"
+                               Foreground="{DynamicResource OverlayForeground}"
+                               FontSize="12"
+                               TextWrapping="Wrap"
+                               Margin="0 4 0 0"/>
+                </StackPanel>
+                <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0 16 0 0">
+                    <Button x:Name="RejectButton"
+                            Content="Reject"
+                            Width="100"
+                            Height="32"
+                            Margin="0 0 10 0"
+                            Background="#A96A6A"
+                            BorderBrush="{DynamicResource ButtonBorder}"
+                            Tag="#8E5A5A"
+                            Style="{StaticResource ApprovalButtonStyle}"/>
+                    <Button x:Name="ApproveButton"
+                            Content="Approve"
+                            Width="100"
+                            Height="32"
+                            Background="#4FAE91"
+                            BorderBrush="{DynamicResource ButtonBorder}"
+                            Tag="#3F947B"
+                            Style="{StaticResource ApprovalButtonStyle}"/>
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

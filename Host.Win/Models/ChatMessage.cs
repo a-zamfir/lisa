@@ -1,6 +1,9 @@
 // File: Host.Win/Models/ChatMessage.cs
 using System.ComponentModel;
+using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Runtime.CompilerServices;
+using System.Linq;
 
 namespace Host.Win.Models
 {
@@ -21,6 +24,13 @@ namespace Host.Win.Models
         private bool _isCancellable;
         private bool _hasContentStream;
         private bool _hasMarkdown;
+        private readonly ObservableCollection<ChatContentSegment> _contentSegments = new();
+        private bool _hasToolApprovals;
+
+        public ChatMessage()
+        {
+            _contentSegments.CollectionChanged += OnSegmentsChanged;
+        }
 
         public string Sender
         {
@@ -118,7 +128,49 @@ namespace Host.Win.Models
             private set => SetProperty(ref _hasMarkdown, value);
         }
 
+        public ObservableCollection<ChatContentSegment> ContentSegments => _contentSegments;
+
+        public bool HasToolApprovals
+        {
+            get => _hasToolApprovals;
+            private set => SetProperty(ref _hasToolApprovals, value);
+        }
+
         public event PropertyChangedEventHandler? PropertyChanged;
+
+        public void ResetContentSegments()
+        {
+            _contentSegments.Clear();
+        }
+
+        public void AppendContentChunk(string chunk)
+        {
+            if (string.IsNullOrEmpty(chunk))
+            {
+                return;
+            }
+
+            EnsureTextSegment();
+            _contentSegments[^1].Text += chunk;
+        }
+
+        public void AddToolApprovalLabel(string toolName, bool approved)
+        {
+            _contentSegments.Add(ChatContentSegment.ApprovalSegment(toolName, approved));
+        }
+
+        private void EnsureTextSegment()
+        {
+            if (_contentSegments.Count == 0 || _contentSegments[^1].IsApproval)
+            {
+                _contentSegments.Add(ChatContentSegment.TextSegment(string.Empty));
+            }
+        }
+
+        private void OnSegmentsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            HasToolApprovals = _contentSegments.Any(segment => segment.IsApproval);
+        }
 
         private void UpdateMarkdownState(string? text)
         {

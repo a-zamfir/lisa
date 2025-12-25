@@ -50,10 +50,16 @@ namespace Host.Win
             _agentClient.SetProviderApiKey(_hostSettings.ProviderApiKey);
             _themeService = new ThemeService();
             _loggingService = new LoggingService();
+            var displayName = _contextCollector.GetDisplayName();
+            var greetingName = string.IsNullOrWhiteSpace(displayName)
+                ? Environment.UserName
+                : displayName.Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
             var overlayVm = new OverlayViewModel
             {
                 AppName = "LISA",
                 StatusText = "Checking...",
+                GreetingName = greetingName,
+                ShowGreeting = true,
                 AgentClient = _agentClient,
                 Logger = _loggingService,
                 Settings = _hostSettings,
@@ -65,8 +71,10 @@ namespace Host.Win
             overlayVm.UpdateMcpStatus(false);
             overlayVm.UpdateAgentStatus(false);
             overlayVm.UpdateProviderStatus(false);
+            overlayVm.ProviderType = _hostSettings.ProviderType;
+            overlayVm.RefreshProviderModels();
 
-            var initialTheme = _themeService.GetSystemTheme();
+            var initialTheme = AppTheme.Glass;
             _themeService.ApplyTheme(initialTheme);
             overlayVm.ApplyTheme(initialTheme);
 
@@ -75,7 +83,12 @@ namespace Host.Win
 
             overlayVm.ToggleThemeCommand = new Commands.RelayCommand(() =>
             {
-                var newTheme = overlayVm.IsLightTheme ? AppTheme.Dark : AppTheme.Light;
+                var newTheme = overlayVm.CurrentTheme switch
+                {
+                    AppTheme.Glass => AppTheme.Dark,
+                    AppTheme.Dark => AppTheme.Light,
+                    _ => AppTheme.Glass
+                };
                 _themeService.ApplyTheme(newTheme);
                 overlayVm.ApplyTheme(newTheme);
             });
@@ -98,6 +111,7 @@ namespace Host.Win
             overlayVm.StartTalkCommand = new Commands.AsyncRelayCommand(() => overlayVm.StartTalkAsync(), overlayVm.CanStartTalk);
             overlayVm.ReplayTtsCommand = new Commands.AsyncRelayCommand(() => overlayVm.ReplayLastTtsAsync());
             overlayVm.ToggleCollapseCommand = new Commands.RelayCommand(() => overlayVm.ToggleCollapsed());
+            overlayVm.BrowseProviderModelCommand = new Commands.RelayCommand(() => overlayVm.BrowseProviderModel());
 
             overlayVm.SelectedMode = AssistantMode.Chat;
 
@@ -113,7 +127,8 @@ namespace Host.Win
                 port: _hostSettings.AgentPort,
                 callbackToken: _agentCallbackToken,
                 callbackPort: AgentCallbackPort,
-                mcpAuthToken: _mcpProcessHost.AuthToken);
+                mcpAuthToken: _mcpProcessHost.AuthToken,
+                providerApiKey: _hostSettings.ProviderApiKey);
             _agentCallbackServer = new TcpCallbackServer(AgentCallbackPort, _agentCallbackToken, callback =>
             {
                 Dispatcher.InvokeAsync(() =>
@@ -122,7 +137,11 @@ namespace Host.Win
                     {
                         return;
                     }
-                    if (callback.Phase == "thinking_chunk" || callback.Phase == "thinking_done")
+                    if (callback.Phase == "tool_approval_required")
+                    {
+                        _ = overlayVm.HandleToolApprovalAsync(callback);
+                    }
+                    else if (callback.Phase == "thinking_chunk" || callback.Phase == "thinking_done")
                     {
                         overlayVm.UpdateThinkingStatus(callback.TurnId, callback.Phase, callback.ThinkingDelta);
                     }
@@ -218,7 +237,8 @@ namespace Host.Win
                     port: overlayVm.Settings.AgentPort,
                     callbackToken: _agentCallbackToken,
                     callbackPort: AgentCallbackPort,
-                    mcpAuthToken: _mcpProcessHost.AuthToken);
+                    mcpAuthToken: _mcpProcessHost.AuthToken,
+                    providerApiKey: overlayVm.Settings.ProviderApiKey);
                 _agentProcessHost.Start();
                 _agentCallbackServer?.Stop();
                 _agentCallbackServer = new TcpCallbackServer(AgentCallbackPort, _agentCallbackToken, callback =>

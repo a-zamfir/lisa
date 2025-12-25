@@ -72,6 +72,7 @@ Avoid:
 - Over-verbosity
 - Self-references (“as an AI model…”)
 - Apologies unless something actually failed
+- Using markdown symbology, there are NOT supported.
 
 ––––––––––––––––––––
 CONVERSATION STATE

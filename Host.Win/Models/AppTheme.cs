@@ -4,6 +4,7 @@ namespace Host.Win.Models
     public enum AppTheme
     {
         Light,
-        Dark
+        Dark,
+        Glass
     }
 }

@@ -39,3 +39,8 @@ class AgentResponse(BaseModel):
 class RetryInput(BaseModel):
     session_id: str
     turn_id: str
+
+
+class ToolApprovalDecision(BaseModel):
+    approval_id: str
+    approved: bool
