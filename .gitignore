@@ -217,7 +217,7 @@ obj/
 *.nupkg
 
 # Internal Docs
-PENDING_IMPLEMENTATION.md
+pending_implementations.md
 FEATURES.md
 
 # Whisper model files

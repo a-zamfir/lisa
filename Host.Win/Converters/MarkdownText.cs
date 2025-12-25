@@ -89,10 +89,6 @@ namespace Host.Win.Converters
                 timer.Tick += (_, _) =>
                 {
                     timer.Stop();
-                    if (!rtb.IsVisible)
-                    {
-                        return;
-                    }
                     var pending = GetPendingText(rtb);
                     if (string.Equals(GetLastRenderedText(rtb), pending, StringComparison.Ordinal))
                     {
@@ -200,21 +196,196 @@ namespace Host.Win.Converters
             }
 
             var lines = text.Replace("\r\n", "\n").Split('\n');
-            var paragraph = new Paragraph { Margin = new Thickness(0) };
-            for (var index = 0; index < lines.Length; index++)
+            var inCodeBlock = false;
+
+            foreach (var raw in lines)
             {
-                if (index > 0)
+                var line = raw ?? string.Empty;
+
+                if (line.StartsWith("```", StringComparison.Ordinal))
                 {
-                    paragraph.Inlines.Add(new LineBreak());
+                    inCodeBlock = !inCodeBlock;
+                    continue;
                 }
-                foreach (var inline in ParseInline(lines[index], foreground))
+
+                if (inCodeBlock)
+                {
+                    doc.Blocks.Add(BuildCodeLine(line, foreground));
+                    continue;
+                }
+
+                if (TryParseHeading(line, out var headingLevel, out var headingText))
+                {
+                    doc.Blocks.Add(BuildHeading(headingLevel, headingText, foreground));
+                    continue;
+                }
+
+                if (IsHorizontalRule(line))
+                {
+                    doc.Blocks.Add(BuildHorizontalRule(foreground));
+                    continue;
+                }
+
+                if (TryParseListItem(line, out var itemText))
+                {
+                    doc.Blocks.Add(BuildListItem(itemText, foreground));
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    doc.Blocks.Add(new Paragraph { Margin = new Thickness(0, 6, 0, 6) });
+                    continue;
+                }
+
+                var paragraph = new Paragraph { Margin = new Thickness(0, 0, 0, 4) };
+                foreach (var inline in ParseInline(line, foreground))
                 {
                     paragraph.Inlines.Add(inline);
                 }
+                doc.Blocks.Add(paragraph);
             }
-            doc.Blocks.Add(paragraph);
 
             return doc;
+        }
+
+        private static Block BuildCodeLine(string line, WpfMedia.Brush? foreground)
+        {
+            var paragraph = new Paragraph { Margin = new Thickness(0, 0, 0, 2) };
+            var run = new Run(line)
+            {
+                FontFamily = new WpfMedia.FontFamily("Consolas"),
+                FontSize = 13
+            };
+            if (foreground != null)
+            {
+                run.Foreground = foreground;
+            }
+            paragraph.Inlines.Add(run);
+            return paragraph;
+        }
+
+        private static bool TryParseHeading(string line, out int level, out string text)
+        {
+            level = 0;
+            text = string.Empty;
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                return false;
+            }
+
+            var i = 0;
+            while (i < line.Length && line[i] == '#')
+            {
+                i++;
+            }
+
+            if (i is < 1 or > 6)
+            {
+                return false;
+            }
+
+            if (i < line.Length && line[i] == ' ')
+            {
+                level = i;
+                text = line[(i + 1)..].Trim();
+                return !string.IsNullOrWhiteSpace(text);
+            }
+
+            return false;
+        }
+
+        private static Block BuildHeading(int level, string text, WpfMedia.Brush? foreground)
+        {
+            var size = level switch
+            {
+                1 => 20.0,
+                2 => 18.0,
+                3 => 16.0,
+                _ => 15.0
+            };
+
+            var paragraph = new Paragraph
+            {
+                Margin = new Thickness(0, 8, 0, 4),
+                FontSize = size,
+                FontWeight = FontWeights.SemiBold
+            };
+
+            foreach (var inline in ParseInline(text, foreground))
+            {
+                paragraph.Inlines.Add(inline);
+            }
+
+            return paragraph;
+        }
+
+        private static bool IsHorizontalRule(string line)
+        {
+            var trimmed = (line ?? string.Empty).Trim();
+            return trimmed is "---" or "***" or "___";
+        }
+
+        private static Block BuildHorizontalRule(WpfMedia.Brush? foreground)
+        {
+            var brush = CreateRuleBrush(foreground);
+            var border = new WpfControls.Border
+            {
+                Height = 1,
+                Background = brush,
+                Margin = new Thickness(0, 10, 0, 10)
+            };
+            return new BlockUIContainer(border);
+        }
+
+        private static WpfMedia.Brush CreateRuleBrush(WpfMedia.Brush? foreground)
+        {
+            if (foreground is WpfMedia.SolidColorBrush solid)
+            {
+                var color = solid.Color;
+                var rule = new WpfMedia.SolidColorBrush(WpfMedia.Color.FromArgb(70, color.R, color.G, color.B));
+                rule.Freeze();
+                return rule;
+            }
+
+            return WpfMedia.Brushes.Gray;
+        }
+
+        private static bool TryParseListItem(string line, out string itemText)
+        {
+            itemText = string.Empty;
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                return false;
+            }
+
+            var trimmedStart = line.TrimStart();
+            if (trimmedStart.StartsWith("- ", StringComparison.Ordinal) || trimmedStart.StartsWith("* ", StringComparison.Ordinal))
+            {
+                itemText = trimmedStart[2..].TrimEnd();
+                return true;
+            }
+
+            return false;
+        }
+
+        private static Block BuildListItem(string itemText, WpfMedia.Brush? foreground)
+        {
+            var paragraph = new Paragraph { Margin = new Thickness(14, 0, 0, 2) };
+            var bullet = new Run("• ")
+            {
+                FontWeight = FontWeights.SemiBold
+            };
+            if (foreground != null)
+            {
+                bullet.Foreground = foreground;
+            }
+            paragraph.Inlines.Add(bullet);
+            foreach (var inline in ParseInline(itemText, foreground))
+            {
+                paragraph.Inlines.Add(inline);
+            }
+            return paragraph;
         }
 
         private static FlowDocument BuildPlainDocument(string text, WpfMedia.Brush? foreground)
@@ -254,6 +425,7 @@ namespace Host.Win.Converters
             var i = 0;
             while (i < text.Length)
             {
+                // Bold: **text**
                 if (text[i] == '*' && i + 1 < text.Length && text[i + 1] == '*')
                 {
                     var end = text.IndexOf("**", i + 2, StringComparison.Ordinal);
@@ -265,12 +437,18 @@ namespace Host.Win.Converters
                         {
                             run.Foreground = foreground;
                         }
-                        var bold = new Bold(run) { FontWeight = FontWeights.SemiBold };
-                        inlines.Add(bold);
+                        inlines.Add(new Bold(run) { FontWeight = FontWeights.SemiBold });
                         i = end + 2;
                         continue;
                     }
+
+                    // Unmatched opener: treat literally and advance.
+                    inlines.Add(new Run("*"));
+                    i += 1;
+                    continue;
                 }
+
+                // Italic: *text*
                 if (text[i] == '*')
                 {
                     var end = text.IndexOf("*", i + 1, StringComparison.Ordinal);
@@ -282,12 +460,17 @@ namespace Host.Win.Converters
                         {
                             run.Foreground = foreground;
                         }
-                        var italic = new Italic(run);
-                        inlines.Add(italic);
+                        inlines.Add(new Italic(run));
                         i = end + 1;
                         continue;
                     }
+
+                    inlines.Add(new Run("*"));
+                    i += 1;
+                    continue;
                 }
+
+                // Inline code: `text`
                 if (text[i] == '`')
                 {
                     var end = text.IndexOf("`", i + 1, StringComparison.Ordinal);
@@ -306,27 +489,34 @@ namespace Host.Win.Converters
                         i = end + 1;
                         continue;
                     }
+
+                    inlines.Add(new Run("`"));
+                    i += 1;
+                    continue;
                 }
 
-                var sb = new StringBuilder();
-                while (i < text.Length)
+                // Plain chunk until the next markdown marker.
+                var next = i;
+                while (next < text.Length && text[next] != '*' && text[next] != '`')
                 {
-                    if (text[i] == '*' || text[i] == '`')
-                    {
-                        break;
-                    }
-                    sb.Append(text[i]);
-                    i++;
+                    next++;
                 }
-                if (sb.Length > 0)
+
+                if (next > i)
                 {
-                    var run = new Run(sb.ToString());
+                    var run = new Run(text.Substring(i, next - i));
                     if (foreground != null)
                     {
                         run.Foreground = foreground;
                     }
                     inlines.Add(run);
+                    i = next;
+                    continue;
                 }
+
+                // Safety: always advance to avoid infinite loops.
+                inlines.Add(new Run(text[i].ToString()));
+                i += 1;
             }
 
             return inlines;

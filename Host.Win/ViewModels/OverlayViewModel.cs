@@ -650,6 +650,33 @@ namespace Host.Win.ViewModels
             });
         }
 
+        public void UpdateMemoryStatus(string turnId, string phase)
+        {
+            RunOnUi(() =>
+            {
+                foreach (var message in ChatMessages)
+                {
+                    if (!message.IsAssistant || message.TurnId != turnId) continue;
+                    if (phase == "memory_update_started")
+                    {
+                        message.IsMemoryUpdating = true;
+                        break;
+                    }
+
+                    if (phase == "memory_update_done" || phase == "memory_update_failed")
+                    {
+                        message.IsMemoryUpdating = false;
+                        var success = phase == "memory_update_done";
+                        var text = success ? "Memory updated." : "Memory update failed.";
+                        message.StatusSegments.Clear();
+                        message.StatusSegments.Add(ChatContentSegment.BadgeSegment(text, success));
+                        break;
+                    }
+                    break;
+                }
+            });
+        }
+
         public void UpdateThinkingStatus(string turnId, string phase, string? delta)
         {
             RunOnUi(() =>

@@ -64,9 +64,10 @@
 ## Settings
 
 - Stored at `%LOCALAPPDATA%/LISA/host-settings.json` via `SettingsService` (JSON, pretty printed; provider API key encrypted at rest via DPAPI CurrentUser).
-- Fields: `mcpHost`, `mcpPort`, `agentHost`, `agentPort`, `providerType` (LM Studio|Ollama|OpenAI), `providerMode` (Local|Hosted), `providerHost`, `providerPort`, `providerApiKey`, `providerModel`, `providerTemperature`, `providerThink`, `voiceType`, `voiceRate`, `voiceVolume`, `ttsEnabledInChat`, `verboseLogging`, `piperMode` (exe|python), `piperExePath`, `piperPythonPath`, `piperVoiceModelPath`, `piperVoiceConfigPath`, `piperSpeakerId`.
+- Fields: `mcpHost`, `mcpPort`, `agentHost`, `agentPort`, `providerType` (LM Studio|Ollama|OpenAI), `providerMode` (Local|Hosted), `providerHost`, `providerPort`, `providerApiKey`, `providerModel`, `providerTemperature`, `providerThink`, `voiceType`, `voiceRate`, `voiceVolume`, `ttsEnabledInChat`, `verboseLogging`, `memoryEnabled`, `piperMode` (exe|python), `piperExePath`, `piperPythonPath`, `piperVoiceModelPath`, `piperVoiceConfigPath`, `piperSpeakerId`.
 - UI note: `voiceRate` and `voiceVolume` are persisted as floats, but the UI edits them as integer percentages.
 - UX note: `ttsEnabledInChat` controls auto-play for Chat messages; Talk mode still plays TTS for responses.
+- UX note: `memoryEnabled` enables long-term memory (SQLite + FTS when available). Writes are non-blocking and indicated in the chat UI via a small status badge (e.g. “Memory updated.”).
 
 ## TTS (Host)
 
@@ -104,11 +105,17 @@
 
 ## Agent Worker Notes
 
-- FastAPI endpoints: `/health`, `/input/text`, `/input/retry`, `/input/audio`, `/visual-context/frame`.
+- FastAPI endpoints: `/health`, `/input/text`, `/input/retry`, `/input/audio`, `/visual-context/frame`, `/memory/*`.
 - Provider integration:
   - LM Studio / OpenAI: OpenAI-compatible chat completions (`POST /v1/chat/completions`) with SSE streaming.
   - Ollama: `POST /api/chat` streaming.
 - Streaming: provider stream is parsed; partial content and thinking are forwarded via TCP callbacks to Host.Win for live display. Tool calls are detected and executed against MCP; phases are sent as callbacks.
+- Memory:
+  - The assistant may append a hidden trailer `<lisa_memory>{...}</lisa_memory>` at the end of its response.
+  - `Agent.Worker` strips the trailer from user-visible content, minimally validates ops (non-secret, bounded size), and writes to `%LOCALAPPDATA%/LISA/memory.db` asynchronously.
+  - Host receives `memory_update_started|memory_update_done|memory_update_failed` callbacks for UI.
+  - Memory entries are stored as string key/value pairs; `kind` is optional metadata and treated as free-form.
+  - Retrieval: before each provider call, the agent injects a system message starting with `Long-term memory:` and `[mem] key = value` lines when matches are found; if none are found, the agent injects a “none found, do not guess” instruction.
 - Conversations: in-memory store with approximate token cap + max message count trimming.
 - Settings: read from `%LOCALAPPDATA%/LISA/host-settings.json` (agent/provider hosts, ports, mode, model, temperature, think flag, API key, voice params).
 

@@ -34,11 +34,11 @@ This repository contains:
 ### Phase 2 (Done)
 - Talk mode: local STT with VAD + spoken responses.
 
-### Phase 3 (Current)
+### Phase 3 (Done)
 - Share mode: arm Share and the next prompt includes a one-shot screenshot (vision-capable models).
 
-### Near Term
-- Memory: opt-in local storage for preferences and context.
+### Phase 4 (Current)
+- Memory: opt-in local storage (SQLite + FTS when available) with key/value strings, updated asynchronously.
 
 ---
 

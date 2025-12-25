@@ -1062,9 +1062,9 @@
                                                                     </Style.Triggers>
                                                                 </Style>
                                                             </ToggleButton.Style>
-                                                            <StackPanel Orientation="Horizontal">
-                                                                <TextBlock Text="Thinking..."
-                                                                           FontSize="12">
+                                                             <StackPanel Orientation="Horizontal">
+                                                                 <TextBlock Text="Thinking..."
+                                                                            FontSize="12">
                                                                     <TextBlock.Style>
                                                                         <Style TargetType="TextBlock">
                                                                             <Setter Property="Visibility" Value="Collapsed"/>
@@ -1076,8 +1076,8 @@
                                                                         </Style>
                                                                     </TextBlock.Style>
                                                                 </TextBlock>
-                                                                <TextBlock Text="{Binding ThoughtSeconds, StringFormat=Thought for {0:0.0} seconds}"
-                                                                           FontSize="12">
+                                                                 <TextBlock Text="{Binding ThoughtSeconds, StringFormat=Thought for {0:0.0} seconds}"
+                                                                            FontSize="12">
                                                                     <TextBlock.Style>
                                                                         <Style TargetType="TextBlock">
                                                                             <Setter Property="Visibility" Value="Visible"/>
@@ -1088,11 +1088,11 @@
                                                                             </Style.Triggers>
                                                                         </Style>
                                                                     </TextBlock.Style>
-                                                                </TextBlock>
-                                                                <TextBlock Text="&#xE70D;" FontFamily="Segoe MDL2 Assets" FontSize="12" Margin="8 0 0 0">
-                                                                    <TextBlock.RenderTransform>
-                                                                        <RotateTransform Angle="0"/>
-                                                                    </TextBlock.RenderTransform>
+                                                                 </TextBlock>
+                                                                 <TextBlock Text="&#xE70D;" FontFamily="Segoe MDL2 Assets" FontSize="12" Margin="8 0 0 0">
+                                                                     <TextBlock.RenderTransform>
+                                                                         <RotateTransform Angle="0"/>
+                                                                     </TextBlock.RenderTransform>
                                                                     <TextBlock.Style>
                                                                         <Style TargetType="TextBlock">
                                                                             <Style.Triggers>
@@ -1109,88 +1109,150 @@
                                                                 </TextBlock>
                                                             </StackPanel>
                                                         </ToggleButton>
-                                                        <ItemsControl x:Name="AssistantSegments"
-                                                                      Grid.Row="2"
-                                                                      ItemsSource="{Binding ContentSegments}"
-                                                                      Margin="0 8 0 0">
-                                                            <ItemsControl.ItemsPanel>
-                                                                <ItemsPanelTemplate>
-                                                                    <StackPanel/>
-                                                                </ItemsPanelTemplate>
-                                                            </ItemsControl.ItemsPanel>
-                                                            <ItemsControl.Style>
-                                                                <Style TargetType="ItemsControl">
-                                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                                    <Style.Triggers>
-                                                                        <MultiDataTrigger>
-                                                                            <MultiDataTrigger.Conditions>
-                                                                                <Condition Binding="{Binding IsAssistant}" Value="True"/>
-                                                                                <Condition Binding="{Binding HasToolApprovals}" Value="True"/>
-                                                                            </MultiDataTrigger.Conditions>
-                                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                                        </MultiDataTrigger>
-                                                                    </Style.Triggers>
-                                                                </Style>
-                                                            </ItemsControl.Style>
-                                                            <ItemsControl.ItemTemplate>
-                                                                <DataTemplate>
-                                                                    <Grid>
-                                                                        <TextBlock Text="{Binding Text}"
-                                                                                   TextWrapping="Wrap"
-                                                                                   Foreground="{DynamicResource AssistantBubbleForeground}">
-                                                                            <TextBlock.Style>
-                                                                                <Style TargetType="TextBlock">
-                                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                                    <Style.Triggers>
-                                                                                        <DataTrigger Binding="{Binding IsApproval}" Value="True">
-                                                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                                                        </DataTrigger>
-                                                                                    </Style.Triggers>
-                                                                                </Style>
-                                                                            </TextBlock.Style>
-                                                                        </TextBlock>
+                                                        <StackPanel Grid.Row="2" Margin="0 8 0 0">
+                                                            <ItemsControl x:Name="AssistantSegments"
+                                                                          ItemsSource="{Binding ContentSegments}">
+                                                                <ItemsControl.ItemsPanel>
+                                                                    <ItemsPanelTemplate>
+                                                                        <StackPanel/>
+                                                                    </ItemsPanelTemplate>
+                                                                </ItemsControl.ItemsPanel>
+                                                                <ItemsControl.Style>
+                                                                    <Style TargetType="ItemsControl">
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        <Style.Triggers>
+                                                                            <MultiDataTrigger>
+                                                                                <MultiDataTrigger.Conditions>
+                                                                                    <Condition Binding="{Binding IsAssistant}" Value="True"/>
+                                                                                    <Condition Binding="{Binding HasToolApprovals}" Value="True"/>
+                                                                                </MultiDataTrigger.Conditions>
+                                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                            </MultiDataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </ItemsControl.Style>
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <Grid>
+                                                                            <TextBlock Text="{Binding Text}"
+                                                                                       TextWrapping="Wrap"
+                                                                                       Foreground="{DynamicResource AssistantBubbleForeground}">
+                                                                                <TextBlock.Style>
+                                                                                    <Style TargetType="TextBlock">
+                                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                                        <Style.Triggers>
+                                                                                            <DataTrigger Binding="{Binding IsApproval}" Value="True">
+                                                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                            </DataTrigger>
+                                                                                        </Style.Triggers>
+                                                                                    </Style>
+                                                                                </TextBlock.Style>
+                                                                            </TextBlock>
+                                                                            <Border CornerRadius="8"
+                                                                                    Padding="8 6">
+                                                                                <Border.Style>
+                                                                                    <Style TargetType="Border">
+                                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                        <Setter Property="Background" Value="{DynamicResource ApprovalAcceptedBackground}"/>
+                                                                                        <Setter Property="BorderBrush" Value="{DynamicResource ApprovalAcceptedBorder}"/>
+                                                                                        <Setter Property="BorderThickness" Value="1"/>
+                                                                                        <Setter Property="Margin" Value="0 0 0 6"/>
+                                                                                        <Style.Triggers>
+                                                                                            <DataTrigger Binding="{Binding IsApproval}" Value="True">
+                                                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                                                <Setter Property="Margin" Value="0 6 0 6"/>
+                                                                                            </DataTrigger>
+                                                                                            <MultiDataTrigger>
+                                                                                                <MultiDataTrigger.Conditions>
+                                                                                                    <Condition Binding="{Binding IsApproval}" Value="True"/>
+                                                                                                    <Condition Binding="{Binding Approved}" Value="False"/>
+                                                                                                </MultiDataTrigger.Conditions>
+                                                                                                <Setter Property="Background" Value="{DynamicResource ApprovalRejectedBackground}"/>
+                                                                                                <Setter Property="BorderBrush" Value="{DynamicResource ApprovalRejectedBorder}"/>
+                                                                                            </MultiDataTrigger>
+                                                                                        </Style.Triggers>
+                                                                                    </Style>
+                                                                                </Border.Style>
+                                                                                <TextBlock FontSize="12" TextWrapping="Wrap">
+                                                                                    <TextBlock.Style>
+                                                                                        <Style TargetType="TextBlock">
+                                                                                            <Setter Property="Foreground" Value="{DynamicResource ApprovalAcceptedForeground}"/>
+                                                                                            <Style.Triggers>
+                                                                                                <DataTrigger Binding="{Binding Approved}" Value="False">
+                                                                                                    <Setter Property="Foreground" Value="{DynamicResource ApprovalRejectedForeground}"/>
+                                                                                                </DataTrigger>
+                                                                                            </Style.Triggers>
+                                                                                        </Style>
+                                                                                    </TextBlock.Style>
+                                                                                    <Run Text="Tool request: "/>
+                                                                                    <Run Text="{Binding ToolName}"/>
+                                                                                    <Run Text=" - "/>
+                                                                                    <Run Text="{Binding StatusText, Mode=OneWay}" FontWeight="SemiBold"/>
+                                                                                </TextBlock>
+                                                                            </Border>
+                                                                        </Grid>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+
+                                                            <ItemsControl x:Name="MemoryBadges"
+                                                                          ItemsSource="{Binding StatusSegments}">
+                                                                <ItemsControl.ItemsPanel>
+                                                                    <ItemsPanelTemplate>
+                                                                        <StackPanel/>
+                                                                    </ItemsPanelTemplate>
+                                                                </ItemsControl.ItemsPanel>
+                                                                <ItemsControl.Style>
+                                                                    <Style TargetType="ItemsControl">
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        <Style.Triggers>
+                                                                            <MultiDataTrigger>
+                                                                                <MultiDataTrigger.Conditions>
+                                                                                    <Condition Binding="{Binding IsAssistant}" Value="True"/>
+                                                                                    <Condition Binding="{Binding HasStatusBadges}" Value="True"/>
+                                                                                </MultiDataTrigger.Conditions>
+                                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                            </MultiDataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </ItemsControl.Style>
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
                                                                         <Border CornerRadius="8"
-                                                                                Padding="8 6">
+                                                                                Padding="8 6"
+                                                                                Margin="0 6 0 0"
+                                                                                BorderThickness="1">
                                                                             <Border.Style>
                                                                                 <Style TargetType="Border">
-                                                                                    <Setter Property="Visibility" Value="Collapsed"/>
                                                                                     <Setter Property="Background" Value="{DynamicResource ApprovalAcceptedBackground}"/>
                                                                                     <Setter Property="BorderBrush" Value="{DynamicResource ApprovalAcceptedBorder}"/>
-                                                                                    <Setter Property="BorderThickness" Value="1"/>
-                                                                                    <Setter Property="Margin" Value="0 0 0 6"/>
                                                                                     <Style.Triggers>
-                                                                                        <DataTrigger Binding="{Binding IsApproval}" Value="True">
-                                                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                                                            <Setter Property="Margin" Value="0 6 0 6"/>
-                                                                                        </DataTrigger>
-                                                                                        <DataTrigger Binding="{Binding Approved}" Value="False">
+                                                                                        <DataTrigger Binding="{Binding BadgeSuccess}" Value="False">
                                                                                             <Setter Property="Background" Value="{DynamicResource ApprovalRejectedBackground}"/>
                                                                                             <Setter Property="BorderBrush" Value="{DynamicResource ApprovalRejectedBorder}"/>
                                                                                         </DataTrigger>
                                                                                     </Style.Triggers>
                                                                                 </Style>
                                                                             </Border.Style>
-                                                                            <TextBlock FontSize="12" TextWrapping="Wrap">
+                                                                            <TextBlock FontSize="12"
+                                                                                       TextWrapping="Wrap"
+                                                                                       Text="{Binding BadgeText}">
                                                                                 <TextBlock.Style>
                                                                                     <Style TargetType="TextBlock">
                                                                                         <Setter Property="Foreground" Value="{DynamicResource ApprovalAcceptedForeground}"/>
                                                                                         <Style.Triggers>
-                                                                                            <DataTrigger Binding="{Binding Approved}" Value="False">
+                                                                                            <DataTrigger Binding="{Binding BadgeSuccess}" Value="False">
                                                                                                 <Setter Property="Foreground" Value="{DynamicResource ApprovalRejectedForeground}"/>
                                                                                             </DataTrigger>
                                                                                         </Style.Triggers>
                                                                                     </Style>
                                                                                 </TextBlock.Style>
-                                                                                <Run Text="Tool request: "/>
-                                                                                <Run Text="{Binding ToolName}"/>
-                                                                                <Run Text=" - "/>
-                                                                                <Run Text="{Binding StatusText, Mode=OneWay}" FontWeight="SemiBold"/>
                                                                             </TextBlock>
                                                                         </Border>
-                                                                    </Grid>
-                                                                </DataTemplate>
-                                                            </ItemsControl.ItemTemplate>
-                                                        </ItemsControl>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </StackPanel>
                                                         <TextBlock Grid.Row="3"
                                                                    Text="{Binding Reasoning}"
                                                                    TextWrapping="Wrap"
@@ -2128,19 +2190,26 @@
                                  </StackPanel>
 
                                  <Border Height="1" Background="{DynamicResource ButtonBorder}" Margin="0 14 0 14"/>
-                                 <TextBlock Text="Diagnostics" Foreground="{DynamicResource OverlayForeground}" FontWeight="SemiBold" FontSize="13"/>
-                                 <StackPanel Orientation="Horizontal" Margin="0 10 0 0" VerticalAlignment="Center">
-                                     <TextBlock Text="Enable verbose logging" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
-                                     <CheckBox IsChecked="{Binding Settings.VerboseLogging}"/>
-                                 </StackPanel>
+                                  <TextBlock Text="Diagnostics" Foreground="{DynamicResource OverlayForeground}" FontWeight="SemiBold" FontSize="13"/>
+                                  <StackPanel Orientation="Horizontal" Margin="0 10 0 0" VerticalAlignment="Center">
+                                      <TextBlock Text="Enable verbose logging" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                      <CheckBox IsChecked="{Binding Settings.VerboseLogging}"/>
+                                  </StackPanel>
 
-                                 <Button Content="Save Settings"
-                                         Width="170"
-                                         Height="38"
-                                         HorizontalAlignment="Left"
-                                         Command="{Binding SaveSettingsCommand}"
-                                        Style="{StaticResource SendButtonStyle}"
-                                        Margin="0 14 0 0"/>
+                                  <Border Height="1" Background="{DynamicResource ButtonBorder}" Margin="0 14 0 14"/>
+                                  <TextBlock Text="Memory" Foreground="{DynamicResource OverlayForeground}" FontWeight="SemiBold" FontSize="13"/>
+                                  <StackPanel Orientation="Horizontal" Margin="0 10 0 0" VerticalAlignment="Center">
+                                      <TextBlock Text="Enable auto memory" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                      <CheckBox IsChecked="{Binding Settings.MemoryEnabled}"/>
+                                  </StackPanel>
+
+                                  <Button Content="Save Settings"
+                                          Width="170"
+                                          Height="38"
+                                          HorizontalAlignment="Left"
+                                          Command="{Binding SaveSettingsCommand}"
+                                         Style="{StaticResource SendButtonStyle}"
+                                         Margin="0 14 0 0"/>
                             </StackPanel>
                         </ScrollViewer>
                     </Grid>

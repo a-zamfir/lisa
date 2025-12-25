@@ -12,6 +12,10 @@ namespace Host.Win.Models
         public string ToolName { get; init; } = string.Empty;
         public bool Approved { get; init; }
 
+        public bool IsBadge { get; init; }
+        public string BadgeText { get; init; } = string.Empty;
+        public bool BadgeSuccess { get; init; } = true;
+
         public string Text
         {
             get => _text;
@@ -28,6 +32,11 @@ namespace Host.Win.Models
         public static ChatContentSegment ApprovalSegment(string toolName, bool approved)
         {
             return new ChatContentSegment { IsApproval = true, ToolName = toolName, Approved = approved };
+        }
+
+        public static ChatContentSegment BadgeSegment(string text, bool success = true)
+        {
+            return new ChatContentSegment { IsBadge = true, BadgeText = text ?? string.Empty, BadgeSuccess = success };
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;

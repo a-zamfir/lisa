@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from agent_worker.routers.text import init_tool_cache, start_tool_cache_retry, warm_services, router as text_router
 from agent_worker.routers.audio import router as audio_router
 from agent_worker.routers.visual import router as visual_router
+from agent_worker.routers.memory import router as memory_router
 from agent_worker.services.settings import DEFAULT_PORT
 from agent_worker.services.stt import load_model
 from starlette.concurrency import run_in_threadpool
@@ -24,6 +25,7 @@ app = FastAPI(title="LISA Agent Worker", version="0.1.0")
 app.include_router(text_router)
 app.include_router(audio_router)
 app.include_router(visual_router)
+app.include_router(memory_router)
 
 
 @app.on_event("startup")

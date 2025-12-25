@@ -14,6 +14,9 @@ from fastapi import APIRouter, Header
 
 from agent_worker.models import AgentMessage, AgentResponse, RetryInput, TextInput, ToolApprovalDecision
 from agent_worker.services.conversations import ConversationStore
+from agent_worker.services.memory_policy import parse_ops, validate_ops
+from agent_worker.services.memory_store import MemoryStore
+from agent_worker.services.memory_trailer import StreamTrailerFilter, extract_memory_trailer
 from agent_worker.services.mcp_client import McpClient
 from agent_worker.services.provider import call_provider, call_provider_stream, warm_provider_client
 from agent_worker.services.session_state import get_session_nonce, set_session_nonce
@@ -26,6 +29,7 @@ from agent_worker.services.visual_context import pop_latest_frame, peek_latest_f
 router = APIRouter()
 _conversations = ConversationStore()
 _mcp_client = McpClient()
+_memory_store = MemoryStore()
 _tool_context: Optional[str] = None
 _tool_context_version = 0
 _SYSTEM_CONTEXT = collect_system_context()
@@ -106,9 +110,12 @@ def _build_provider_messages(
     user_text: Optional[str],
     *,
     frame: object | None = None,
+    memory_context: Optional[str] = None,
 ) -> List[dict]:
     messages: List[dict] = []
     messages.extend(history)
+    if memory_context:
+        messages.append({"role": "system", "content": memory_context})
     if user_text is not None:
         if frame is not None:
             # Keep the vision prompt tight: we only add this when an image is attached.
@@ -289,6 +296,101 @@ async def _await_tool_approval(session_id: str, turn_id: str, tool_name: str, to
     return await approval_manager.wait_for(approval_id, _APPROVAL_TIMEOUT_S)
 
 
+async def _send_memory_callback(session_id: str, turn_id: str, phase: str, op_count: int = 0, error: str = "") -> None:
+    payload: Dict[str, Any] = {
+        "session_id": session_id,
+        "turn_id": turn_id,
+        "phase": phase,
+    }
+    if op_count:
+        payload["memory_op_count"] = op_count
+    if error:
+        payload["memory_error"] = error
+    await _send_pipe_payload(payload)
+
+
+async def _build_memory_context(cfg, query: str) -> str:
+    if not getattr(cfg, "memory_enabled", False):
+        return ""
+
+    try:
+        items = await asyncio.wait_for(
+            asyncio.to_thread(_memory_store.search, query, limit=6),
+            timeout=0.02,
+        )
+    except Exception:
+        items = []
+
+    if items:
+        lines = [
+            "Long-term memory (user-provided; may be outdated). Use this if relevant; if it seems wrong, ask the user:"
+        ]
+        for item in items:
+            lines.append(f"[mem] {item.key} = {item.value}")
+        text = "\n".join(lines).strip()
+        return text[:1200]
+
+    # If nothing is found, explicitly tell the model to avoid guessing personal facts.
+    return (
+        "Long-term memory: none found relevant for this prompt. "
+        "If the user asks about personal facts/preferences and you can't find them in memory, ask a clarifying question rather than guessing."
+    )
+
+
+def _extract_and_schedule_memory_update(cfg, session_id: str, turn_id: str, completion: str) -> str:
+    cleaned, payload = extract_memory_trailer(completion)
+    if not payload:
+        if cleaned != completion and "<lisa_memory>" in completion:
+            _log.info("memory trailer stripped but invalid/unparseable session=%s turn=%s", session_id, turn_id)
+        return cleaned
+
+    ops = parse_ops(payload)
+    accepted, rejected_reasons = validate_ops(ops)
+    if not accepted:
+        if rejected_reasons:
+            _log.info("memory trailer rejected: %s", "; ".join(rejected_reasons[:10]))
+        return cleaned
+
+    if not getattr(cfg, "memory_enabled", False):
+        _log.debug("memory trailer present but memory disabled; skipping")
+        return cleaned
+
+    _memory_store.configure_path(getattr(cfg, "memory_path", None))
+    _log.info(
+        "memory update scheduled session=%s turn=%s ops=%s db=%s",
+        session_id,
+        turn_id,
+        len(accepted),
+        str(_memory_store.path),
+    )
+
+    async def _apply() -> None:
+        await _send_memory_callback(session_id, turn_id, "memory_update_started", op_count=len(accepted))
+        try:
+            await asyncio.to_thread(_memory_store.ensure_initialized)
+            for op in accepted:
+                if op.op == "delete":
+                    await asyncio.to_thread(_memory_store.delete, op.key)
+                else:
+                    await asyncio.to_thread(
+                        _memory_store.upsert,
+                        key=op.key,
+                        kind=op.kind or "misc_fact",
+                        value=op.value or "",
+                        confidence=op.confidence,
+                        source_session_id=session_id,
+                        source_turn_id=turn_id,
+                    )
+            await _send_memory_callback(session_id, turn_id, "memory_update_done", op_count=len(accepted))
+            _log.info("memory update applied session=%s turn=%s ops=%s", session_id, turn_id, len(accepted))
+        except Exception as ex:
+            await _send_memory_callback(session_id, turn_id, "memory_update_failed", error=str(ex))
+            _log.warning("memory update failed session=%s turn=%s err=%s", session_id, turn_id, str(ex))
+
+    asyncio.create_task(_apply())
+    return cleaned
+
+
 def _send_thinking_callback(session_id: str, turn_id: str, phase: str, delta: Optional[str] = None) -> None:
     payload: Dict[str, Any] = {
         "session_id": session_id,
@@ -373,13 +475,23 @@ async def handle_text(req: TextInput, x_mcp_token: str | None = Header(default=N
                 getattr(frame, "height", 0),
             )
 
-    provider_messages = _build_provider_messages(_conversations.get_all(req.session_id), req.text, frame=frame)
+    _memory_store.configure_path(getattr(provider_cfg, "memory_path", None))
+    memory_context = await _build_memory_context(provider_cfg, req.text)
+    provider_messages = _build_provider_messages(
+        _conversations.get_all(req.session_id),
+        req.text,
+        frame=frame,
+        memory_context=memory_context,
+    )
 
     streamed_content = {"seen": False}
+    stream_filter = StreamTrailerFilter()
 
     def _on_content(chunk: str) -> None:
         streamed_content["seen"] = True
-        _send_content_callback(req.session_id, req.turn_id, "content_chunk", chunk)
+        safe = stream_filter.feed(chunk)
+        if safe:
+            _send_content_callback(req.session_id, req.turn_id, "content_chunk", safe)
 
     result = await call_provider_stream(
         provider_messages,
@@ -388,6 +500,9 @@ async def handle_text(req: TextInput, x_mcp_token: str | None = Header(default=N
         on_content_chunk=_on_content,
     )
     if streamed_content["seen"]:
+        tail, _ = stream_filter.finalize()
+        if tail:
+            _send_content_callback(req.session_id, req.turn_id, "content_chunk", tail)
         _send_content_callback(req.session_id, req.turn_id, "content_done")
     if not result.get("tool_calls") and not result.get("content"):
         result = await call_provider(provider_messages, tools=provider_tools)
@@ -440,10 +555,13 @@ async def handle_text(req: TextInput, x_mcp_token: str | None = Header(default=N
             await _send_tool_callback(req.session_id, req.turn_id, "tool_rejected", rejected_tools)
 
         follow_streamed = {"seen": False}
+        follow_filter = StreamTrailerFilter()
 
         def _on_follow_content(chunk: str) -> None:
             follow_streamed["seen"] = True
-            _send_content_callback(req.session_id, req.turn_id, "content_chunk", chunk)
+            safe = follow_filter.feed(chunk)
+            if safe:
+                _send_content_callback(req.session_id, req.turn_id, "content_chunk", safe)
 
         follow = await call_provider_stream(
             provider_messages,
@@ -452,9 +570,28 @@ async def handle_text(req: TextInput, x_mcp_token: str | None = Header(default=N
             on_content_chunk=_on_follow_content,
         )
         if follow_streamed["seen"]:
+            tail, _ = follow_filter.finalize()
+            if tail:
+                _send_content_callback(req.session_id, req.turn_id, "content_chunk", tail)
             _send_content_callback(req.session_id, req.turn_id, "content_done")
         completion = follow.get("content") or follow.get("error", "")
         await _send_tool_callback(req.session_id, req.turn_id, "tool_complete", used_tools)
+
+    had_memory_trailer = "<lisa_memory>" in completion
+    completion = _extract_and_schedule_memory_update(provider_cfg, req.session_id, req.turn_id, completion)
+
+    if (not completion or completion == "{}" or completion == "{ }") and had_memory_trailer:
+        _log.warning("provider returned only a memory trailer; retrying once for user-visible content")
+        retry_messages = list(provider_messages) + [
+            {
+                "role": "system",
+                "content": "Your previous reply contained no user-visible content. Reply with a short acknowledgement to the user. Do NOT include <lisa_memory>.",
+            }
+        ]
+        retry = await call_provider(retry_messages, tools=provider_tools)
+        retry_text = retry.get("content") or retry.get("error", "")
+        retry_cleaned, _ = extract_memory_trailer(retry_text or "")
+        completion = retry_cleaned.strip() or "Noted."
 
     thinking_ms = int((time.monotonic() - start_time) * 1000)
     reasoning = ""
@@ -463,12 +600,10 @@ async def handle_text(req: TextInput, x_mcp_token: str | None = Header(default=N
     elif used_tools:
         reasoning = f"Tool calls: {', '.join(used_tools)}\nAwaited tool responses."
 
-    messages = [AgentMessage(role="assistant", content=completion)]
     if not completion or completion == "{}" or completion == "{ }":
-        messages = [
-            AgentMessage(role="assistant", content="(empty content from provider)"),
-            AgentMessage(role="assistant", content=f"(debug payload) {completion}"),
-        ]
+        _log.warning("provider returned empty completion; returning a short fallback message")
+        completion = "Sorry — I didn’t get a response from the provider. Can you retry?"
+    messages = [AgentMessage(role="assistant", content=completion)]
 
     _conversations.append(req.session_id, "user", req.text)
     _conversations.append(req.session_id, "assistant", completion)
@@ -517,10 +652,13 @@ async def handle_retry(req: RetryInput, x_mcp_token: str | None = Header(default
         _update_tool_context(tools_payload)
 
     streamed_content = {"seen": False}
+    stream_filter = StreamTrailerFilter()
 
     def _on_content(chunk: str) -> None:
         streamed_content["seen"] = True
-        _send_content_callback(req.session_id, req.turn_id, "content_chunk", chunk)
+        safe = stream_filter.feed(chunk)
+        if safe:
+            _send_content_callback(req.session_id, req.turn_id, "content_chunk", safe)
 
     _conversations.ensure_system(req.session_id, _SYSTEM_CONTEXT, _tool_context, _tool_context_version)
     provider_messages = _build_provider_messages(_conversations.get_all(req.session_id), None)
@@ -532,18 +670,33 @@ async def handle_retry(req: RetryInput, x_mcp_token: str | None = Header(default
         on_content_chunk=_on_content,
     )
     if streamed_content["seen"]:
+        tail, _ = stream_filter.finalize()
+        if tail:
+            _send_content_callback(req.session_id, req.turn_id, "content_chunk", tail)
         _send_content_callback(req.session_id, req.turn_id, "content_done")
     if not result.get("tool_calls") and not result.get("content"):
         result = await call_provider(provider_messages, tools=_build_tools_payload(tools_payload))
     _send_thinking_callback(req.session_id, req.turn_id, "thinking_done")
     completion = result.get("content") or result.get("error", "")
-    used_tools = []
-    messages = [AgentMessage(role="assistant", content=completion)]
-    if not completion or completion == "{}" or completion == "{ }":
-        messages = [
-            AgentMessage(role="assistant", content="(empty content from provider)"),
-            AgentMessage(role="assistant", content=f"(debug payload) {completion}"),
+    had_memory_trailer = "<lisa_memory>" in completion
+    completion = _extract_and_schedule_memory_update(load_settings(), req.session_id, req.turn_id, completion)
+    if (not completion or completion == "{}" or completion == "{ }") and had_memory_trailer:
+        _log.warning("retry returned only a memory trailer; retrying once for user-visible content")
+        retry_messages = list(provider_messages) + [
+            {
+                "role": "system",
+                "content": "Your previous reply contained no user-visible content. Reply with a short acknowledgement to the user. Do NOT include <lisa_memory>.",
+            }
         ]
+        retry = await call_provider(retry_messages, tools=_build_tools_payload(tools_payload))
+        retry_text = retry.get("content") or retry.get("error", "")
+        retry_cleaned, _ = extract_memory_trailer(retry_text or "")
+        completion = retry_cleaned.strip() or "Noted."
+    used_tools = []
+    if not completion or completion == "{}" or completion == "{ }":
+        _log.warning("provider returned empty completion (retry); returning a short fallback message")
+        completion = "Sorry — I didn’t get a response from the provider. Can you retry?"
+    messages = [AgentMessage(role="assistant", content=completion)]
 
     _conversations.append(req.session_id, "assistant", completion)
 

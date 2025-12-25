@@ -169,15 +169,32 @@ namespace Host.Win
                     {
                         return;
                     }
-                    if (callback.Phase == "tool_approval_required")
-                    {
-                        _ = overlayVm.HandleToolApprovalAsync(callback);
-                    }
-                    else if (callback.Phase == "thinking_chunk" || callback.Phase == "thinking_done")
-                    {
-                        overlayVm.UpdateThinkingStatus(callback.TurnId, callback.Phase, callback.ThinkingDelta);
-                    }
-                    else if (callback.Phase == "content_chunk" || callback.Phase == "content_done")
+                     if (callback.Phase == "tool_approval_required")
+                     {
+                         _ = overlayVm.HandleToolApprovalAsync(callback);
+                     }
+                     else if (callback.Phase == "memory_update_started"
+                              || callback.Phase == "memory_update_done"
+                              || callback.Phase == "memory_update_failed")
+                     {
+                         overlayVm.UpdateMemoryStatus(callback.TurnId, callback.Phase);
+                         if (_hostSettings?.VerboseLogging == true)
+                         {
+                             _loggingService?.LogEvent("memory.update", new
+                             {
+                                 callback.SessionId,
+                                 callback.TurnId,
+                                 callback.Phase,
+                                 callback.MemoryOpCount,
+                                 callback.MemoryError
+                             });
+                         }
+                     }
+                     else if (callback.Phase == "thinking_chunk" || callback.Phase == "thinking_done")
+                     {
+                         overlayVm.UpdateThinkingStatus(callback.TurnId, callback.Phase, callback.ThinkingDelta);
+                     }
+                     else if (callback.Phase == "content_chunk" || callback.Phase == "content_done")
                     {
                         overlayVm.UpdateContentStatus(callback.TurnId, callback.Phase, callback.ContentDelta);
                     }

@@ -20,6 +20,7 @@ namespace Host.Win.Models
         public double VoiceVolume { get; set; } = 1.0;
         public bool TtsEnabledInChat { get; set; } = true;
         public bool VerboseLogging { get; set; } = false;
+        public bool MemoryEnabled { get; set; } = false;
         public string PiperExePath { get; set; } = string.Empty;
         public string PiperMode { get; set; } = "exe"; // exe | python
         public string PiperPythonPath { get; set; } = "python";

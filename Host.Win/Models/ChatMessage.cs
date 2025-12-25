@@ -9,6 +9,8 @@ namespace Host.Win.Models
 {
     public sealed class ChatMessage : INotifyPropertyChanged
     {
+        private const int MaxMarkdownLength = 4000;
+
         private string _sender = string.Empty;
         private string _text = string.Empty;
         private bool _isAssistant;
@@ -26,10 +28,14 @@ namespace Host.Win.Models
         private bool _hasMarkdown;
         private readonly ObservableCollection<ChatContentSegment> _contentSegments = new();
         private bool _hasToolApprovals;
+        private readonly ObservableCollection<ChatContentSegment> _statusSegments = new();
+        private bool _hasStatusBadges;
+        private bool _isMemoryUpdating;
 
         public ChatMessage()
         {
             _contentSegments.CollectionChanged += OnSegmentsChanged;
+            _statusSegments.CollectionChanged += OnStatusSegmentsChanged;
         }
 
         public string Sender
@@ -136,6 +142,20 @@ namespace Host.Win.Models
             private set => SetProperty(ref _hasToolApprovals, value);
         }
 
+        public ObservableCollection<ChatContentSegment> StatusSegments => _statusSegments;
+
+        public bool HasStatusBadges
+        {
+            get => _hasStatusBadges;
+            private set => SetProperty(ref _hasStatusBadges, value);
+        }
+
+        public bool IsMemoryUpdating
+        {
+            get => _isMemoryUpdating;
+            set => SetProperty(ref _isMemoryUpdating, value);
+        }
+
         public event PropertyChangedEventHandler? PropertyChanged;
 
         public void ResetContentSegments()
@@ -172,11 +192,30 @@ namespace Host.Win.Models
             HasToolApprovals = _contentSegments.Any(segment => segment.IsApproval);
         }
 
+        private void OnStatusSegmentsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            HasStatusBadges = _statusSegments.Any(segment => segment.IsBadge);
+        }
+
         private void UpdateMarkdownState(string? text)
         {
             var value = text ?? string.Empty;
-            HasMarkdown = value.Contains("**", System.StringComparison.Ordinal)
-                || value.Contains("`", System.StringComparison.Ordinal);
+            if (value.Length > MaxMarkdownLength)
+            {
+                HasMarkdown = false;
+                return;
+            }
+
+            HasMarkdown =
+                value.Contains("**", System.StringComparison.Ordinal)
+                || value.Contains("`", System.StringComparison.Ordinal)
+                || value.Contains("```", System.StringComparison.Ordinal)
+                || value.StartsWith("#", System.StringComparison.Ordinal)
+                || value.Contains("\n#", System.StringComparison.Ordinal)
+                || value.StartsWith("---", System.StringComparison.Ordinal)
+                || value.Contains("\n---", System.StringComparison.Ordinal)
+                || value.StartsWith("- ", System.StringComparison.Ordinal)
+                || value.Contains("\n- ", System.StringComparison.Ordinal);
         }
 
         private void SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
