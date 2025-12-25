@@ -6,12 +6,13 @@
         xmlns:models="clr-namespace:Host.Win.Models"
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
         Title="LISA Overlay"
-        Width="740"
-        Height="480"
+        Width="720"
+        Height="460"
         WindowStyle="None"
         AllowsTransparency="True"
         ResizeMode="NoResize"
         Background="Transparent"
+        Foreground="Transparent"
         ShowInTaskbar="False"
         Topmost="True"
         FontFamily="Segoe UI"
@@ -356,6 +357,79 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="ChatStopActionButtonStyle" TargetType="Button" BasedOn="{StaticResource ChatActionButtonStyle}">
+            <Setter Property="ToolTip" Value="Stop"/>
+            <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid RenderTransformOrigin="0.5,0.5">
+                            <Grid.RenderTransform>
+                                <ScaleTransform x:Name="Scale" ScaleX="1" ScaleY="1"/>
+                            </Grid.RenderTransform>
+                            <Border x:Name="Pulse"
+                                    Background="{DynamicResource ApprovalRejectedBackground}"
+                                    CornerRadius="10"
+                                    Opacity="0"/>
+                            <Border x:Name="Border"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="8">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="{DynamicResource ButtonBackground}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding IsStreaming}" Value="True"/>
+                                    <Condition Binding="{Binding IsCancellable}" Value="True"/>
+                                </MultiDataTrigger.Conditions>
+                                <Setter Property="Foreground" Value="{DynamicResource ApprovalRejectedForeground}"/>
+                                <Setter Property="BorderBrush" Value="{DynamicResource ApprovalRejectedBorder}"/>
+                                <Setter Property="ToolTip" Value="Stop generating"/>
+                                <Setter Property="Width" Value="30"/>
+                                <Setter Property="Height" Value="30"/>
+                                <MultiDataTrigger.EnterActions>
+                                    <BeginStoryboard x:Name="StopPulseStoryboard">
+                                        <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                            <DoubleAnimation Storyboard.TargetName="Pulse"
+                                                             Storyboard.TargetProperty="Opacity"
+                                                             From="0.06" To="0.24"
+                                                             Duration="0:0:0.85"
+                                                             EasingFunction="{StaticResource QuadraticEaseOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="Scale"
+                                                             Storyboard.TargetProperty="ScaleX"
+                                                             From="1" To="1.08"
+                                                             Duration="0:0:0.85"
+                                                             EasingFunction="{StaticResource QuadraticEaseOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="Scale"
+                                                             Storyboard.TargetProperty="ScaleY"
+                                                             From="1" To="1.08"
+                                                             Duration="0:0:0.85"
+                                                             EasingFunction="{StaticResource QuadraticEaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </MultiDataTrigger.EnterActions>
+                                <MultiDataTrigger.ExitActions>
+                                    <StopStoryboard BeginStoryboardName="StopPulseStoryboard"/>
+                                </MultiDataTrigger.ExitActions>
+                            </MultiDataTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="ThoughtToggleStyle" TargetType="ToggleButton">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
@@ -524,20 +598,27 @@
             </Setter>
         </Style>
     </Window.Resources>
-    <Border x:Name="RootBorder"
-            Background="{DynamicResource OverlayBackground}"
-            CornerRadius="18"
-            Padding="16"
-            BorderBrush="{DynamicResource OverlayBorder}"
-            BorderThickness="1"
-            RenderTransformOrigin="0.5,0.5">
-        <Border.Effect>
-            <DropShadowEffect BlurRadius="18" ShadowDepth="0" Opacity="0.45" />
-        </Border.Effect>
-        <Border.RenderTransform>
+    <Grid x:Name="RootContainer"
+          RenderTransformOrigin="0.5,0.5">
+        <Grid.RenderTransform>
             <TranslateTransform x:Name="RootTranslate" Y="12"/>
-        </Border.RenderTransform>
-        <Grid>
+        </Grid.RenderTransform>
+        <!-- Keep shadow on a shape layer; DropShadowEffect on Border can render inconsistently. -->
+        <Rectangle RadiusX="0"
+                   RadiusY="0"
+                   Fill="{DynamicResource OverlayBackground}"
+                   IsHitTestVisible="False">
+            <Rectangle.Effect>
+                <DropShadowEffect BlurRadius="18" ShadowDepth="0" Opacity="0.45" />
+            </Rectangle.Effect>
+        </Rectangle>
+        <Border x:Name="RootBorder"
+                Background="Transparent"
+                Padding="16"
+                BorderBrush="{DynamicResource OverlayBorder}"
+                BorderThickness="1"
+                ClipToBounds="True">
+            <Grid>
             <Grid x:Name="ExpandedLayout">
                 <Grid.Style>
                     <Style TargetType="Grid">
@@ -774,7 +855,47 @@
                                     <ColumnDefinition Width="8"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="&#xE72D;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center"/>
+                                <Grid Grid.Column="0" Width="16" Height="16" VerticalAlignment="Center">
+                                    <TextBlock Text="&#xE72D;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center"/>
+                                    <Ellipse Width="10" Height="10"
+                                             Fill="#EF4444"
+                                             Stroke="#B91C1C"
+                                             StrokeThickness="0"
+                                             HorizontalAlignment="Right"
+                                             VerticalAlignment="Top"
+                                             Margin="0 0 -60 0"
+                                             Opacity="0">
+                                    <Ellipse.Style>
+                                        <Style TargetType="Ellipse">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsSharing}" Value="True">
+                                                    <Setter Property="Opacity" Value="1"/>
+                                                    <DataTrigger.EnterActions>
+                                                        <BeginStoryboard Name="ShareRecPulseExpanded">
+                                                            <Storyboard RepeatBehavior="Forever">
+                                                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                 From="0.35" To="1"
+                                                                                 Duration="0:0:0.8"
+                                                                                 AutoReverse="True"/>
+                                                            </Storyboard>
+                                                        </BeginStoryboard>
+                                                    </DataTrigger.EnterActions>
+                                                    <DataTrigger.ExitActions>
+                                                        <StopStoryboard BeginStoryboardName="ShareRecPulseExpanded"/>
+                                                        <BeginStoryboard>
+                                                            <Storyboard>
+                                                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                 To="0"
+                                                                                 Duration="0:0:0.12"/>
+                                                            </Storyboard>
+                                                        </BeginStoryboard>
+                                                    </DataTrigger.ExitActions>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Ellipse.Style>
+                                </Ellipse>
+                                </Grid>
                                 <TextBlock Grid.Column="2" Text="Share" VerticalAlignment="Center"/>
                             </Grid>
                         </Button>
@@ -1194,11 +1315,10 @@
                                                                     ToolTip="Retry">
                                                                 <TextBlock Text="&#xE72C;" FontFamily="Segoe MDL2 Assets"/>
                                                             </Button>
-                                                            <Button Style="{StaticResource ChatActionButtonStyle}"
+                                                            <Button Style="{StaticResource ChatStopActionButtonStyle}"
                                                                     Command="{Binding DataContext.StopMessageCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                     CommandParameter="{Binding}"
                                                                     IsEnabled="{Binding IsCancellable}"
-                                                                    ToolTip="Stop"
                                                                     Margin="8 0 0 0">
                                                                 <TextBlock Text="&#xE71A;" FontFamily="Segoe MDL2 Assets"/>
                                                             </Button>
@@ -1674,7 +1794,7 @@
                                         <ScaleTransform ScaleX="1" ScaleY="1"/>
                                     </Grid.RenderTransform>
                                     <Ellipse x:Name="ShareRing"
-                                             Width="140" Height="140"
+                                             Width="110" Height="110"
                                              Stroke="{DynamicResource ButtonActiveBorder}"
                                              StrokeThickness="1.2"
                                              Opacity="0.2">
@@ -1697,7 +1817,7 @@
                                             </Style>
                                         </Ellipse.Style>
                                     </Ellipse>
-                                    <Ellipse Width="120" Height="120"
+                                    <Ellipse Width="110" Height="110"
                                              Fill="{DynamicResource ButtonBackground}"
                                              Stroke="{DynamicResource ButtonBorder}"
                                              StrokeThickness="1.2"
@@ -1786,7 +1906,7 @@
                                              StrokeThickness="1"
                                              HorizontalAlignment="Right"
                                              VerticalAlignment="Top"
-                                             Margin="0 8 8 0"
+                                             Margin="0 4 2 0"
                                              Opacity="0">
                                         <Ellipse.Style>
                                             <Style TargetType="Ellipse">
@@ -1979,39 +2099,46 @@
 
                                 <Border Height="1" Background="{DynamicResource ButtonBorder}" Margin="0 14 0 14"/>
 
-                                <TextBlock Text="Voice" Foreground="{DynamicResource OverlayForeground}" FontWeight="SemiBold" FontSize="13"/>
-                                <StackPanel Orientation="Horizontal" Margin="0 10 0 0">
-                                    <TextBlock Text="TTS Volume" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
-                                    <TextBox Width="90"
-                                             FontSize="13"
-                                             Margin="0 0 10 0"
-                                             Text="{Binding Settings.VoiceVolume, UpdateSourceTrigger=PropertyChanged}"
-                                             Style="{StaticResource RoundedTextBoxStyle}"/>
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0 8 0 0">
-                                    <TextBlock Text="TTS Playback speed" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
-                                    <TextBox Width="90"
-                                             FontSize="13"
-                                             Text="{Binding Settings.VoiceRate, UpdateSourceTrigger=PropertyChanged}"
-                                             Style="{StaticResource RoundedTextBoxStyle}"/>
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0 8 0 0" VerticalAlignment="Center">
-                                    <TextBlock Text="TTS Enabled in chat" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
-                                    <CheckBox IsChecked="{Binding Settings.TtsEnabledInChat}"/>
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0 8 0 0">
-                                    <TextBlock Text="TTS Voice Actor" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
-                                    <TextBox Width="210"
-                                             FontSize="13"
-                                             Text="{Binding Settings.VoiceType, UpdateSourceTrigger=PropertyChanged}"
-                                             Style="{StaticResource RoundedTextBoxStyle}"/>
-                                </StackPanel>
+                                 <TextBlock Text="Voice" Foreground="{DynamicResource OverlayForeground}" FontWeight="SemiBold" FontSize="13"/>
+                                 <StackPanel Orientation="Horizontal" Margin="0 10 0 0">
+                                     <TextBlock Text="TTS Volume (%)" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                     <TextBox Width="90"
+                                              FontSize="13"
+                                              Margin="0 0 10 0"
+                                              Text="{Binding VoiceVolumePercent, UpdateSourceTrigger=LostFocus}"
+                                              Style="{StaticResource RoundedTextBoxStyle}"/>
+                                 </StackPanel>
+                                 <StackPanel Orientation="Horizontal" Margin="0 8 0 0">
+                                     <TextBlock Text="TTS Playback speed (%)" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                     <TextBox Width="90"
+                                              FontSize="13"
+                                              Text="{Binding VoiceRatePercent, UpdateSourceTrigger=LostFocus}"
+                                              Style="{StaticResource RoundedTextBoxStyle}"/>
+                                 </StackPanel>
+                                 <StackPanel Orientation="Horizontal" Margin="0 8 0 0" VerticalAlignment="Center">
+                                     <TextBlock Text="Auto-play TTS in Chat" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                     <CheckBox IsChecked="{Binding Settings.TtsEnabledInChat}"/>
+                                 </StackPanel>
+                                 <StackPanel Orientation="Horizontal" Margin="0 8 0 0">
+                                     <TextBlock Text="TTS Voice Actor" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                     <TextBox Width="210"
+                                              FontSize="13"
+                                              Text="{Binding Settings.VoiceType, UpdateSourceTrigger=PropertyChanged}"
+                                              Style="{StaticResource RoundedTextBoxStyle}"/>
+                                 </StackPanel>
 
-                                <Button Content="Save Settings"
-                                        Width="170"
-                                        Height="38"
-                                        HorizontalAlignment="Left"
-                                        Command="{Binding SaveSettingsCommand}"
+                                 <Border Height="1" Background="{DynamicResource ButtonBorder}" Margin="0 14 0 14"/>
+                                 <TextBlock Text="Diagnostics" Foreground="{DynamicResource OverlayForeground}" FontWeight="SemiBold" FontSize="13"/>
+                                 <StackPanel Orientation="Horizontal" Margin="0 10 0 0" VerticalAlignment="Center">
+                                     <TextBlock Text="Enable verbose logging" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                     <CheckBox IsChecked="{Binding Settings.VerboseLogging}"/>
+                                 </StackPanel>
+
+                                 <Button Content="Save Settings"
+                                         Width="170"
+                                         Height="38"
+                                         HorizontalAlignment="Left"
+                                         Command="{Binding SaveSettingsCommand}"
                                         Style="{StaticResource SendButtonStyle}"
                                         Margin="0 14 0 0"/>
                             </StackPanel>
@@ -2163,7 +2290,47 @@
                                 </Style.Triggers>
                             </Style>
                         </Button.Style>
-                        <TextBlock Text="&#xE72D;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center"/>
+                        <Grid Width="18" Height="18">
+                            <TextBlock Text="&#xE72D;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            <Ellipse Width="8" Height="8"
+                                     Fill="#EF4444"
+                                     Stroke="#B91C1C"
+                                     StrokeThickness="0.0"
+                                     HorizontalAlignment="Right"
+                                     VerticalAlignment="Top"
+                                     Margin="0 -2 -10 0"
+                                     Opacity="0">
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsSharing}" Value="True">
+                                                <Setter Property="Opacity" Value="1"/>
+                                                <DataTrigger.EnterActions>
+                                                    <BeginStoryboard Name="ShareRecPulseCollapsed">
+                                                        <Storyboard RepeatBehavior="Forever">
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                             From="0.35" To="1"
+                                                                             Duration="0:0:0.8"
+                                                                             AutoReverse="True"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </DataTrigger.EnterActions>
+                                                <DataTrigger.ExitActions>
+                                                    <StopStoryboard BeginStoryboardName="ShareRecPulseCollapsed"/>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                             To="0"
+                                                                             Duration="0:0:0.12"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </DataTrigger.ExitActions>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
+                        </Grid>
                     </Button>
                     <Button Command="{Binding SetModeCommand}" CommandParameter="{x:Static models:AssistantMode.Settings}">
                         <Button.Style>
@@ -2181,6 +2348,7 @@
                     </Button>
                 </UniformGrid>
             </Grid>
-        </Grid>
-    </Border>
+            </Grid>
+        </Border>
+    </Grid>
 </Window>

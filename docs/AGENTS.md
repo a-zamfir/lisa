@@ -1,11 +1,11 @@
-# agents.md
+# AGENTS.md
 
 ## Purpose
 
 LISA must:
-- operate **fully locally**
-- be **low-latency and resource-efficient**
-- prefer **standard, composable patterns**
+- operate fully locally
+- be low-latency and resource-efficient
+- prefer standard, composable patterns
 - avoid hidden coupling with the host or tools
 - remain safe, predictable, and debuggable
 
@@ -19,9 +19,9 @@ LISA must:
 - Network calls must be explicit, optional, and configurable, and local IPC must be authenticated.
 
 ### 2. Clear separation of responsibilities
-- **Agent**: reasoning, planning, tool selection, state.
-- **Host (Windows)**: UX, OS APIs, audio/screen capture, playback.
-- **MCP tools**: system inspection and automation primitives.
+- Agent: reasoning, planning, tool selection, state.
+- Host (Windows): UX, OS APIs, audio/screen capture, playback.
+- MCP tools: system inspection and automation primitives.
 
 ---
 
@@ -35,7 +35,7 @@ An agent may:
 - synthesize responses (text-first)
 - return structured outputs to the host
 
-An agent must **not**:
+An agent must not:
 - block on long-running tasks without progress signals
 - embed UI logic
 - embed platform-specific assumptions
@@ -45,7 +45,7 @@ An agent must **not**:
 
 ## Latency & Performance Constraints
 
-Agents are designed for **edge devices**.
+Agents are designed for edge devices.
 
 Guidelines:
 - avoid unnecessary prompt bloat
@@ -68,16 +68,16 @@ Any change that increases latency or memory usage must be justified.
   - inspectable
   - opt-in
 
-Memory strategies must be documented in `architecture.md`.
+Memory strategies must be documented in `docs/ARCHITECTURE.md`.
 
 ---
 
 ## Temporary Workarounds & Technical Debt
 
-Technical debt is not ignored — it is **tracked**.
+Technical debt is not ignored - it is tracked.
 
 Rules:
-- Any temporary workaround **must** be:
+- Any temporary workaround must be:
   - clearly marked in code (`TODO`, `TEMP`, or equivalent)
   - documented in `pending_implementation.md`
 - No silent hacks.
@@ -99,14 +99,8 @@ Agent logic should be testable in isolation.
 
 ## Related Documents
 
-- `architecture.md`  
-  Full system architecture, tech stack, and design decisions.
+- `docs/ARCHITECTURE.md` - system architecture and design decisions
+- `docs/DEVELOPER.md` - developer-facing feature and integration guide
+- `features.md` (gitignored) - product-level features, ideas, and roadmap
+- `pending_implementation.md` (gitignored) - known issues, gaps, workarounds, and technical debt
 
-- `developer.md`  
-  Developer-facing feature and integration guide.
-
-- `features.md` *(gitignored)*  
-  Product-level features, ideas, and roadmap.
-
-- `pending_implementation.md` *(gitignored)*  
-  Known issues, gaps, workarounds, and technical debt.

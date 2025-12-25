@@ -31,6 +31,7 @@ namespace Host.Win
         private AgentProcessHost? _agentProcessHost;
         private McpProcessHost? _mcpProcessHost;
         private TcpCallbackServer? _agentCallbackServer;
+        private TextWriterTraceListener? _verboseTraceListener;
         private readonly string _agentCallbackToken = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
         private const int AgentCallbackPort = 5052;
 
@@ -42,6 +43,7 @@ namespace Host.Win
 
             _settingsService = new SettingsService();
             _hostSettings = _settingsService.LoadAsync().GetAwaiter().GetResult();
+            UpdateVerboseTraceListener(_hostSettings.VerboseLogging);
             _contextCollector = new ContextCollector();
             _audioCaptureService = new AudioCaptureService();
             _audioPlaybackService = new AudioPlaybackService();
@@ -80,6 +82,28 @@ namespace Host.Win
 
             var overlayWindow = new OverlayWindow { DataContext = overlayVm };
             _overlayController = new OverlayController(overlayWindow, _contextCollector);
+            var captureWasVisible = false;
+            overlayVm.SetOverlayOpacityAsync = opacity =>
+                overlayWindow.Dispatcher.InvokeAsync(() =>
+                {
+                    if (opacity <= 0)
+                    {
+                        captureWasVisible = overlayWindow.IsVisible;
+                        overlayWindow.Opacity = 0;
+                        if (captureWasVisible)
+                        {
+                            overlayWindow.Hide();
+                        }
+                        return;
+                    }
+
+                    if (captureWasVisible && !overlayWindow.IsVisible)
+                    {
+                        overlayWindow.Show();
+                        overlayWindow.Topmost = true;
+                    }
+                    overlayWindow.Opacity = opacity;
+                }, DispatcherPriority.Send).Task;
 
             overlayVm.ToggleThemeCommand = new Commands.RelayCommand(() =>
             {
@@ -95,6 +119,13 @@ namespace Host.Win
 
             overlayVm.SetModeCommand = new Commands.RelayCommand<AssistantMode>(mode =>
             {
+                if (mode == AssistantMode.Share)
+                {
+                    overlayVm.ToggleShare();
+                    overlayVm.StatusText = overlayVm.IsSharing ? "Screen share armed" : "Screen share off";
+                    return;
+                }
+
                 if (mode == AssistantMode.Chat || mode == AssistantMode.Settings)
                 {
                     overlayVm.ExpandOverlay();
@@ -118,7 +149,7 @@ namespace Host.Win
             // From Host.Win/bin/Debug/... back to repo root then into Agent.Worker/main.py
             var agentScript = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "Agent.Worker", "main.py");
             var mcpScript = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "Agent.MCP", "main.py");
-            _mcpProcessHost = new McpProcessHost(Path.GetFullPath(mcpScript), port: _hostSettings.McpPort);
+            _mcpProcessHost = new McpProcessHost(Path.GetFullPath(mcpScript), port: _hostSettings.McpPort, verboseLogging: _hostSettings.VerboseLogging);
             _mcpProcessHost.Start();
             _agentClient?.SetMcpAuthToken(_mcpProcessHost.AuthToken);
 
@@ -128,7 +159,8 @@ namespace Host.Win
                 callbackToken: _agentCallbackToken,
                 callbackPort: AgentCallbackPort,
                 mcpAuthToken: _mcpProcessHost.AuthToken,
-                providerApiKey: _hostSettings.ProviderApiKey);
+                providerApiKey: _hostSettings.ProviderApiKey,
+                verboseLogging: _hostSettings.VerboseLogging);
             _agentCallbackServer = new TcpCallbackServer(AgentCallbackPort, _agentCallbackToken, callback =>
             {
                 Dispatcher.InvokeAsync(() =>
@@ -212,6 +244,7 @@ namespace Host.Win
                 {
                     await _settingsService.SaveAsync(overlayVm.Settings);
                     _loggingService?.LogEvent("settings.saved", overlayVm.Settings);
+                    UpdateVerboseTraceListener(overlayVm.Settings.VerboseLogging);
                 }
                 catch (Exception ex)
                 {
@@ -227,7 +260,7 @@ namespace Host.Win
                 // Restart agent process if needed (port change)
                 _mcpProcessHost?.Dispose();
                 var mcpScriptNew = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "Agent.MCP", "main.py");
-                _mcpProcessHost = new McpProcessHost(Path.GetFullPath(mcpScriptNew), port: overlayVm.Settings.McpPort);
+                _mcpProcessHost = new McpProcessHost(Path.GetFullPath(mcpScriptNew), port: overlayVm.Settings.McpPort, verboseLogging: overlayVm.Settings.VerboseLogging);
                 _mcpProcessHost.Start();
                 _agentClient?.SetMcpAuthToken(_mcpProcessHost.AuthToken);
                 _agentProcessHost?.Dispose();
@@ -238,7 +271,8 @@ namespace Host.Win
                     callbackToken: _agentCallbackToken,
                     callbackPort: AgentCallbackPort,
                     mcpAuthToken: _mcpProcessHost.AuthToken,
-                    providerApiKey: overlayVm.Settings.ProviderApiKey);
+                    providerApiKey: overlayVm.Settings.ProviderApiKey,
+                    verboseLogging: overlayVm.Settings.VerboseLogging);
                 _agentProcessHost.Start();
                 _agentCallbackServer?.Stop();
                 _agentCallbackServer = new TcpCallbackServer(AgentCallbackPort, _agentCallbackToken, callback =>
@@ -312,7 +346,54 @@ namespace Host.Win
             _agentProcessHost?.Dispose();
             _mcpProcessHost?.Dispose();
             _agentCallbackServer?.Dispose();
+            UpdateVerboseTraceListener(false);
             base.OnExit(e);
+        }
+
+        private void UpdateVerboseTraceListener(bool enabled)
+        {
+            if (!enabled)
+            {
+                if (_verboseTraceListener != null)
+                {
+                    try
+                    {
+                        Trace.Listeners.Remove(_verboseTraceListener);
+                        _verboseTraceListener.Flush();
+                        _verboseTraceListener.Close();
+                        _verboseTraceListener.Dispose();
+                    }
+                    catch
+                    {
+                        // ignore cleanup errors
+                    }
+                    _verboseTraceListener = null;
+                }
+
+                return;
+            }
+
+            if (_verboseTraceListener != null)
+            {
+                return;
+            }
+
+            try
+            {
+                var logsDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LISA", "logs");
+                Directory.CreateDirectory(logsDir);
+                var tracePath = Path.Combine(logsDir, "verbose-trace.log");
+                var stream = new FileStream(tracePath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+                var writer = new StreamWriter(stream) { AutoFlush = true };
+                _verboseTraceListener = new TextWriterTraceListener(writer);
+                Trace.Listeners.Add(_verboseTraceListener);
+                Trace.AutoFlush = true;
+                Trace.WriteLine($"Verbose trace logging enabled: {tracePath}");
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning($"Failed to enable verbose trace logging: {ex.Message}");
+            }
         }
     }
 }

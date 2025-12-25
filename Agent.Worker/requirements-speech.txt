@@ -1,0 +1,10 @@
+# Optional speech / STT dependencies.
+# These are intentionally split out because `faster-whisper` (via `av`/`tokenizers`)
+# often requires native build tooling on very new Python versions (e.g. 3.14).
+#
+# Install with:
+#   .venv\Scripts\python -m pip install -r requirements-speech.txt
+#
+# Notes:
+# - Recommended Python: 3.11–3.13 (x64) for prebuilt wheels on Windows.
+faster-whisper>=1.2.1; python_version < "3.14"

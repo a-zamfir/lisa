@@ -233,8 +233,9 @@ namespace Host.Win.Views
                 return;
             }
 
-            var dpi = VisualTreeHelper.GetDpi(this);
-            WindowBackdropService.ApplyRoundedCorners(_hwnd, ActualWidth, ActualHeight, 18, dpi.DpiScaleX, dpi.DpiScaleY);
+            // Overlay is intentionally square-cornered; ensure no OS/GDI rounding is applied.
+            WindowBackdropService.TrySetRoundedCorners(_hwnd, WindowBackdropService.WindowCornerPreference.DoNotRound);
+            WindowBackdropService.ClearWindowRegion(_hwnd);
         }
 
         private void EnsureVoiceStoryboards()

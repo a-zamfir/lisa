@@ -2,6 +2,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 
 namespace Host.Win.Services
@@ -17,10 +18,12 @@ namespace Host.Win.Services
         private readonly string _agentRoot;
         private readonly string _pidFile;
         private readonly string _requirementsHashFile;
+        private readonly string _speechRequirementsHashFile;
         private readonly string _callbackToken;
         private readonly int _callbackPort;
         private readonly string _mcpAuthToken;
         private readonly string _providerApiKey;
+        private readonly bool _verboseLogging;
         private IntPtr _jobHandle = IntPtr.Zero;
 
         public AgentProcessHost(
@@ -29,7 +32,8 @@ namespace Host.Win.Services
             string? callbackToken = null,
             int callbackPort = 0,
             string? mcpAuthToken = null,
-            string? providerApiKey = null)
+            string? providerApiKey = null,
+            bool verboseLogging = false)
         {
             _agentPath = agentPath;
             _port = port;
@@ -38,10 +42,12 @@ namespace Host.Win.Services
             _callbackPort = callbackPort;
             _mcpAuthToken = mcpAuthToken ?? string.Empty;
             _providerApiKey = providerApiKey ?? string.Empty;
+            _verboseLogging = verboseLogging;
             var localDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LISA");
             Directory.CreateDirectory(localDir);
             _pidFile = Path.Combine(localDir, "agent.pid");
             _requirementsHashFile = Path.Combine(localDir, "agent-requirements.sha256");
+            _speechRequirementsHashFile = Path.Combine(localDir, "agent-requirements-speech.sha256");
         }
 
         public void Start()
@@ -63,12 +69,15 @@ namespace Host.Win.Services
             }
             Trace.WriteLine($"Agent python resolved: {pythonPath}");
 
+            EnsureWhisperModelAvailable(pythonPath, workingDir);
+
             TryKillExistingPid();
 
+            var uvicornLogLevel = _verboseLogging ? "info" : "warning";
             ProcessStartInfo CreatePsi(string fileName) => new ProcessStartInfo
             {
                 FileName = fileName,
-                Arguments = $"-m uvicorn main:app --host 127.0.0.1 --port {_port} --log-level warning --no-access-log",
+                Arguments = $"-m uvicorn main:app --host 127.0.0.1 --port {_port} --log-level {uvicornLogLevel} --no-access-log",
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 WorkingDirectory = workingDir,
@@ -100,10 +109,12 @@ namespace Host.Win.Services
             {
                 psi.Environment["PROVIDER_API_KEY"] = _providerApiKey;
             }
+            psi.Environment["LISA_VERBOSE_LOGGING"] = _verboseLogging ? "1" : "0";
             psi.Environment["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1";
             psi.Environment["HF_HUB_OFFLINE"] = "1";
+            psi.Environment["FASTER_WHISPER_MODEL"] = "small";
             psi.Environment["FASTER_WHISPER_MODEL_DIR"] = Path.Combine(workingDir, "speech", "models", "whisper-small");
-            Trace.WriteLine($"Agent env: AGENT_PORT={_port} LISA_CALLBACK_TCP_PORT={_callbackPort}");
+            Trace.WriteLine($"Agent env: AGENT_PORT={_port} LISA_CALLBACK_TCP_PORT={_callbackPort} verbose={_verboseLogging}");
 
             try
             {
@@ -112,7 +123,7 @@ namespace Host.Win.Services
                 {
                     Trace.TraceWarning("Primary agent launch failed with 'python'. Trying 'py -3'.");
                     psi = CreatePsi("py");
-                    psi.Arguments = $"-3 -m uvicorn main:app --host 127.0.0.1 --port {_port} --log-level warning --no-access-log";
+                    psi.Arguments = $"-3 -m uvicorn main:app --host 127.0.0.1 --port {_port} --log-level {uvicornLogLevel} --no-access-log";
                     psi.Environment["AGENT_PORT"] = _port.ToString();
                     psi.Environment["LISA_SETTINGS_PATH"] = Path.Combine(
                         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -135,6 +146,11 @@ namespace Host.Win.Services
                     {
                         psi.Environment["PROVIDER_API_KEY"] = _providerApiKey;
                     }
+                    psi.Environment["LISA_VERBOSE_LOGGING"] = _verboseLogging ? "1" : "0";
+                    psi.Environment["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1";
+                    psi.Environment["HF_HUB_OFFLINE"] = "1";
+                    psi.Environment["FASTER_WHISPER_MODEL"] = "small";
+                    psi.Environment["FASTER_WHISPER_MODEL_DIR"] = Path.Combine(workingDir, "speech", "models", "whisper-small");
                     _process = Process.Start(psi);
                 }
 
@@ -155,15 +171,29 @@ namespace Host.Win.Services
                 {
                     if (!string.IsNullOrWhiteSpace(args.Data))
                     {
-                        // Uvicorn logs to stderr; treat INFO as normal noise.
                         var line = args.Data;
                         if (line.StartsWith("INFO:", StringComparison.OrdinalIgnoreCase))
                         {
                             Trace.WriteLine($"[Agent] {line}");
                         }
-                        else
+                        else if (line.StartsWith("DEBUG:", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (_verboseLogging)
+                            {
+                                Trace.WriteLine($"[Agent] {line}");
+                            }
+                        }
+                        else if (line.StartsWith("WARNING:", StringComparison.OrdinalIgnoreCase))
+                        {
+                            Trace.TraceWarning($"[Agent] {line}");
+                        }
+                        else if (line.StartsWith("ERROR:", StringComparison.OrdinalIgnoreCase) || line.StartsWith("CRITICAL:", StringComparison.OrdinalIgnoreCase))
                         {
                             Trace.TraceError($"[Agent ERR] {line}");
+                        }
+                        else
+                        {
+                            Trace.TraceWarning($"[Agent] {line}");
                         }
                     }
                 };
@@ -185,11 +215,67 @@ namespace Host.Win.Services
             }
         }
 
+        private void EnsureWhisperModelAvailable(string pythonExe, string workingDir)
+        {
+            try
+            {
+                var modelDir = Path.Combine(workingDir, "speech", "models", "whisper-small");
+                if (Directory.Exists(modelDir))
+                {
+                    var hasBin = Directory.EnumerateFiles(modelDir, "*.bin", SearchOption.AllDirectories).Any();
+                    if (hasBin)
+                    {
+                        return;
+                    }
+                }
+
+                var downloadScript = Path.Combine(workingDir, "speech", "download_model.py");
+                if (!File.Exists(downloadScript))
+                {
+                    Trace.TraceWarning($"Whisper model download script not found: {downloadScript}");
+                    return;
+                }
+
+                // Only attempt download when faster-whisper is available; speech deps are optional.
+                if (!RunSilently(pythonExe, "-c \"import faster_whisper\"", workingDir, timeoutMs: 20000, verboseLogging: _verboseLogging))
+                {
+                    Trace.WriteLine("faster-whisper not installed; skipping Whisper model download.");
+                    return;
+                }
+
+                Directory.CreateDirectory(modelDir);
+
+                Trace.WriteLine($"Whisper model missing; attempting download to: {modelDir}");
+                var ok = RunSilently(
+                    pythonExe,
+                    $"-u \"{downloadScript}\" --model small --output \"{modelDir}\"",
+                    workingDir,
+                    timeoutMs: 600000,
+                    verboseLogging: _verboseLogging,
+                    configure: psi =>
+                    {
+                        // Allow downloads for this one-shot bootstrap even if the agent runs offline.
+                        psi.Environment["HF_HUB_OFFLINE"] = "0";
+                        psi.Environment["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1";
+                    });
+
+                if (!ok)
+                {
+                    Trace.TraceWarning("Whisper model download failed; Talk mode STT may be unavailable until the model is downloaded.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning($"Whisper model bootstrap failed: {ex.Message}");
+            }
+        }
+
         private string? EnsureVenv(string workingDir)
         {
             var venvPath = Path.Combine(workingDir, ".venv");
             var pythonExe = Path.Combine(venvPath, "Scripts", "python.exe");
             var requirements = Path.Combine(workingDir, "requirements.txt");
+            var speechRequirements = Path.Combine(workingDir, "requirements-speech.txt");
 
             if (!Directory.Exists(venvPath) || !File.Exists(pythonExe))
             {
@@ -241,10 +327,30 @@ namespace Host.Win.Services
                 if (!string.Equals(hash, existingHash, StringComparison.OrdinalIgnoreCase))
                 {
                     Trace.WriteLine("Installing agent requirements...");
-                    RunSilently(pythonExe, "-m pip install --upgrade pip", workingDir);
-                    if (RunSilently(pythonExe, "-m pip install -r requirements.txt", workingDir))
+                    RunSilently(pythonExe, "-m pip install --upgrade pip", workingDir, verboseLogging: _verboseLogging);
+                    if (RunSilently(pythonExe, "-m pip install -r requirements.txt", workingDir, verboseLogging: _verboseLogging))
                     {
                         WriteHash(_requirementsHashFile, hash);
+                    }
+                }
+            }
+
+            if (File.Exists(speechRequirements))
+            {
+                var hash = ComputeFileHash(speechRequirements);
+                var existingHash = ReadHash(_speechRequirementsHashFile);
+                Trace.WriteLine($"Agent speech requirements hash: {hash} (stored={existingHash ?? "none"})");
+                if (!string.Equals(hash, existingHash, StringComparison.OrdinalIgnoreCase))
+                {
+                    Trace.WriteLine("Installing optional agent speech requirements...");
+                    // Prefer wheels to avoid long native builds on fresh machines.
+                    if (RunSilently(pythonExe, "-m pip install --prefer-binary -r requirements-speech.txt", workingDir, verboseLogging: _verboseLogging))
+                    {
+                        WriteHash(_speechRequirementsHashFile, hash);
+                    }
+                    else
+                    {
+                        Trace.TraceWarning("Optional speech requirements failed to install; STT endpoints will run in fallback mode.");
                     }
                 }
             }
@@ -252,7 +358,13 @@ namespace Host.Win.Services
             return pythonExe;
         }
 
-        private static bool RunSilently(string fileName, string arguments, string workingDir)
+        private static bool RunSilently(
+            string fileName,
+            string arguments,
+            string workingDir,
+            int timeoutMs = 20000,
+            bool verboseLogging = false,
+            Action<ProcessStartInfo>? configure = null)
         {
             try
             {
@@ -266,21 +378,23 @@ namespace Host.Win.Services
                     RedirectStandardError = true,
                     CreateNoWindow = true
                 };
+                configure?.Invoke(psi);
                 using var proc = Process.Start(psi);
                 if (proc != null)
                 {
                     var stdout = proc.StandardOutput.ReadToEnd();
                     var stderr = proc.StandardError.ReadToEnd();
-                    proc.WaitForExit(20000);
-                    if (!string.IsNullOrWhiteSpace(stdout))
+                    proc.WaitForExit(timeoutMs);
+                    var ok = proc.ExitCode == 0;
+                    if ((!string.IsNullOrWhiteSpace(stdout)) && (verboseLogging || !ok))
                     {
                         Trace.WriteLine($"[Agent cmd] {fileName} {arguments} -> {stdout}");
                     }
-                    if (!string.IsNullOrWhiteSpace(stderr))
+                    if ((!string.IsNullOrWhiteSpace(stderr)) && (verboseLogging || !ok))
                     {
                         Trace.TraceWarning($"[Agent cmd ERR] {fileName} {arguments} -> {stderr}");
                     }
-                    return proc.ExitCode == 0;
+                    return ok;
                 }
             }
             catch (Exception ex)
@@ -337,7 +451,8 @@ namespace Host.Win.Services
                 if (!File.Exists(_pidFile)) return;
                 var text = File.ReadAllText(_pidFile).Trim();
                 if (!int.TryParse(text, out var pid)) return;
-                var proc = Process.GetProcessById(pid);
+                using var proc = Process.GetProcesses().FirstOrDefault(p => p.Id == pid);
+                if (proc == null) return;
                 if (!proc.HasExited)
                 {
                     if (IsExpectedAgentProcess(proc))
