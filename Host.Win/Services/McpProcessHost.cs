@@ -2,6 +2,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 
 namespace Host.Win.Services
@@ -17,12 +18,14 @@ namespace Host.Win.Services
         private readonly string _pidFile;
         private readonly string _requirementsHashFile;
         private readonly string _authToken;
+        private readonly bool _verboseLogging;
         private IntPtr _jobHandle = IntPtr.Zero;
 
-        public McpProcessHost(string mcpPath, int port)
+        public McpProcessHost(string mcpPath, int port, bool verboseLogging = false)
         {
             _mcpPath = mcpPath;
             _port = port;
+            _verboseLogging = verboseLogging;
             var localDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LISA");
             Directory.CreateDirectory(localDir);
             _pidFile = Path.Combine(localDir, "mcp.pid");
@@ -66,7 +69,8 @@ namespace Host.Win.Services
             psi.Environment["MCP_PORT"] = _port.ToString();
             psi.Environment["PYTHONPATH"] = workingDir;
             psi.Environment["MCP_AUTH_TOKEN"] = _authToken;
-            Trace.WriteLine($"MCP env: MCP_PORT={_port}");
+            psi.Environment["LISA_VERBOSE_LOGGING"] = _verboseLogging ? "1" : "0";
+            Trace.WriteLine($"MCP env: MCP_PORT={_port} verbose={_verboseLogging}");
 
             try
             {
@@ -82,7 +86,12 @@ namespace Host.Win.Services
                 _process.OutputDataReceived += (_, args) =>
                 {
                     if (!string.IsNullOrWhiteSpace(args.Data))
-                        Trace.WriteLine($"[MCP] {args.Data}");
+                    {
+                        if (_verboseLogging || !args.Data.StartsWith("DEBUG:", StringComparison.OrdinalIgnoreCase))
+                        {
+                            Trace.WriteLine($"[MCP] {args.Data}");
+                        }
+                    }
                 };
                 _process.ErrorDataReceived += (_, args) =>
                 {
@@ -93,9 +102,24 @@ namespace Host.Win.Services
                         {
                             Trace.WriteLine($"[MCP] {line}");
                         }
-                        else
+                        else if (line.StartsWith("DEBUG:", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (_verboseLogging)
+                            {
+                                Trace.WriteLine($"[MCP] {line}");
+                            }
+                        }
+                        else if (line.StartsWith("WARNING:", StringComparison.OrdinalIgnoreCase))
+                        {
+                            Trace.TraceWarning($"[MCP] {line}");
+                        }
+                        else if (line.StartsWith("ERROR:", StringComparison.OrdinalIgnoreCase) || line.StartsWith("CRITICAL:", StringComparison.OrdinalIgnoreCase))
                         {
                             Trace.TraceError($"[MCP ERR] {line}");
+                        }
+                        else
+                        {
+                            Trace.TraceWarning($"[MCP] {line}");
                         }
                     }
                 };
@@ -211,8 +235,8 @@ namespace Host.Win.Services
                 if (!string.Equals(hash, existingHash, StringComparison.OrdinalIgnoreCase))
                 {
                     Trace.WriteLine("Installing MCP requirements...");
-                    RunSilently(pythonExe, "-m pip install --upgrade pip", workingDir);
-                    if (RunSilently(pythonExe, "-m pip install -r requirements.txt", workingDir))
+                    RunSilently(pythonExe, "-m pip install --upgrade pip", workingDir, verboseLogging: _verboseLogging);
+                    if (RunSilently(pythonExe, "-m pip install -r requirements.txt", workingDir, verboseLogging: _verboseLogging))
                     {
                         WriteHash(_requirementsHashFile, hash);
                     }
@@ -222,7 +246,7 @@ namespace Host.Win.Services
             return pythonExe;
         }
 
-        private static bool RunSilently(string fileName, string arguments, string workingDir)
+        private static bool RunSilently(string fileName, string arguments, string workingDir, bool verboseLogging = false)
         {
             try
             {
@@ -242,15 +266,16 @@ namespace Host.Win.Services
                     var stdout = proc.StandardOutput.ReadToEnd();
                     var stderr = proc.StandardError.ReadToEnd();
                     proc.WaitForExit(20000);
-                    if (!string.IsNullOrWhiteSpace(stdout))
+                    var ok = proc.ExitCode == 0;
+                    if ((!string.IsNullOrWhiteSpace(stdout)) && (verboseLogging || !ok))
                     {
                         Trace.WriteLine($"[MCP cmd] {fileName} {arguments} -> {stdout}");
                     }
-                    if (!string.IsNullOrWhiteSpace(stderr))
+                    if ((!string.IsNullOrWhiteSpace(stderr)) && (verboseLogging || !ok))
                     {
                         Trace.TraceWarning($"[MCP cmd ERR] {fileName} {arguments} -> {stderr}");
                     }
-                    return proc.ExitCode == 0;
+                    return ok;
                 }
             }
             catch (Exception ex)
@@ -267,7 +292,8 @@ namespace Host.Win.Services
                 if (!File.Exists(_pidFile)) return;
                 var text = File.ReadAllText(_pidFile).Trim();
                 if (!int.TryParse(text, out var pid)) return;
-                var proc = Process.GetProcessById(pid);
+                using var proc = Process.GetProcesses().FirstOrDefault(p => p.Id == pid);
+                if (proc == null) return;
                 if (!proc.HasExited)
                 {
                     Trace.WriteLine($"Killing existing MCP process PID {pid} before start.");

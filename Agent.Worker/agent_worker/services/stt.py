@@ -29,82 +29,83 @@ def _load_model():
     if _LOAD_ERROR is not None:
         raise RuntimeError(_LOAD_ERROR)
 
+    def _import_whisper_model():
+        try:
+            from faster_whisper import WhisperModel  # type: ignore
+
+            return WhisperModel
+        except ModuleNotFoundError as exc:
+            msg = (
+                "Speech-to-text is not installed (missing 'faster-whisper'). "
+                "Install `Agent.Worker/requirements-speech.txt` (Python 3.11-3.13 recommended)."
+            )
+            global _LOAD_ERROR
+            _LOAD_ERROR = msg
+            raise RuntimeError(msg) from exc
+
     if not os.path.isdir(_MODEL_DIR):
         _LOAD_ERROR = f"Whisper model directory not found: {_MODEL_DIR}"
         raise RuntimeError(_LOAD_ERROR)
 
-    model_name = os.environ.get("FASTER_WHISPER_MODEL", "base")
-    try:
-        if not _has_cudnn():
-            raise RuntimeError("cuDNN not found on PATH")
-        from faster_whisper import WhisperModel  # type: ignore
+    model_name = os.environ.get("FASTER_WHISPER_MODEL", "small")
+    device_pref = os.environ.get("FASTER_WHISPER_DEVICE", "auto").strip().lower()
 
-        device = "cuda"
-        compute = "int8_float16"
-        print(f"[stt] loading model from {_MODEL_DIR} ({device} {compute})")
-        _MODEL = WhisperModel(_MODEL_DIR, device=device, compute_type=compute)
-        _MODEL_DEVICE = device
-        _MODEL_COMPUTE = compute
-        logger.info("stt model_loaded device=%s compute_type=%s model_dir=%s", device, compute, _MODEL_DIR)
-    except Exception as exc:
-        logger.info("stt gpu init skipped (int8_float16): %s", exc)
+    def _cuda_device_count() -> int:
         try:
-            if not _has_cudnn():
-                raise RuntimeError("cuDNN not found on PATH")
-            from faster_whisper import WhisperModel  # type: ignore
+            import ctranslate2  # type: ignore
 
-            device = "cuda"
-            compute = "float16"
-            print(f"[stt] loading model from {_MODEL_DIR} ({device} {compute})")
-            _MODEL = WhisperModel(_MODEL_DIR, device=device, compute_type=compute)
-            _MODEL_DEVICE = device
-            _MODEL_COMPUTE = compute
-            logger.info("stt model_loaded device=%s compute_type=%s model_dir=%s", device, compute, _MODEL_DIR)
-        except Exception as exc:
-            logger.info("stt gpu init skipped (float16): %s", exc)
+            count = ctranslate2.get_cuda_device_count()
+            return int(count) if count is not None else 0
+        except Exception:
+            return 0
+
+    def _try_load(device: str, compute: str):
+        WhisperModel = _import_whisper_model()
+        print(f"[stt] loading model from {_MODEL_DIR} ({device} {compute})")
+        return WhisperModel(_MODEL_DIR, device=device, compute_type=compute)
+
+    cuda_count = _cuda_device_count()
+    allow_gpu = device_pref in {"auto", "cuda", "gpu"}
+    if allow_gpu and cuda_count > 0:
+        for compute in ("int8_float16", "float16", "int8", "float32"):
             try:
-                if not _has_cudnn():
-                    raise RuntimeError("cuDNN not found on PATH")
-                from faster_whisper import WhisperModel  # type: ignore
-
                 device = "cuda"
-                compute = "int8"
-                print(f"[stt] loading model from {_MODEL_DIR} ({device} {compute})")
-                _MODEL = WhisperModel(_MODEL_DIR, device=device, compute_type=compute)
+                _MODEL = _try_load(device, compute)
                 _MODEL_DEVICE = device
                 _MODEL_COMPUTE = compute
-                logger.info("stt model_loaded device=%s compute_type=%s model_dir=%s", device, compute, _MODEL_DIR)
+                logger.info(
+                    "stt model_loaded device=%s compute_type=%s model_dir=%s model=%s",
+                    device,
+                    compute,
+                    _MODEL_DIR,
+                    model_name,
+                )
+                return _MODEL
             except Exception as exc:
-                logger.info("stt gpu init skipped (int8): %s", exc)
-                try:
-                    if not _has_cudnn():
-                        raise RuntimeError("cuDNN not found on PATH")
-                    from faster_whisper import WhisperModel  # type: ignore
+                logger.info("stt gpu init skipped (%s): %s", compute, exc)
+    elif allow_gpu:
+        logger.info("stt gpu not available (cuda_device_count=%s); using cpu", cuda_count)
 
-                    device = "cuda"
-                    compute = "float32"
-                    print(f"[stt] loading model from {_MODEL_DIR} ({device} {compute})")
-                    _MODEL = WhisperModel(_MODEL_DIR, device=device, compute_type=compute)
-                    _MODEL_DEVICE = device
-                    _MODEL_COMPUTE = compute
-                    logger.info("stt model_loaded device=%s compute_type=%s model_dir=%s", device, compute, _MODEL_DIR)
-                except Exception as exc:
-                    logger.info("stt gpu init skipped (float32): %s", exc)
-                    try:
-                        from faster_whisper import WhisperModel  # type: ignore
+    for compute in ("int8", "float32"):
+        try:
+            device = "cpu"
+            _MODEL = _try_load(device, compute)
+            _MODEL_DEVICE = device
+            _MODEL_COMPUTE = compute
+            logger.info(
+                "stt model_loaded device=%s compute_type=%s model_dir=%s model=%s",
+                device,
+                compute,
+                _MODEL_DIR,
+                model_name,
+            )
+            logger.info("stt cpu fallback active")
+            return _MODEL
+        except Exception as exc:
+            logger.info("stt cpu init skipped (%s): %s", compute, exc)
 
-                        device = "cpu"
-                        compute = "int8"
-                        print(f"[stt] loading model from {_MODEL_DIR} ({device} {compute})")
-                        _MODEL = WhisperModel(_MODEL_DIR, device=device, compute_type=compute)
-                        _MODEL_DEVICE = device
-                        _MODEL_COMPUTE = compute
-                        logger.info("stt model_loaded device=%s compute_type=%s model_dir=%s", device, compute, _MODEL_DIR)
-                        logger.info("stt cpu fallback active")
-                    except Exception as exc:
-                        _LOAD_ERROR = f"faster-whisper init failed for model '{model_name}': {exc}"
-                        raise RuntimeError(_LOAD_ERROR) from exc
-    return _MODEL
+    _LOAD_ERROR = f"faster-whisper init failed for model '{model_name}'"
+    raise RuntimeError(_LOAD_ERROR)
 
 
 def load_model():
@@ -191,13 +192,3 @@ def transcribe_audio(audio_bytes: bytes) -> Tuple[str, int, int, str | None, str
 
     logger.info("stt decode_ms=%s stt_ms=%s sample_rate=%s", decode_ms, stt_ms, sample_rate)
     return transcript, decode_ms, stt_ms, _MODEL_DEVICE, _MODEL_COMPUTE
-def _has_cudnn() -> bool:
-    for key in ("cudnn_ops64_9.dll", "cudnn_ops64_8.dll"):
-        try:
-            import ctypes
-
-            ctypes.WinDLL(key)
-            return True
-        except Exception:
-            continue
-    return False

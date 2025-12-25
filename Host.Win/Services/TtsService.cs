@@ -2,6 +2,8 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Host.Win.Models;
@@ -11,6 +13,7 @@ namespace Host.Win.Services
     public sealed class TtsService
     {
         private static readonly TimeSpan PiperTimeout = TimeSpan.FromSeconds(10);
+        private const int MaxErrorPreviewChars = 400;
 
         public async Task<TtsResult> GenerateAsync(string text, HostSettings? settings, CancellationToken cancellationToken)
         {
@@ -23,108 +26,264 @@ namespace Host.Win.Services
             var command = ResolvePiperCommand(settings);
             var modelPath = ResolveVoiceModelPath(settings);
             var configPath = ResolveVoiceConfigPath(settings, modelPath);
+            var verbose = settings?.VerboseLogging == true;
 
             if (string.IsNullOrWhiteSpace(command.FileName))
             {
-                return await FallbackToSapiAsync(text, settings, cancellationToken, "Piper executable not found.").ConfigureAwait(false);
+                var details = verbose
+                    ? $"piperMode={settings?.PiperMode ?? "exe"} piperExePath={settings?.PiperExePath ?? ""} piperPythonPath={settings?.PiperPythonPath ?? ""}"
+                    : null;
+                return await FallbackToSapiAsync(text, settings, cancellationToken, "Piper executable not found.", details).ConfigureAwait(false);
             }
 
             if (command.RequiresExistingFile && !File.Exists(command.FileName))
             {
-                return await FallbackToSapiAsync(text, settings, cancellationToken, "Piper executable not found.").ConfigureAwait(false);
+                var details = verbose ? $"expectedPiperPath={command.FileName}" : null;
+                return await FallbackToSapiAsync(text, settings, cancellationToken, "Piper executable not found.", details).ConfigureAwait(false);
             }
 
             if (string.IsNullOrWhiteSpace(modelPath) || !File.Exists(modelPath))
             {
-                return await FallbackToSapiAsync(text, settings, cancellationToken, "Piper voice model not found.").ConfigureAwait(false);
+                var details = verbose ? $"piperVoiceModelPath={settings?.PiperVoiceModelPath ?? ""} resolvedModelPath={modelPath}" : null;
+                return await FallbackToSapiAsync(text, settings, cancellationToken, "Piper voice model not found.", details).ConfigureAwait(false);
             }
 
             var outputPath = Path.Combine(Path.GetTempPath(), $"lisa_tts_{Guid.NewGuid():N}.wav");
             try
             {
-                var args = $"{command.ArgumentsPrefix} --model \"{modelPath}\" --output_file \"{outputPath}\"";
+                var coreArgs = $"--model \"{modelPath}\" --output_file \"{outputPath}\"";
                 if (!string.IsNullOrWhiteSpace(configPath) && File.Exists(configPath))
                 {
-                    args += $" --config \"{configPath}\"";
-                }
-
-                var lengthScale = GetPiperLengthScale(settings);
-                if (lengthScale.HasValue)
-                {
-                    args += $" --length_scale {lengthScale.Value:0.00}";
+                    coreArgs += $" --config \"{configPath}\"";
                 }
 
                 if (settings?.PiperSpeakerId is int speakerId && speakerId >= 0)
                 {
-                    args += $" --speaker {speakerId}";
+                    coreArgs += $" --speaker {speakerId}";
                 }
 
-                var startInfo = new ProcessStartInfo
+                async Task<(bool Success, byte[]? AudioBytes, string Reason, string? VerboseDetails)> TryRunPiperAsync(
+                    PiperCommand piperCommand,
+                    string piperArgs,
+                    string? attemptLabel)
                 {
-                    FileName = command.FileName,
-                    Arguments = args,
-                    RedirectStandardInput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-
-                using var process = new Process { StartInfo = startInfo };
-                if (!process.Start())
-                {
-                    return await FallbackToSapiAsync(text, settings, cancellationToken, "Failed to start Piper.").ConfigureAwait(false);
-                }
-
-                await process.StandardInput.WriteAsync(text).ConfigureAwait(false);
-                await process.StandardInput.FlushAsync().ConfigureAwait(false);
-                process.StandardInput.Close();
-
-                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                timeoutCts.CancelAfter(PiperTimeout);
-                try
-                {
-                    await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                    if (!process.HasExited)
+                    var startInfo = new ProcessStartInfo
                     {
-                        try
+                        FileName = piperCommand.FileName,
+                        Arguments = piperArgs,
+                        RedirectStandardInput = true,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+
+                    if (piperCommand.RequiresExistingFile)
+                    {
+                        var wd = Path.GetDirectoryName(piperCommand.FileName);
+                        if (!string.IsNullOrWhiteSpace(wd))
                         {
-                            process.Kill(true);
-                        }
-                        catch
-                        {
-                            // ignore kill errors
+                            startInfo.WorkingDirectory = wd;
                         }
                     }
 
-                    if (cancellationToken.IsCancellationRequested)
+                    if (verbose)
                     {
-                        return TtsResult.Failed("TTS cancelled.");
+                        var label = string.IsNullOrWhiteSpace(attemptLabel) ? "Piper" : attemptLabel;
+                        Trace.WriteLine($"[TTS] {label} cmd: {startInfo.FileName} {startInfo.Arguments}");
+                        if (!string.IsNullOrWhiteSpace(startInfo.WorkingDirectory))
+                        {
+                            Trace.WriteLine($"[TTS] {label} cwd: {startInfo.WorkingDirectory}");
+                        }
+                        Trace.WriteLine($"[TTS] Piper model: {modelPath}");
+                        if (!string.IsNullOrWhiteSpace(configPath))
+                        {
+                            Trace.WriteLine($"[TTS] Piper config: {configPath}");
+                        }
+                        Trace.WriteLine($"[TTS] Piper output: {outputPath}");
                     }
 
-                    return TtsResult.Failed("TTS timed out.");
+                    using var process = new Process { StartInfo = startInfo };
+                    if (!process.Start())
+                    {
+                        var details = verbose ? $"cmd={startInfo.FileName} {startInfo.Arguments}" : null;
+                        return (false, null, "Failed to start Piper.", details);
+                    }
+
+                    var stdoutTask = process.StandardOutput.ReadToEndAsync();
+                    var stderrTask = process.StandardError.ReadToEndAsync();
+
+                    await process.StandardInput.WriteAsync(text + Environment.NewLine).ConfigureAwait(false);
+                    await process.StandardInput.FlushAsync().ConfigureAwait(false);
+                    process.StandardInput.Close();
+
+                    using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    timeoutCts.CancelAfter(PiperTimeout);
+                    try
+                    {
+                        await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        if (!process.HasExited)
+                        {
+                            try
+                            {
+                                process.Kill(true);
+                            }
+                            catch
+                            {
+                                // ignore kill errors
+                            }
+                        }
+
+                        if (cancellationToken.IsCancellationRequested)
+                        {
+                            return (false, null, "TTS cancelled.", null);
+                        }
+
+                        return (false, null, "TTS timed out.", null);
+                    }
+
+                    var stderr = (await stderrTask.ConfigureAwait(false)).Trim();
+                    var stdout = (await stdoutTask.ConfigureAwait(false)).Trim();
+
+                    if (process.ExitCode != 0)
+                    {
+                        var reason = $"Piper exited with code {process.ExitCode}.";
+                        if (!string.IsNullOrWhiteSpace(stderr))
+                        {
+                            reason += $" stderr: {TruncateForLog(stderr, MaxErrorPreviewChars)}";
+                        }
+                        else if (!string.IsNullOrWhiteSpace(stdout))
+                        {
+                            reason += $" stdout: {TruncateForLog(stdout, MaxErrorPreviewChars)}";
+                        }
+
+                        string? verboseDetails = null;
+                        if (verbose)
+                        {
+                            verboseDetails =
+                                $"cmd={startInfo.FileName} {startInfo.Arguments}\n" +
+                                $"cwd={(string.IsNullOrWhiteSpace(startInfo.WorkingDirectory) ? "(default)" : startInfo.WorkingDirectory)}\n" +
+                                $"exit_code={process.ExitCode}\n" +
+                                $"stdout={(string.IsNullOrWhiteSpace(stdout) ? "(empty)" : stdout)}\n" +
+                                $"stderr={(string.IsNullOrWhiteSpace(stderr) ? "(empty)" : stderr)}";
+                        }
+
+                        return (false, null, reason, verboseDetails);
+                    }
+
+                    if (verbose)
+                    {
+                        if (!string.IsNullOrWhiteSpace(stdout))
+                        {
+                            Trace.WriteLine($"[TTS] Piper stdout: {stdout}");
+                        }
+                        if (!string.IsNullOrWhiteSpace(stderr))
+                        {
+                            Trace.TraceWarning($"[TTS] Piper stderr: {stderr}");
+                        }
+                    }
+
+                    if (!File.Exists(outputPath))
+                    {
+                        var reason = $"Piper output missing: {outputPath}";
+                        var details = verbose ? $"cmd={startInfo.FileName} {startInfo.Arguments}" : null;
+                        return (false, null, reason, details);
+                    }
+
+                    var bytes = await File.ReadAllBytesAsync(outputPath, cancellationToken).ConfigureAwait(false);
+                    return (true, bytes, string.Empty, null);
                 }
 
-                if (process.ExitCode != 0)
+                static string BuildArgs(PiperCommand piperCommand, string argsCore)
                 {
-                    var error = await process.StandardError.ReadToEndAsync().ConfigureAwait(false);
-                    var message = string.IsNullOrWhiteSpace(error) ? "Piper exited with errors." : error.Trim();
-                    return await FallbackToSapiAsync(text, settings, cancellationToken, message).ConfigureAwait(false);
+                    if (string.IsNullOrWhiteSpace(piperCommand.ArgumentsPrefix))
+                    {
+                        return argsCore.Trim();
+                    }
+
+                    return $"{piperCommand.ArgumentsPrefix} {argsCore}".Trim();
                 }
 
-                if (!File.Exists(outputPath))
+                var primary = await TryRunPiperAsync(command, BuildArgs(command, coreArgs), attemptLabel: "Piper(primary)").ConfigureAwait(false);
+                if (primary.Success && primary.AudioBytes != null)
                 {
-                    return await FallbackToSapiAsync(text, settings, cancellationToken, "Piper output missing.").ConfigureAwait(false);
+                    return TtsResult.FromAudio(primary.AudioBytes);
                 }
 
-                var bytes = await File.ReadAllBytesAsync(outputPath, cancellationToken).ConfigureAwait(false);
-                return TtsResult.FromAudio(bytes);
+                // Some Windows venv installs ship a broken `piper.exe` console shim. If the shim fails, retry via the venv python.
+                if (string.Equals(settings?.PiperMode, "exe", StringComparison.OrdinalIgnoreCase)
+                    && command.RequiresExistingFile
+                    && IsPiperCommand(command.FileName))
+                {
+                    try
+                    {
+                        if (verbose)
+                        {
+                            Trace.TraceWarning($"[TTS] Piper(primary) failed; retrying with python fallback. reason={primary.Reason}");
+                        }
+
+                        var scriptsDir = Path.GetDirectoryName(command.FileName);
+                        if (!string.IsNullOrWhiteSpace(scriptsDir))
+                        {
+                            var venvPython = Path.Combine(scriptsDir, "python.exe");
+                            if (File.Exists(venvPython))
+                            {
+                                if (verbose)
+                                {
+                                    Trace.WriteLine($"[TTS] Retrying Piper via venv python: {venvPython} -m piper");
+                                }
+
+                                TryDelete(outputPath);
+                                var pythonCommand = new PiperCommand(venvPython, "-m piper", requiresExistingFile: true);
+                                var pythonAttempt = await TryRunPiperAsync(
+                                        pythonCommand,
+                                        BuildArgs(pythonCommand, coreArgs),
+                                        attemptLabel: "Piper(python-fallback)")
+                                    .ConfigureAwait(false);
+
+                                if (pythonAttempt.Success && pythonAttempt.AudioBytes != null)
+                                {
+                                    if (verbose)
+                                    {
+                                        Trace.WriteLine("[TTS] Piper(python-fallback) succeeded.");
+                                    }
+                                    return TtsResult.FromAudio(pythonAttempt.AudioBytes);
+                                }
+
+                                var combinedReason = $"{primary.Reason} (python fallback: {pythonAttempt.Reason})";
+                                var combinedDetails = verbose
+                                    ? $"primary:\n{primary.VerboseDetails ?? "(no details)"}\n\npython:\n{pythonAttempt.VerboseDetails ?? "(no details)"}"
+                                    : null;
+
+                                return await FallbackToSapiAsync(text, settings, cancellationToken, combinedReason, combinedDetails).ConfigureAwait(false);
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // ignore and keep the primary result
+                    }
+                }
+
+                if (string.Equals(primary.Reason, "TTS cancelled.", StringComparison.Ordinal))
+                {
+                    return TtsResult.Failed(primary.Reason);
+                }
+
+                if (string.Equals(primary.Reason, "TTS timed out.", StringComparison.Ordinal))
+                {
+                    return TtsResult.Failed(primary.Reason);
+                }
+
+                return await FallbackToSapiAsync(text, settings, cancellationToken, primary.Reason, primary.VerboseDetails).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                return await FallbackToSapiAsync(text, settings, cancellationToken, $"Piper failed: {ex.Message}").ConfigureAwait(false);
+                var details = verbose ? $"cmd={command.FileName} model={modelPath} mode={settings?.PiperMode ?? "exe"}" : null;
+                return await FallbackToSapiAsync(text, settings, cancellationToken, $"Piper failed: {ex.Message}", details).ConfigureAwait(false);
             }
             finally
             {
@@ -190,30 +349,18 @@ namespace Host.Win.Services
             return string.Empty;
         }
 
-        private static double? GetPiperLengthScale(HostSettings? settings)
-        {
-            var rate = settings?.VoiceRate ?? 1.0;
-            if (Math.Abs(rate - 1.0) < 0.01)
-            {
-                return null;
-            }
-
-            if (rate <= 0.05)
-            {
-                return null;
-            }
-
-            var lengthScale = 1.0 / rate;
-            return Math.Clamp(lengthScale, 0.5, 2.0);
-        }
-
         private static async Task<TtsResult> FallbackToSapiAsync(
             string text,
             HostSettings? settings,
             CancellationToken cancellationToken,
-            string reason)
+            string reason,
+            string? verboseDetails = null)
         {
             Trace.TraceWarning($"TTS fallback to SAPI: {reason}");
+            if (settings?.VerboseLogging == true && !string.IsNullOrWhiteSpace(verboseDetails))
+            {
+                Trace.WriteLine($"[TTS] Piper details:\n{verboseDetails}");
+            }
             var success = await TrySpeakWithSapiAsync(text, settings, cancellationToken).ConfigureAwait(false);
             if (!success)
             {
@@ -222,22 +369,83 @@ namespace Host.Win.Services
             return TtsResult.UsedSapi();
         }
 
+        private static string TruncateForLog(string value, int maxChars)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            value = value.Trim();
+            if (value.Length <= maxChars)
+            {
+                return value;
+            }
+
+            return value.Substring(0, maxChars) + "…";
+        }
+
         private static async Task<bool> TrySpeakWithSapiAsync(string text, HostSettings? settings, CancellationToken cancellationToken)
         {
             var synthType = Type.GetType("System.Speech.Synthesis.SpeechSynthesizer, System.Speech");
-            if (synthType == null)
+            if (synthType != null)
             {
-                Trace.TraceWarning("SAPI not available on this system.");
-                return false;
+                return await Task.Run(() =>
+                {
+                    object? synth = null;
+                    try
+                    {
+                        synth = Activator.CreateInstance(synthType);
+                        if (synth == null)
+                        {
+                            return false;
+                        }
+
+                        var rate = ConvertToSapiRate(settings?.VoiceRate ?? 1.0);
+                        var volume = ConvertToSapiVolume(settings?.VoiceVolume ?? 1.0);
+
+                        synthType.GetProperty("Rate")?.SetValue(synth, rate);
+                        synthType.GetProperty("Volume")?.SetValue(synth, volume);
+                        synthType.GetMethod("SetOutputToDefaultAudioDevice")?.Invoke(synth, null);
+
+                        if (cancellationToken.IsCancellationRequested)
+                        {
+                            return false;
+                        }
+
+                        synthType.GetMethod("Speak")?.Invoke(synth, new object[] { text });
+                        return true;
+                    }
+                    catch (Exception ex)
+                    {
+                        Trace.TraceWarning($"SAPI TTS failed (System.Speech): {ex.Message}");
+                        return false;
+                    }
+                    finally
+                    {
+                        if (synth != null)
+                        {
+                            synthType.GetMethod("Dispose")?.Invoke(synth, null);
+                        }
+                    }
+                }, cancellationToken).ConfigureAwait(false);
             }
 
             return await Task.Run(() =>
             {
-                object? synth = null;
+                Type? comType = null;
+                object? voice = null;
                 try
                 {
-                    synth = Activator.CreateInstance(synthType);
-                    if (synth == null)
+                    comType = Type.GetTypeFromProgID("SAPI.SpVoice");
+                    if (comType == null)
+                    {
+                        Trace.TraceWarning("SAPI not available on this system.");
+                        return false;
+                    }
+
+                    voice = Activator.CreateInstance(comType);
+                    if (voice == null)
                     {
                         return false;
                     }
@@ -245,28 +453,34 @@ namespace Host.Win.Services
                     var rate = ConvertToSapiRate(settings?.VoiceRate ?? 1.0);
                     var volume = ConvertToSapiVolume(settings?.VoiceVolume ?? 1.0);
 
-                    synthType.GetProperty("Rate")?.SetValue(synth, rate);
-                    synthType.GetProperty("Volume")?.SetValue(synth, volume);
-                    synthType.GetMethod("SetOutputToDefaultAudioDevice")?.Invoke(synth, null);
+                    comType.InvokeMember("Rate", BindingFlags.SetProperty, null, voice, new object[] { rate });
+                    comType.InvokeMember("Volume", BindingFlags.SetProperty, null, voice, new object[] { volume });
 
                     if (cancellationToken.IsCancellationRequested)
                     {
                         return false;
                     }
 
-                    synthType.GetMethod("Speak")?.Invoke(synth, new object[] { text });
+                    comType.InvokeMember("Speak", BindingFlags.InvokeMethod, null, voice, new object[] { text, 0 });
                     return true;
                 }
                 catch (Exception ex)
                 {
-                    Trace.TraceWarning($"SAPI TTS failed: {ex.Message}");
+                    Trace.TraceWarning($"SAPI TTS failed (COM): {ex.Message}");
                     return false;
                 }
                 finally
                 {
-                    if (synth != null)
+                    if (voice != null && Marshal.IsComObject(voice))
                     {
-                        synthType.GetMethod("Dispose")?.Invoke(synth, null);
+                        try
+                        {
+                            Marshal.FinalReleaseComObject(voice);
+                        }
+                        catch
+                        {
+                            // ignore release errors
+                        }
                     }
                 }
             }, cancellationToken).ConfigureAwait(false);

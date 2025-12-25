@@ -18,12 +18,12 @@ SETTINGS_PATH = Path(
 
 
 class ProviderConfig(BaseModel):
-    provider_type: str = "Ollama"
+    provider_type: str = "LM Studio"
     host: str = "127.0.0.1"
-    port: int = 11434
+    port: int = 1234
     api_key: Optional[str] = None
-    model: str = "llama3.2"
-    temperature: float = 0.7
+    model: str = "mistralai/ministral-3-3b"
+    temperature: float = 0.0
     stream: bool = False
     think: bool = True
 
@@ -37,16 +37,24 @@ def load_settings() -> ProviderConfig:
                 for key in keys:
                     if key in data:
                         return data[key]
+                    # Host settings are written by .NET and may be PascalCase; treat keys as case-insensitive.
+                    key_l = str(key).lower()
+                    for existing in data.keys():
+                        try:
+                            if str(existing).lower() == key_l:
+                                return data[existing]
+                        except Exception:
+                            continue
                 return default
 
             return ProviderConfig(
-                provider_type=pick("provider_type", "providerType", default="Ollama"),
-                host=pick("provider_host", "providerHost", default="127.0.0.1"),
-                port=int(pick("provider_port", "providerPort", default=11434)),
-                api_key=os.environ.get("PROVIDER_API_KEY") or pick("provider_api_key", "providerApiKey") or None,
-                model=pick("provider_model", "providerModel", default="llama3.2"),
-                temperature=float(pick("provider_temperature", "providerTemperature", default=0.7)),
-                think=bool(pick("provider_think", "providerThink", default=True)),
+                provider_type=pick("provider_type", "providerType", "ProviderType", default="Ollama"),
+                host=pick("provider_host", "providerHost", "ProviderHost", default="127.0.0.1"),
+                port=int(pick("provider_port", "providerPort", "ProviderPort", default=11434)),
+                api_key=os.environ.get("PROVIDER_API_KEY") or pick("provider_api_key", "providerApiKey", "ProviderApiKey") or None,
+                model=pick("provider_model", "providerModel", "ProviderModel", default="llama3.2"),
+                temperature=float(pick("provider_temperature", "providerTemperature", "ProviderTemperature", default=0.7)),
+                think=bool(pick("provider_think", "providerThink", "ProviderThink", default=True)),
             )
         except Exception:
             pass

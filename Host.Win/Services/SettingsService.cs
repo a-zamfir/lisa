@@ -80,6 +80,7 @@ namespace Host.Win.Services
                 VoiceRate = settings.VoiceRate,
                 VoiceVolume = settings.VoiceVolume,
                 TtsEnabledInChat = settings.TtsEnabledInChat,
+                VerboseLogging = settings.VerboseLogging,
                 PiperExePath = settings.PiperExePath,
                 PiperMode = settings.PiperMode,
                 PiperPythonPath = settings.PiperPythonPath,

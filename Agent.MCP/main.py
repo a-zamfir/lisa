@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import logging
 import os
 
 from agent_mcp.app import app
 
 DEFAULT_PORT = int(os.environ.get("MCP_PORT", "8123"))
+VERBOSE = os.environ.get("LISA_VERBOSE_LOGGING", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=DEFAULT_PORT, log_level="warning", access_log=False)
+    logging.basicConfig(level=logging.DEBUG if VERBOSE else logging.INFO)
+    uvicorn.run(app, host="127.0.0.1", port=DEFAULT_PORT, log_level="info" if VERBOSE else "warning", access_log=VERBOSE)

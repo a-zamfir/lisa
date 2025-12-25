@@ -45,14 +45,14 @@ flowchart LR
 ## Modalities & UX
 - Talk: user presses/holds mic; host captures PCM; VAD stops on silence; host uploads audio; agent transcribes; agent responds with text and speak flag; host plays TTS via external Piper process (GPL, no embedding or redistribution).
 - Chat: text input in overlay; show history; send to agent; render markdown; show tool/stream status; copy/retry/stop per message.
-- Share Screen: user toggles permission; host captures snapshots (WinRT Graphics Capture) on interval/on-demand; send to agent; agent summarizes/uses vision; results inline.
+- Share Screen: user arms Share; the next Chat/Talk prompt captures a one-shot screenshot (host briefly hides the overlay), uploads it to the agent (`POST /visual-context/frame`), and the agent attaches it to the next LLM request (vision-capable models).
 - Settings: MCP servers, voice settings, hotkeys, startup, provider selection; stored locally and synced to agent.
 - Streaming UX: reasoning streamed separately; content streamed live; tool-call phases surfaced (awaiting/processing/complete).
 
 ## Responsibilities Split
 - Host (C# WPF):
   - Hotkeys, tray, overlay rendering, focus.
-  - Mic capture (WASAPI), VAD (WebRTC preferred), screen capture (WinRT).
+  - Mic capture (WASAPI), VAD, screen capture (currently GDI `CopyFromScreen`; WinRT capture is a future upgrade).
   - Audio playback (NAudio), permission gates, clipboard/open-url enforcement.
   - Settings UI + storage (`%LOCALAPPDATA%/LISA/host-settings.json`).
   - UI cache for messages; health indicators for MCP/Agent/Provider; local TCP listener for streaming callbacks.
@@ -78,12 +78,11 @@ flowchart LR
   - Phase 2 option: named pipes or gRPC for tighter surface and typed contracts.
 - Core endpoints:
   - `GET /health`
-  - `POST /session/start`
   - `POST /input/text`
   - `POST /input/audio`
-  - `POST /input/screen`
-  - `GET /session/{id}/history`
-  - `POST /settings/sync`
+  - `POST /input/retry`
+  - `POST /tool/approval`
+  - `POST /visual-context/frame`
 
 ### Shared JSON Fields
 - `session_id`, `turn_id`, `timestamp`.
@@ -96,8 +95,6 @@ flowchart LR
     "messages": [{ "role": "assistant", "content": "text/markdown" }],
     "speak": false,
     "tts_text": null,
-    "tts_audio_b64": null,
-    "diagnostics": { "latency_ms": 1200 },
     "tool_calls": ["tool_a"],
     "reasoning": "optional reasoning",
     "thinking_ms": 4200
@@ -156,19 +153,19 @@ sequenceDiagram
   participant Host
   participant Agent
   participant LLM
-  User->>Host: Toggle screen share ON
-  Host->>Host: Start periodic capture (with permission)
-  loop interval/on-demand
-    Host->>Agent: POST /input/screen {session_id, turn_id} + image bytes
-    Agent->>LLM: Vision summary
-    LLM-->>Agent: Summary/actions
-    Agent-->>Host: {messages, speak?, ui_hints}
-    Host-->>User: Update overlay; optional toast
-  end
+  User->>Host: Arm Share
+  User->>Host: Send prompt (Chat or Talk transcript)
+  Host->>Host: Briefly hide overlay; capture screenshot
+  Host->>Agent: POST /visual-context/frame {session_id, image}
+  Host->>Agent: POST /input/text {session_id, turn_id, text}
+  Agent->>LLM: Vision + response (image attached)
+  LLM-->>Agent: Streamed content/thinking/tool calls
+  Agent-->>Host: TCP callbacks + response
+  Host-->>User: Render streamed content
 ```
 
 ## Tech Stack
-- Host: .NET 8 WPF, MVVM; WASAPI capture; WebRTC VAD; WinRT Graphics Capture; NAudio playback; Piper via external process only (GPL, user-installed); JSON settings (SQLite later).
+- Host: .NET 8 WPF, MVVM; WASAPI capture; VAD; screen capture via GDI `CopyFromScreen` (one-shot in Share); NAudio playback; Piper via external process only (GPL, user-installed); JSON settings (SQLite later).
 - Agent Worker: FastAPI; Ollama/provider; MCP client; TCP callbacks; system context builder; prompts as markdown files; MCP auth token injected at startup to warm tool cache.
 - Agent.MCP: FastAPI tools server; PowerShell/WMI under the hood; read-only tools.
 

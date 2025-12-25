@@ -7,6 +7,7 @@ import socket
 import threading
 import time
 import uuid
+import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Header
@@ -19,6 +20,7 @@ from agent_worker.services.session_state import get_session_nonce, set_session_n
 from agent_worker.services.settings import load_settings
 from agent_worker.services.system_context import collect_system_context
 from agent_worker.services.tool_approval import approval_manager
+from agent_worker.services.visual_context import pop_latest_frame, peek_latest_frame
 
 
 router = APIRouter()
@@ -27,9 +29,12 @@ _mcp_client = McpClient()
 _tool_context: Optional[str] = None
 _tool_context_version = 0
 _SYSTEM_CONTEXT = collect_system_context()
+_log = logging.getLogger("agent_worker.text")
 _callback_socket: Optional[socket.socket] = None
 _callback_port: Optional[int] = None
 _callback_lock = threading.Lock()
+_callback_queue: "asyncio.Queue[Dict[str, Any]]" = asyncio.Queue(maxsize=8192)
+_callback_sender_task: Optional[asyncio.Task] = None
 _APPROVAL_TIMEOUT_S = 30
 
 
@@ -99,11 +104,33 @@ def _build_tools_payload(tools_payload: Optional[Dict[str, Any]]) -> Optional[Li
 def _build_provider_messages(
     history: List[dict],
     user_text: Optional[str],
+    *,
+    frame: object | None = None,
 ) -> List[dict]:
     messages: List[dict] = []
     messages.extend(history)
     if user_text is not None:
-        messages.append({"role": "user", "content": user_text})
+        if frame is not None:
+            # Keep the vision prompt tight: we only add this when an image is attached.
+            messages.append(
+                {
+                    "role": "system",
+                    "content": "A screenshot is attached. It may include a small LISA overlay UI; ignore the overlay and focus on the underlying app/content.",
+                }
+            )
+            mime = getattr(frame, "mime_type", "image/jpeg")
+            b64 = getattr(frame, "data_base64", "")
+            messages.append(
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": user_text},
+                        {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
+                    ],
+                }
+            )
+        else:
+            messages.append({"role": "user", "content": user_text})
     return messages
 
 
@@ -184,10 +211,34 @@ def _write_callback_payload(payload: Dict[str, Any]) -> None:
 
 
 async def _send_pipe_payload(payload: Dict[str, Any]) -> None:
+    _ensure_callback_sender()
     try:
-        await asyncio.to_thread(_write_callback_payload, payload)
+        _callback_queue.put_nowait(payload)
+    except asyncio.QueueFull:
+        await _callback_queue.put(payload)
+
+
+def _ensure_callback_sender() -> None:
+    global _callback_sender_task
+    try:
+        asyncio.get_running_loop()
     except RuntimeError:
-        _write_callback_payload(payload)
+        return
+
+    if _callback_sender_task is None or _callback_sender_task.done():
+        _callback_sender_task = asyncio.create_task(_callback_sender_loop())
+
+
+async def _callback_sender_loop() -> None:
+    while True:
+        payload = await _callback_queue.get()
+        try:
+            await asyncio.to_thread(_write_callback_payload, payload)
+        except Exception:
+            # Best-effort: callbacks should not crash the agent.
+            pass
+        finally:
+            _callback_queue.task_done()
 
 
 async def _send_tool_callback(session_id: str, turn_id: str, phase: str, tool_names: List[str]) -> None:
@@ -247,10 +298,16 @@ def _send_thinking_callback(session_id: str, turn_id: str, phase: str, delta: Op
     if delta:
         payload["thinking_delta"] = delta
     try:
-        loop = asyncio.get_running_loop()
-        loop.run_in_executor(None, _write_callback_payload, payload)
+        _ensure_callback_sender()
+        _callback_queue.put_nowait(payload)
     except RuntimeError:
         _write_callback_payload(payload)
+    except asyncio.QueueFull:
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(_send_pipe_payload(payload))
+        except RuntimeError:
+            _write_callback_payload(payload)
 
 
 def _send_content_callback(session_id: str, turn_id: str, phase: str, delta: Optional[str] = None) -> None:
@@ -262,10 +319,16 @@ def _send_content_callback(session_id: str, turn_id: str, phase: str, delta: Opt
     if delta:
         payload["content_delta"] = delta
     try:
-        loop = asyncio.get_running_loop()
-        loop.run_in_executor(None, _write_callback_payload, payload)
+        _ensure_callback_sender()
+        _callback_queue.put_nowait(payload)
     except RuntimeError:
         _write_callback_payload(payload)
+    except asyncio.QueueFull:
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(_send_pipe_payload(payload))
+        except RuntimeError:
+            _write_callback_payload(payload)
 
 
 @router.get("/health")
@@ -278,6 +341,7 @@ async def health():
 async def handle_text(req: TextInput, x_mcp_token: str | None = Header(default=None)):
     if x_mcp_token:
         os.environ["MCP_AUTH_TOKEN"] = x_mcp_token
+    provider_cfg = load_settings()
     start_time = time.monotonic()
     text = req.text.strip()
     if req.input_meta and req.input_meta.session_nonce:
@@ -294,7 +358,22 @@ async def handle_text(req: TextInput, x_mcp_token: str | None = Header(default=N
 
     # Tool registry is injected once per session to avoid repeated prompt bloat.
     _conversations.ensure_system(req.session_id, _SYSTEM_CONTEXT, _tool_context, _tool_context_version)
-    provider_messages = _build_provider_messages(_conversations.get_all(req.session_id), req.text)
+
+    provider_kind = (provider_cfg.provider_type or "").strip().lower()
+    supports_vision = provider_kind in {"lmstudio", "lm studio", "lm-studio", "openai", "open ai"}
+    frame = None
+    if supports_vision and peek_latest_frame(req.session_id) is not None:
+        frame = pop_latest_frame(req.session_id)
+        if frame is not None:
+            _log.info(
+                "attaching visual frame session=%s mime=%s %sx%s",
+                req.session_id,
+                getattr(frame, "mime_type", ""),
+                getattr(frame, "width", 0),
+                getattr(frame, "height", 0),
+            )
+
+    provider_messages = _build_provider_messages(_conversations.get_all(req.session_id), req.text, frame=frame)
 
     streamed_content = {"seen": False}
 

@@ -171,6 +171,49 @@ namespace Host.Win.Services
             }
         }
 
+        public async Task<bool> SendVisualFrameAsync(VisualFrameRequest request, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var payload = new
+                {
+                    session_id = request.SessionId,
+                    mime_type = request.MimeType,
+                    data_base64 = request.DataBase64,
+                    width = request.Width,
+                    height = request.Height,
+                    timestamp = request.Timestamp.ToUnixTimeMilliseconds() / 1000.0
+                };
+                using var message = new HttpRequestMessage(HttpMethod.Post, new Uri(_baseUri, "/visual-context/frame"))
+                {
+                    Content = JsonContent.Create(payload)
+                };
+                if (!string.IsNullOrWhiteSpace(_providerApiKey))
+                {
+                    message.Headers.Add("X-Provider-Api-Key", _providerApiKey);
+                }
+                if (!string.IsNullOrWhiteSpace(_mcpAuthToken))
+                {
+                    message.Headers.Add("X-Mcp-Token", _mcpAuthToken);
+                }
+
+                var response = await SharedClient.SendAsync(message, cancellationToken).ConfigureAwait(false);
+                response.EnsureSuccessStatusCode();
+                return true;
+            }
+            catch (HttpRequestException ex)
+            {
+                var status = ex.StatusCode.HasValue ? ((int)ex.StatusCode.Value).ToString() : "unknown";
+                Trace.TraceWarning($"Visual frame send failed (status={status}): {ex.Message}");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning($"Visual frame send failed: {ex.Message}");
+                return false;
+            }
+        }
+
         public void Dispose()
         {
             // Shared HttpClient intentionally not disposed; process scoped.

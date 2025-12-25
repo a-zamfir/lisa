@@ -6,12 +6,20 @@ using Host.Win.Views;
 using System;
 using System.Diagnostics;
 using System.Collections.ObjectModel;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Microsoft.VisualBasic;
 using System.Text.Json;
+using System.Windows.Threading;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
+using System.Threading;
+using System.Windows.Forms;
 
 namespace Host.Win.ViewModels
 {
@@ -51,6 +59,9 @@ namespace Host.Win.ViewModels
         private ICommand? _saveSettingsCommand;
         private ICommand? _toggleCollapseCommand;
         private readonly System.Collections.Generic.Dictionary<string, System.Threading.CancellationTokenSource> _inflightTurns = new();
+        private readonly Dictionary<string, StringBuilder> _pendingContentByTurn = new();
+        private readonly Dictionary<string, StringBuilder> _pendingThinkingByTurn = new();
+        private DispatcherTimer? _streamFlushTimer;
         private string _sessionId = Guid.NewGuid().ToString();
         private string _sessionNonce = GenerateSessionNonce();
         private string _providerType = "Ollama";
@@ -62,11 +73,16 @@ namespace Host.Win.ViewModels
         private bool _isCollapsed;
         private double _overlayWidth = ExpandedWidth;
         private double _overlayHeight = ExpandedHeight;
+        private readonly SemaphoreSlim _screenShareCaptureGate = new(1, 1);
+        public Func<double, Task>? SetOverlayOpacityAsync { get; set; }
 
-        private const double ExpandedWidth = 640;
-        private const double ExpandedHeight = 420;
+        private const double ExpandedWidth = 720;
+        private const double ExpandedHeight = 460;
         private const double CollapsedWidth = 420;
         private const double CollapsedHeight = 160;
+        private const int ScreenShareMaxDimensionPx = 1280;
+        private const long ScreenShareJpegQuality = 70L;
+        private const int ScreenShareHideMs = 5;
 
         public string? AppName
         {
@@ -253,6 +269,32 @@ namespace Host.Win.ViewModels
             {
                 if (!SetProperty(ref _settings, value)) return;
                 ProviderType = _settings?.ProviderType ?? "Ollama";
+                OnPropertyChanged(nameof(VoiceRatePercent));
+                OnPropertyChanged(nameof(VoiceVolumePercent));
+            }
+        }
+
+        public int VoiceRatePercent
+        {
+            get => (int)Math.Round((Settings?.VoiceRate ?? 1.0) * 100.0);
+            set
+            {
+                if (Settings == null) return;
+                var clamped = Math.Clamp(value, 50, 200);
+                Settings.VoiceRate = clamped / 100.0;
+                OnPropertyChanged(nameof(VoiceRatePercent));
+            }
+        }
+
+        public int VoiceVolumePercent
+        {
+            get => (int)Math.Round((Settings?.VoiceVolume ?? 1.0) * 100.0);
+            set
+            {
+                if (Settings == null) return;
+                var clamped = Math.Clamp(value, 0, 100);
+                Settings.VoiceVolume = clamped / 100.0;
+                OnPropertyChanged(nameof(VoiceVolumePercent));
             }
         }
 
@@ -588,7 +630,7 @@ namespace Host.Win.ViewModels
 
         public void UpdateToolStatus(string turnId, string phase, System.Collections.Generic.List<string> toolCalls)
         {
-            _ = RunOnUiAsync(() =>
+            RunOnUi(() =>
             {
                 foreach (var message in ChatMessages)
                 {
@@ -610,47 +652,50 @@ namespace Host.Win.ViewModels
 
         public void UpdateThinkingStatus(string turnId, string phase, string? delta)
         {
-            _ = RunOnUiAsync(() =>
+            RunOnUi(() =>
             {
-                foreach (var message in ChatMessages)
+                if (phase == "thinking_chunk" && !string.IsNullOrEmpty(delta))
                 {
-                    if (!message.IsAssistant || message.TurnId != turnId) continue;
-                    if (phase == "thinking_chunk" && !string.IsNullOrEmpty(delta))
+                    QueueStreamDelta(_pendingThinkingByTurn, turnId, delta);
+                    EnsureStreamFlushTimer();
+                    return;
+                }
+
+                if (phase == "thinking_done")
+                {
+                    FlushStreamDeltasForTurn(turnId);
+                    foreach (var message in ChatMessages)
                     {
-                        message.Reasoning += delta;
-                        message.HasReasoning = true;
-                        message.IsReasoningExpanded = true;
-                    }
-                    else if (phase == "thinking_done")
-                    {
+                        if (!message.IsAssistant || message.TurnId != turnId) continue;
                         message.IsReasoningExpanded = false;
+                        break;
                     }
-                    break;
                 }
             });
         }
 
         public void UpdateContentStatus(string turnId, string phase, string? delta)
         {
-            _ = RunOnUiAsync(() =>
+            RunOnUi(() =>
             {
-                foreach (var message in ChatMessages)
+                if (phase == "content_chunk" && !string.IsNullOrEmpty(delta))
                 {
-                    if (!message.IsAssistant || message.TurnId != turnId) continue;
-                    if (phase == "content_chunk" && !string.IsNullOrEmpty(delta))
+                    QueueStreamDelta(_pendingContentByTurn, turnId, delta);
+                    EnsureStreamFlushTimer();
+                    return;
+                }
+
+                if (phase == "content_done")
+                {
+                    FlushStreamDeltasForTurn(turnId);
+                    foreach (var message in ChatMessages)
                     {
-                        message.HasContentStream = true;
-                        message.IsStreaming = true;
-                        message.Text += delta;
-                        message.AppendContentChunk(delta);
-                    }
-                    else if (phase == "content_done")
-                    {
+                        if (!message.IsAssistant || message.TurnId != turnId) continue;
                         message.HasContentStream = true;
                         message.IsStreaming = false;
                         message.IsCancellable = false;
+                        break;
                     }
-                    break;
                 }
             });
         }
@@ -771,7 +816,157 @@ namespace Host.Win.ViewModels
         public void ToggleShare()
         {
             IsSharing = !IsSharing;
-            Logger?.LogEvent(IsSharing ? "share.start" : "share.stop", new { sessionId = SessionId });
+            Logger?.LogEvent(IsSharing ? "share.armed" : "share.disarmed", new { sessionId = SessionId });
+        }
+
+        private async Task CaptureAndSendScreenFrameAsync(CancellationToken cancellationToken)
+        {
+            if (AgentClient == null)
+            {
+                return;
+            }
+
+            await _screenShareCaptureGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                var screen = Screen.PrimaryScreen;
+                if (screen == null)
+                {
+                    return;
+                }
+
+                var bounds = screen.Bounds;
+                using var bmp = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format24bppRgb);
+                var hidden = false;
+                var hideStart = Stopwatch.StartNew();
+                try
+                {
+                    if (SetOverlayOpacityAsync != null)
+                    {
+                        await SetOverlayOpacityAsync(0).ConfigureAwait(false);
+                        hidden = true;
+                        Logger?.LogEvent("share.capture.hide", new { sessionId = SessionId, ms = ScreenShareHideMs });
+                        await RunOnUiAsync(() => { }, DispatcherPriority.Render).ConfigureAwait(false);
+                        WindowBackdropService.FlushComposition();
+                        var remainingMs = ScreenShareHideMs - (int)hideStart.ElapsedMilliseconds;
+                        if (remainingMs > 0)
+                        {
+                            await Task.Delay(remainingMs, cancellationToken).ConfigureAwait(false);
+                        }
+                    }
+
+                    using var g = Graphics.FromImage(bmp);
+                    g.CopyFromScreen(bounds.Left, bounds.Top, 0, 0, bmp.Size, CopyPixelOperation.SourceCopy);
+                }
+                finally
+                {
+                    if (hidden && SetOverlayOpacityAsync != null)
+                    {
+                        try
+                        {
+                            await SetOverlayOpacityAsync(1).ConfigureAwait(false);
+                            Logger?.LogEvent("share.capture.show", new { sessionId = SessionId });
+                            await RunOnUiAsync(() => { }, DispatcherPriority.Render).ConfigureAwait(false);
+                            WindowBackdropService.FlushComposition();
+                        }
+                        catch
+                        {
+                            // ignore restore failures
+                        }
+                    }
+                }
+
+                using var resized = ResizeToMaxDimension(bmp, ScreenShareMaxDimensionPx);
+                var jpegBytes = EncodeJpeg(resized, ScreenShareJpegQuality);
+                var req = new VisualFrameRequest
+                {
+                    SessionId = SessionId,
+                    MimeType = "image/jpeg",
+                    DataBase64 = Convert.ToBase64String(jpegBytes),
+                    Width = resized.Width,
+                    Height = resized.Height,
+                    Timestamp = DateTimeOffset.UtcNow
+                };
+
+                var ok = await AgentClient.SendVisualFrameAsync(req, cancellationToken).ConfigureAwait(false);
+                if (ok)
+                {
+                    Logger?.LogEvent("share.frame.sent", new { sessionId = SessionId, bytes = jpegBytes.Length, width = req.Width, height = req.Height });
+                }
+                else
+                {
+                    Logger?.LogEvent("share.frame.failed", new { sessionId = SessionId, bytes = jpegBytes.Length, width = req.Width, height = req.Height });
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // ignore
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning($"Screen share capture failed: {ex.Message}");
+                Logger?.LogEvent("share.frame.error", new { sessionId = SessionId, error = ex.Message });
+            }
+            finally
+            {
+                _screenShareCaptureGate.Release();
+            }
+        }
+
+        private static Bitmap ResizeToMaxDimension(Bitmap source, int maxDimension)
+        {
+            var w = source.Width;
+            var h = source.Height;
+            if (w <= 0 || h <= 0)
+            {
+                return (Bitmap)source.Clone();
+            }
+
+            var maxSide = Math.Max(w, h);
+            if (maxSide <= maxDimension)
+            {
+                return (Bitmap)source.Clone();
+            }
+
+            var scale = (double)maxDimension / maxSide;
+            var newW = Math.Max(1, (int)Math.Round(w * scale));
+            var newH = Math.Max(1, (int)Math.Round(h * scale));
+
+            var resized = new Bitmap(newW, newH, PixelFormat.Format24bppRgb);
+            using var g = Graphics.FromImage(resized);
+            g.CompositingQuality = CompositingQuality.HighSpeed;
+            g.InterpolationMode = InterpolationMode.HighQualityBilinear;
+            g.SmoothingMode = SmoothingMode.HighSpeed;
+            g.PixelOffsetMode = PixelOffsetMode.HighSpeed;
+            g.DrawImage(source, 0, 0, newW, newH);
+            return resized;
+        }
+
+        private static byte[] EncodeJpeg(Bitmap bmp, long quality)
+        {
+            using var ms = new MemoryStream();
+            var encoder = ImageCodecInfo.GetImageEncoders().FirstOrDefault(e => e.MimeType == "image/jpeg");
+            if (encoder == null)
+            {
+                bmp.Save(ms, ImageFormat.Jpeg);
+                return ms.ToArray();
+            }
+
+            using var parameters = new EncoderParameters(1);
+            parameters.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, quality);
+            bmp.Save(ms, encoder, parameters);
+            return ms.ToArray();
+        }
+
+        private void DisarmShareAfterCapture(string reason)
+        {
+            if (!IsSharing)
+            {
+                return;
+            }
+
+            IsSharing = false;
+            Logger?.LogEvent("share.auto_stop", new { sessionId = SessionId, reason });
         }
 
         public async Task StartTalkAsync()
@@ -984,7 +1179,10 @@ namespace Host.Win.ViewModels
             {
                 IsSpeaking = true;
             }
-            await AudioPlaybackService.PlayLastAsync(System.Threading.CancellationToken.None).ConfigureAwait(false);
+            // Apply current playback speed setting even for replay.
+            var playbackRate = Settings?.VoiceRate ?? 1.0;
+            var volume = Settings?.VoiceVolume ?? 1.0;
+            await AudioPlaybackService.PlayLastAsync(playbackRate, volume, System.Threading.CancellationToken.None).ConfigureAwait(false);
             if (SelectedMode == AssistantMode.Talk)
             {
                 IsSpeaking = false;
@@ -1022,6 +1220,24 @@ namespace Host.Win.ViewModels
         {
             if (markSending && _isSending) return;
             if (string.IsNullOrWhiteSpace(text)) return;
+
+            if (IsSharing)
+            {
+                Logger?.LogEvent("share.attach.prepare", new { sessionId = SessionId, input_type = inputType });
+                try
+                {
+                    using var capCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                    await CaptureAndSendScreenFrameAsync(capCts.Token).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // best-effort
+                }
+                finally
+                {
+                    await RunOnUiAsync(() => DisarmShareAfterCapture("captured")).ConfigureAwait(false);
+                }
+            }
 
             if (markSending)
             {
@@ -1156,12 +1372,16 @@ namespace Host.Win.ViewModels
                 return;
             }
 
-            var ttsText = response.TtsText;
-            if (string.IsNullOrWhiteSpace(ttsText) && !response.Speak)
+            var shouldAutoplay =
+                SelectedMode == AssistantMode.Talk
+                || (SelectedMode == AssistantMode.Chat && (Settings?.TtsEnabledInChat ?? true));
+
+            if (!shouldAutoplay)
             {
                 return;
             }
 
+            var ttsText = response.TtsText;
             if (string.IsNullOrWhiteSpace(ttsText))
             {
                 ttsText = streamingMessage.Text;
@@ -1189,7 +1409,12 @@ namespace Host.Win.ViewModels
                             {
                                 await RunOnUiAsync(() => IsSpeaking = true).ConfigureAwait(false);
                             }
-                            await AudioPlaybackService.PlayAsync(result.AudioBytes, cancellationToken).ConfigureAwait(false);
+                            await AudioPlaybackService.PlayAsync(
+                                    result.AudioBytes,
+                                    Settings?.VoiceRate ?? 1.0,
+                                    Settings?.VoiceVolume ?? 1.0,
+                                    cancellationToken)
+                                .ConfigureAwait(false);
                             if (SelectedMode == AssistantMode.Talk)
                             {
                                 await RunOnUiAsync(() => IsSpeaking = false).ConfigureAwait(false);
@@ -1219,6 +1444,158 @@ namespace Host.Win.ViewModels
         private static Task RunOnUiAsync(Action action)
         {
             return System.Windows.Application.Current.Dispatcher.InvokeAsync(action).Task;
+        }
+
+        private static Task RunOnUiAsync(Action action, DispatcherPriority priority)
+        {
+            return System.Windows.Application.Current.Dispatcher.InvokeAsync(action, priority).Task;
+        }
+
+        private static void RunOnUi(Action action)
+        {
+            var dispatcher = System.Windows.Application.Current.Dispatcher;
+            if (dispatcher.CheckAccess())
+            {
+                action();
+                return;
+            }
+
+            _ = dispatcher.InvokeAsync(action);
+        }
+
+        private static void QueueStreamDelta(Dictionary<string, StringBuilder> dict, string turnId, string delta)
+        {
+            if (string.IsNullOrEmpty(delta) || string.IsNullOrWhiteSpace(turnId))
+            {
+                return;
+            }
+
+            lock (dict)
+            {
+                if (!dict.TryGetValue(turnId, out var sb))
+                {
+                    sb = new StringBuilder();
+                    dict[turnId] = sb;
+                }
+                sb.Append(delta);
+            }
+        }
+
+        private void EnsureStreamFlushTimer()
+        {
+            if (_streamFlushTimer != null)
+            {
+                return;
+            }
+
+            _streamFlushTimer = new DispatcherTimer(DispatcherPriority.Background)
+            {
+                Interval = TimeSpan.FromMilliseconds(33) // ~30fps
+            };
+            _streamFlushTimer.Tick += (_, _) => FlushStreamDeltas();
+            _streamFlushTimer.Start();
+        }
+
+        private void FlushStreamDeltasForTurn(string turnId)
+        {
+            if (string.IsNullOrWhiteSpace(turnId))
+            {
+                return;
+            }
+
+            string? content = null;
+            string? thinking = null;
+
+            lock (_pendingContentByTurn)
+            {
+                if (_pendingContentByTurn.Remove(turnId, out var sb))
+                {
+                    content = sb.ToString();
+                }
+            }
+
+            lock (_pendingThinkingByTurn)
+            {
+                if (_pendingThinkingByTurn.Remove(turnId, out var sb))
+                {
+                    thinking = sb.ToString();
+                }
+            }
+
+            ApplyStreamDeltas(turnId, content, thinking);
+        }
+
+        private void FlushStreamDeltas()
+        {
+            if (!System.Windows.Application.Current.Dispatcher.CheckAccess())
+            {
+                return;
+            }
+
+            var hadPending = false;
+            Dictionary<string, string> content;
+            Dictionary<string, string> thinking;
+
+            lock (_pendingContentByTurn)
+            {
+                hadPending |= _pendingContentByTurn.Count > 0;
+                content = _pendingContentByTurn.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToString());
+                _pendingContentByTurn.Clear();
+            }
+
+            lock (_pendingThinkingByTurn)
+            {
+                hadPending |= _pendingThinkingByTurn.Count > 0;
+                thinking = _pendingThinkingByTurn.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToString());
+                _pendingThinkingByTurn.Clear();
+            }
+
+            if (!hadPending)
+            {
+                _streamFlushTimer?.Stop();
+                _streamFlushTimer = null;
+                return;
+            }
+
+            var allTurnIds = new HashSet<string>(content.Keys);
+            allTurnIds.UnionWith(thinking.Keys);
+
+            foreach (var turnId in allTurnIds)
+            {
+                content.TryGetValue(turnId, out var contentDelta);
+                thinking.TryGetValue(turnId, out var thinkingDelta);
+                ApplyStreamDeltas(turnId, contentDelta, thinkingDelta);
+            }
+        }
+
+        private void ApplyStreamDeltas(string turnId, string? contentDelta, string? thinkingDelta)
+        {
+            if (string.IsNullOrWhiteSpace(turnId))
+            {
+                return;
+            }
+
+            foreach (var message in ChatMessages)
+            {
+                if (!message.IsAssistant || message.TurnId != turnId) continue;
+
+                if (!string.IsNullOrEmpty(contentDelta))
+                {
+                    message.HasContentStream = true;
+                    message.IsStreaming = true;
+                    message.Text += contentDelta;
+                    message.AppendContentChunk(contentDelta);
+                }
+
+                if (!string.IsNullOrEmpty(thinkingDelta))
+                {
+                    message.Reasoning += thinkingDelta;
+                    message.HasReasoning = true;
+                    message.IsReasoningExpanded = true;
+                }
+
+                break;
+            }
         }
 
         private void UpdateSession(string newSessionId)

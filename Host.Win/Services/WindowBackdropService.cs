@@ -9,6 +9,15 @@ namespace Host.Win.Services
         private const int WcaAccentPolicy = 19;
         private const int AccentDisabled = 0;
         private const int AccentEnableAcrylicBlurBehind = 4;
+        private const int DwmwaWindowCornerPreference = 33;
+
+        public enum WindowCornerPreference
+        {
+            Default = 0,
+            DoNotRound = 1,
+            Round = 2,
+            RoundSmall = 3
+        }
 
         [StructLayout(LayoutKind.Sequential)]
         private struct AccentPolicy
@@ -41,6 +50,12 @@ namespace Host.Win.Services
 
         [DllImport("user32.dll")]
         private static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool bRedraw);
+
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmSetWindowAttribute(IntPtr hwnd, int dwAttribute, ref int pvAttribute, int cbAttribute);
+
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmFlush();
 
         public static void ApplyGlass(IntPtr hwnd, bool enabled)
         {
@@ -75,6 +90,52 @@ namespace Host.Win.Services
             {
                 Marshal.FreeHGlobal(ptr);
             }
+        }
+
+        public static bool TrySetRoundedCorners(IntPtr hwnd, WindowCornerPreference preference)
+        {
+            if (hwnd == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            try
+            {
+                var value = (int)preference;
+                return DwmSetWindowAttribute(hwnd, DwmwaWindowCornerPreference, ref value, sizeof(int)) == 0;
+            }
+            catch (DllNotFoundException)
+            {
+                return false;
+            }
+            catch (EntryPointNotFoundException)
+            {
+                return false;
+            }
+        }
+
+        public static void FlushComposition()
+        {
+            try
+            {
+                DwmFlush();
+            }
+            catch (DllNotFoundException)
+            {
+            }
+            catch (EntryPointNotFoundException)
+            {
+            }
+        }
+
+        public static void ClearWindowRegion(IntPtr hwnd)
+        {
+            if (hwnd == IntPtr.Zero)
+            {
+                return;
+            }
+
+            SetWindowRgn(hwnd, IntPtr.Zero, true);
         }
 
         public static void ApplyRoundedCorners(IntPtr hwnd, double widthDip, double heightDip, double radiusDip, double dpiScaleX, double dpiScaleY)
