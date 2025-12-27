@@ -60,6 +60,7 @@
     <SolidColorBrush x:Key="UserBubbleBackground" Color="{StaticResource UserBubbleBackgroundColor}"/>
     <SolidColorBrush x:Key="UserBubbleForeground" Color="{StaticResource UserBubbleForegroundColor}"/>
     <SolidColorBrush x:Key="PopupBackground" Color="{StaticResource PopupBackgroundColor}"/>
+    <SolidColorBrush x:Key="PopupBorder" Color="{StaticResource OverlayBorderColor}"/>
     <SolidColorBrush x:Key="ApprovalAcceptedBackground" Color="{StaticResource ApprovalAcceptedBackgroundColor}"/>
     <SolidColorBrush x:Key="ApprovalAcceptedBorder" Color="{StaticResource ApprovalAcceptedBorderColor}"/>
     <SolidColorBrush x:Key="ApprovalAcceptedForeground" Color="{StaticResource ApprovalAcceptedForegroundColor}"/>

@@ -26,6 +26,9 @@
     <Color x:Key="UserBubbleBackgroundColor">#80314B7A</Color>
     <Color x:Key="UserBubbleForegroundColor">#FFF8FAFC</Color>
     <Color x:Key="PopupBackgroundColor">#CC273450</Color>
+    <Color x:Key="PopupBorderTopColor">#9A2C2560</Color>
+    <Color x:Key="PopupBorderMidColor">#7A2C2560</Color>
+    <Color x:Key="PopupBorderBottomColor">#5A2C2560</Color>
     <Color x:Key="ApprovalAcceptedBackgroundColor">#4FAE91</Color>
     <Color x:Key="ApprovalAcceptedBorderColor">#4FAE91</Color>
     <Color x:Key="ApprovalAcceptedForegroundColor">#FFDCFCE7</Color>
@@ -64,6 +67,11 @@
     <SolidColorBrush x:Key="UserBubbleBackground" Color="{StaticResource UserBubbleBackgroundColor}"/>
     <SolidColorBrush x:Key="UserBubbleForeground" Color="{StaticResource UserBubbleForegroundColor}"/>
     <SolidColorBrush x:Key="PopupBackground" Color="{StaticResource PopupBackgroundColor}"/>
+    <LinearGradientBrush x:Key="PopupBorder" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="{StaticResource PopupBorderTopColor}" Offset="0"/>
+        <GradientStop Color="{StaticResource PopupBorderMidColor}" Offset="0.5"/>
+        <GradientStop Color="{StaticResource PopupBorderBottomColor}" Offset="1"/>
+    </LinearGradientBrush>
     <SolidColorBrush x:Key="ApprovalAcceptedBackground" Color="{StaticResource ApprovalAcceptedBackgroundColor}"/>
     <SolidColorBrush x:Key="ApprovalAcceptedBorder" Color="{StaticResource ApprovalAcceptedBorderColor}"/>
     <SolidColorBrush x:Key="ApprovalAcceptedForeground" Color="{StaticResource ApprovalAcceptedForegroundColor}"/>

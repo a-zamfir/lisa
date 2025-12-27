@@ -163,6 +163,17 @@ namespace Host.Win.Models
             _contentSegments.Clear();
         }
 
+        public void KeepOnlyToolApprovals()
+        {
+            for (var i = _contentSegments.Count - 1; i >= 0; i--)
+            {
+                if (!_contentSegments[i].IsApproval)
+                {
+                    _contentSegments.RemoveAt(i);
+                }
+            }
+        }
+
         public void AppendContentChunk(string chunk)
         {
             if (string.IsNullOrEmpty(chunk))

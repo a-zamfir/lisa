@@ -1133,23 +1133,18 @@
                                                                 </ItemsControl.Style>
                                                                 <ItemsControl.ItemTemplate>
                                                                     <DataTemplate>
-                                                                        <Grid>
-                                                                            <TextBlock Text="{Binding Text}"
-                                                                                       TextWrapping="Wrap"
-                                                                                       Foreground="{DynamicResource AssistantBubbleForeground}">
-                                                                                <TextBlock.Style>
-                                                                                    <Style TargetType="TextBlock">
-                                                                                        <Setter Property="Visibility" Value="Visible"/>
-                                                                                        <Style.Triggers>
-                                                                                            <DataTrigger Binding="{Binding IsApproval}" Value="True">
-                                                                                                <Setter Property="Visibility" Value="Collapsed"/>
-                                                                                            </DataTrigger>
-                                                                                        </Style.Triggers>
-                                                                                    </Style>
-                                                                                </TextBlock.Style>
-                                                                            </TextBlock>
-                                                                            <Border CornerRadius="8"
-                                                                                    Padding="8 6">
+                                                                         <Grid>
+                                                                             <TextBlock Text="{Binding Text}"
+                                                                                        TextWrapping="Wrap"
+                                                                                        Foreground="{DynamicResource AssistantBubbleForeground}">
+                                                                                 <TextBlock.Style>
+                                                                                     <Style TargetType="TextBlock">
+                                                                                         <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                     </Style>
+                                                                                 </TextBlock.Style>
+                                                                             </TextBlock>
+                                                                             <Border CornerRadius="8"
+                                                                                     Padding="8 6">
                                                                                 <Border.Style>
                                                                                     <Style TargetType="Border">
                                                                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -1298,24 +1293,52 @@
                                                             <TextBlock.Style>
                                                                 <Style TargetType="TextBlock">
                                                                     <Setter Property="Visibility" Value="Collapsed"/>
-                                                            <Style.Triggers>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding IsAssistant}" Value="True"/>
-                                                                        <Condition Binding="{Binding IsStreaming}" Value="True"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </MultiDataTrigger>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding IsAssistant}" Value="True"/>
-                                                                        <Condition Binding="{Binding HasMarkdown}" Value="False"/>
-                                                                    </MultiDataTrigger.Conditions>
+                                                                    <Style.Triggers>
+                                                                        <MultiDataTrigger>
+                                                                            <MultiDataTrigger.Conditions>
+                                                                                <Condition Binding="{Binding IsAssistant}" Value="True"/>
+                                                                                <Condition Binding="{Binding HasMarkdown}" Value="False"/>
+                                                                            </MultiDataTrigger.Conditions>
                                                                             <Setter Property="Visibility" Value="Visible"/>
-                                                                </MultiDataTrigger>
-                                                                <DataTrigger Binding="{Binding HasToolApprovals}" Value="True">
+                                                                        </MultiDataTrigger>
+                                                                        <DataTrigger Binding="{Binding IsStreaming}" Value="True">
+                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                        <TextBlock x:Name="AssistantStreamText"
+                                                                   Grid.Row="4"
+                                                                   TextWrapping="Wrap"
+                                                                   Margin="0 10 0 0"
+                                                                   Foreground="{DynamicResource AssistantBubbleForeground}"
+                                                                   MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ScrollViewer}}"
+                                                                   TextOptions.TextFormattingMode="Display"
+                                                                   TextOptions.TextRenderingMode="ClearType"
+                                                                   TextOptions.TextHintingMode="Fixed"
+                                                                   UseLayoutRounding="True"
+                                                                   SnapsToDevicePixels="True"
+                                                                   conv:InlineSegments.Segments="{Binding ContentSegments}">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
                                                                     <Setter Property="Visibility" Value="Collapsed"/>
-                                                                </DataTrigger>
+                                                                    <Style.Triggers>
+                                                                        <MultiDataTrigger>
+                                                                            <MultiDataTrigger.Conditions>
+                                                                                <Condition Binding="{Binding IsAssistant}" Value="True"/>
+                                                                                <Condition Binding="{Binding IsStreaming}" Value="True"/>
+                                                                            </MultiDataTrigger.Conditions>
+                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                        </MultiDataTrigger>
+                                                                        <MultiDataTrigger>
+                                                                            <MultiDataTrigger.Conditions>
+                                                                                <Condition Binding="{Binding IsAssistant}" Value="True"/>
+                                                                                <Condition Binding="{Binding HasContentStream}" Value="True"/>
+                                                                                <Condition Binding="{Binding Text}" Value=""/>
+                                                                            </MultiDataTrigger.Conditions>
+                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                        </MultiDataTrigger>
                                                                     </Style.Triggers>
                                                                 </Style>
                                                             </TextBlock.Style>
@@ -1342,15 +1365,12 @@
                                                                     <DataTrigger Binding="{Binding HasMarkdown}" Value="False">
                                                                         <Setter Property="Visibility" Value="Collapsed"/>
                                                                     </DataTrigger>
-                                                                    <DataTrigger Binding="{Binding IsStreaming}" Value="True">
-                                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                                    </DataTrigger>
-                                                                    <DataTrigger Binding="{Binding HasToolApprovals}" Value="True">
-                                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                            </RichTextBox.Style>
+                                                                 <DataTrigger Binding="{Binding IsStreaming}" Value="True">
+                                                                     <Setter Property="Visibility" Value="Collapsed"/>
+                                                                 </DataTrigger>
+                                                                 </Style.Triggers>
+                                                             </Style>
+                                                             </RichTextBox.Style>
                                                         </RichTextBox>
                                                         <StackPanel Grid.Row="5" Orientation="Horizontal" Margin="0 10 0 0">
                                                             <StackPanel.Style>

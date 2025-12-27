@@ -218,6 +218,7 @@ obj/
 
 # Internal Docs
 pending_implementations.md
+PENDING_IMPLEMENTATIONS.md
 FEATURES.md
 
 # Whisper model files
