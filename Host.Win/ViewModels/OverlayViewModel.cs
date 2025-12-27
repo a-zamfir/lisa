@@ -47,6 +47,7 @@ namespace Host.Win.ViewModels
         private string _greetingName = Environment.UserName;
         private bool _showGreeting = true;
         private bool _isSending;
+        private bool _isThinkArmed;
         private ICommand? _sendChatCommand;
         private ICommand? _copyMessageCommand;
         private ICommand? _retryMessageCommand;
@@ -55,6 +56,7 @@ namespace Host.Win.ViewModels
         private ICommand? _toggleShareCommand;
         private ICommand? _startTalkCommand;
         private ICommand? _replayTtsCommand;
+        private ICommand? _attachFileCommand;
         private HostSettings? _settings;
         private ICommand? _saveSettingsCommand;
         private ICommand? _toggleCollapseCommand;
@@ -101,7 +103,22 @@ namespace Host.Win.ViewModels
         public string GreetingName
         {
             get => _greetingName;
-            set => SetProperty(ref _greetingName, value);
+            set
+            {
+                if (!SetProperty(ref _greetingName, value)) return;
+                OnPropertyChanged(nameof(GreetingText));
+            }
+        }
+
+        public string GreetingText
+        {
+            get
+            {
+                var hour = DateTime.Now.Hour;
+                var greeting = hour < 12 ? "Good morning" : (hour < 18 ? "Good afternoon" : "Good evening");
+                var name = string.IsNullOrWhiteSpace(GreetingName) ? Environment.UserName : GreetingName.Trim();
+                return $"{greeting}, {name}!";
+            }
         }
 
         public bool ShowGreeting
@@ -262,6 +279,18 @@ namespace Host.Win.ViewModels
         {
             get => _replayTtsCommand;
             set => SetProperty(ref _replayTtsCommand, value);
+        }
+
+        public ICommand? AttachFileCommand
+        {
+            get => _attachFileCommand;
+            set => SetProperty(ref _attachFileCommand, value);
+        }
+
+        public bool IsThinkArmed
+        {
+            get => _isThinkArmed;
+            set => SetProperty(ref _isThinkArmed, value);
         }
 
         public HostSettings? Settings

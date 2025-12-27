@@ -138,6 +138,7 @@ namespace Host.Win
             overlayVm.RetryMessageCommand = new Commands.RelayCommand<Models.ChatMessage>(message => _ = overlayVm.RetryAssistantAsync(message));
             overlayVm.StopMessageCommand = new Commands.RelayCommand<Models.ChatMessage>(message => overlayVm.StopMessage(message));
             overlayVm.ResetConversationCommand = new Commands.RelayCommand(() => overlayVm.ResetConversation());
+            overlayVm.AttachFileCommand = new Commands.RelayCommand(() => overlayVm.StatusText = "Attach file (coming soon)");
             overlayVm.ToggleShareCommand = new Commands.RelayCommand(() => overlayVm.ToggleShare());
             overlayVm.StartTalkCommand = new Commands.AsyncRelayCommand(() => overlayVm.StartTalkAsync(), overlayVm.CanStartTalk);
             overlayVm.ReplayTtsCommand = new Commands.AsyncRelayCommand(() => overlayVm.ReplayLastTtsAsync());
