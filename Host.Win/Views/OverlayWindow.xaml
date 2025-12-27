@@ -21,6 +21,7 @@
     <Window.Resources>
         <QuadraticEase x:Key="QuadraticEaseOut" EasingMode="EaseOut"/>
         <QuadraticEase x:Key="QuadraticEaseIn" EasingMode="EaseIn"/>
+        <SineEase x:Key="SineEaseInOut" EasingMode="EaseInOut"/>
         <conv:StringEqualsConverter x:Key="EqualityConverter"/>
         <conv:BoolEqualsConverter x:Key="BoolEqualityConverter"/>
         <Style x:Key="ModeButtonStyle" TargetType="Button">
@@ -360,32 +361,49 @@
         <Style x:Key="ChatStopActionButtonStyle" TargetType="Button" BasedOn="{StaticResource ChatActionButtonStyle}">
             <Setter Property="ToolTip" Value="Stop"/>
             <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
+            <Setter Property="Background" Value="{DynamicResource ApprovalRejectedBackground}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ApprovalRejectedBorder}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="{DynamicResource ApprovalRejectedForeground}"/>
+            <Setter Property="UseLayoutRounding" Value="True"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Grid RenderTransformOrigin="0.5,0.5">
-                            <Grid.RenderTransform>
-                                <ScaleTransform x:Name="Scale" ScaleX="1" ScaleY="1"/>
-                            </Grid.RenderTransform>
-                            <Border x:Name="Pulse"
-                                    Background="{DynamicResource ApprovalRejectedBackground}"
+                        <Grid UseLayoutRounding="False" SnapsToDevicePixels="False">
+                            <!-- Outer glow ring - no effects, just opacity and scale -->
+                            <Border x:Name="GlowRing"
+                                    Width="38" Height="38"
                                     CornerRadius="10"
-                                    Opacity="0"/>
-                            <Border x:Name="Border"
+                                    Background="{TemplateBinding Background}"
+                                    Opacity="0"
+                                    RenderTransformOrigin="0.5,0.5"
+                                    UseLayoutRounding="False"
+                                    IsHitTestVisible="False">
+                                <Border.RenderTransform>
+                                    <ScaleTransform x:Name="GlowScale" ScaleX="1" ScaleY="1"/>
+                                </Border.RenderTransform>
+                            </Border>
+                            <!-- Main button surface -->
+                            <Border x:Name="Surface"
                                     Background="{TemplateBinding Background}"
                                     BorderBrush="{TemplateBinding BorderBrush}"
                                     BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="8">
+                                    CornerRadius="8"
+                                    RenderTransformOrigin="0.5,0.5"
+                                    UseLayoutRounding="False">
+                                <Border.RenderTransform>
+                                    <ScaleTransform x:Name="Scale" ScaleX="1" ScaleY="1"/>
+                                </Border.RenderTransform>
                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}"/>
                                 <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Border" Property="Background" Value="{DynamicResource ButtonBackground}"/>
+                                <Setter TargetName="Surface" Property="Opacity" Value="0.9"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Opacity" Value="0.45"/>
@@ -395,29 +413,37 @@
                                     <Condition Binding="{Binding IsStreaming}" Value="True"/>
                                     <Condition Binding="{Binding IsCancellable}" Value="True"/>
                                 </MultiDataTrigger.Conditions>
-                                <Setter Property="Foreground" Value="{DynamicResource ApprovalRejectedForeground}"/>
-                                <Setter Property="BorderBrush" Value="{DynamicResource ApprovalRejectedBorder}"/>
                                 <Setter Property="ToolTip" Value="Stop generating"/>
                                 <Setter Property="Width" Value="30"/>
                                 <Setter Property="Height" Value="30"/>
                                 <MultiDataTrigger.EnterActions>
                                     <BeginStoryboard x:Name="StopPulseStoryboard">
-                                        <Storyboard RepeatBehavior="Forever" AutoReverse="True">
-                                            <DoubleAnimation Storyboard.TargetName="Pulse"
-                                                             Storyboard.TargetProperty="Opacity"
-                                                             From="0.06" To="0.24"
-                                                             Duration="0:0:0.85"
-                                                             EasingFunction="{StaticResource QuadraticEaseOut}"/>
+                                        <Storyboard RepeatBehavior="Forever" AutoReverse="True" Timeline.DesiredFrameRate="60">
                                             <DoubleAnimation Storyboard.TargetName="Scale"
                                                              Storyboard.TargetProperty="ScaleX"
-                                                             From="1" To="1.08"
-                                                             Duration="0:0:0.85"
-                                                             EasingFunction="{StaticResource QuadraticEaseOut}"/>
+                                                             From="1" To="1.06"
+                                                             Duration="0:0:1.4"
+                                                             EasingFunction="{StaticResource SineEaseInOut}"/>
                                             <DoubleAnimation Storyboard.TargetName="Scale"
                                                              Storyboard.TargetProperty="ScaleY"
-                                                             From="1" To="1.08"
-                                                             Duration="0:0:0.85"
-                                                             EasingFunction="{StaticResource QuadraticEaseOut}"/>
+                                                             From="1" To="1.06"
+                                                             Duration="0:0:1.4"
+                                                             EasingFunction="{StaticResource SineEaseInOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="GlowScale"
+                                                             Storyboard.TargetProperty="ScaleX"
+                                                             From="1" To="0.88"
+                                                             Duration="0:0:1.4"
+                                                             EasingFunction="{StaticResource SineEaseInOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="GlowScale"
+                                                             Storyboard.TargetProperty="ScaleY"
+                                                             From="1" To="0.88"
+                                                             Duration="0:0:1.4"
+                                                             EasingFunction="{StaticResource SineEaseInOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="GlowRing"
+                                                             Storyboard.TargetProperty="Opacity"
+                                                             From="0.45" To="0.18"
+                                                             Duration="0:0:1.4"
+                                                             EasingFunction="{StaticResource SineEaseInOut}"/>
                                         </Storyboard>
                                     </BeginStoryboard>
                                 </MultiDataTrigger.EnterActions>
@@ -776,46 +802,57 @@
                                     </StackPanel>
                                 </Grid>
 
-                                <Button x:Name="SendHintButton"
-                                        Grid.Row="1"
-                                        HorizontalAlignment="Right"
-                                        VerticalAlignment="Center"
-                                        Margin="0 0 10 10"
-                                        Padding="12 0"
-                                        Height="32"
-                                        MinWidth="82"
-                                        Background="Transparent"
-                                        BorderThickness="0"
-                                        Foreground="{DynamicResource SubtleText}"
-                                        Cursor="Hand"
-                                        Command="{Binding SendChatCommand}">
-                                    <Button.Template>
-                                        <ControlTemplate TargetType="Button">
-                                            <Border x:Name="Border"
-                                                    Background="{TemplateBinding Background}"
-                                                    CornerRadius="12"
-                                                    Padding="{TemplateBinding Padding}">
-                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            </Border>
-                                            <ControlTemplate.Triggers>
-                                                <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter TargetName="Border" Property="Background" Value="{DynamicResource ButtonBackground}"/>
-                                                    <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
-                                                </Trigger>
-                                                <Trigger Property="IsPressed" Value="True">
-                                                    <Setter TargetName="Border" Property="Opacity" Value="0.85"/>
-                                                </Trigger>
-                                                <Trigger Property="IsEnabled" Value="False">
-                                                    <Setter TargetName="Border" Property="Opacity" Value="0.55"/>
-                                                </Trigger>
-                                            </ControlTemplate.Triggers>
-                                        </ControlTemplate>
-                                    </Button.Template>
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="&#x21B5;" FontSize="18" Margin="0 0 8 0" VerticalAlignment="Center"/>
-                                        <TextBlock Text="Send" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </Button>
+                                <Grid Grid.Row="1"
+                                      HorizontalAlignment="Right"
+                                      VerticalAlignment="Center"
+                                      Margin="0 0 10 10">
+                                    <Button x:Name="SendHintButton"
+                                            Padding="12 0"
+                                            Height="32"
+                                            MinWidth="82"
+                                            Background="Transparent"
+                                            BorderThickness="0"
+                                            Foreground="{DynamicResource SubtleText}"
+                                            Cursor="Hand"
+                                            Command="{Binding SendChatCommand}">
+                                        <Button.Style>
+                                            <Style TargetType="Button">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasActiveStreaming}" Value="True">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                        <Button.Template>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="Border"
+                                                        Background="{TemplateBinding Background}"
+                                                        CornerRadius="12"
+                                                        Padding="{TemplateBinding Padding}">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="Border" Property="Background" Value="{DynamicResource ButtonBackground}"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsPressed" Value="True">
+                                                        <Setter TargetName="Border" Property="Opacity" Value="0.85"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsEnabled" Value="False">
+                                                        <Setter TargetName="Border" Property="Opacity" Value="0.55"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Button.Template>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#x21B5;" FontSize="18" Margin="0 0 8 0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Send" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
                             </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -1636,13 +1673,6 @@
                                                                     ToolTip="Retry">
                                                                 <TextBlock Text="&#xE72C;" FontFamily="Segoe MDL2 Assets"/>
                                                             </Button>
-                                                            <Button Style="{StaticResource ChatStopActionButtonStyle}"
-                                                                    Command="{Binding DataContext.StopMessageCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                    CommandParameter="{Binding}"
-                                                                    IsEnabled="{Binding IsCancellable}"
-                                                                    Margin="8 0 0 0">
-                                                                <TextBlock Text="&#xE71A;" FontFamily="Segoe MDL2 Assets"/>
-                                                            </Button>
                                                         </StackPanel>
                                                     </Grid>
                                                 </Border>
@@ -1706,6 +1736,30 @@
                                             <KeyBinding Key="Enter" Command="{Binding SendChatCommand}"/>
                                         </TextBox.InputBindings>
                                     </TextBox>
+                                    <!-- Stop button overlay - outside TextBox template for smooth animation -->
+                                    <Button x:Name="StopHintButton"
+                                            Width="32"
+                                            Height="32"
+                                            HorizontalAlignment="Right"
+                                            VerticalAlignment="Bottom"
+                                            Margin="0 0 10 10"
+                                            Cursor="Hand"
+                                            DataContext="{Binding ActiveStreamingMessage}"
+                                            Command="{Binding DataContext.StopMessageCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            CommandParameter="{Binding}"
+                                            IsEnabled="{Binding IsCancellable}">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource ChatStopActionButtonStyle}">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding DataContext.HasActiveStreaming, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                        <TextBlock Text="&#xE71A;" FontFamily="Segoe MDL2 Assets"/>
+                                    </Button>
                                 </Grid>
                                 </Grid>
                         </Grid>

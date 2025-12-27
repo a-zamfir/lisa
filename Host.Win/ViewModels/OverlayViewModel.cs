@@ -48,6 +48,7 @@ namespace Host.Win.ViewModels
         private bool _showGreeting = true;
         private bool _isSending;
         private bool _isThinkArmed;
+        private ChatMessage? _activeStreamingMessage;
         private ICommand? _sendChatCommand;
         private ICommand? _copyMessageCommand;
         private ICommand? _retryMessageCommand;
@@ -293,6 +294,18 @@ namespace Host.Win.ViewModels
             set => SetProperty(ref _isThinkArmed, value);
         }
 
+        public ChatMessage? ActiveStreamingMessage
+        {
+            get => _activeStreamingMessage;
+            private set
+            {
+                if (!SetProperty(ref _activeStreamingMessage, value)) return;
+                OnPropertyChanged(nameof(HasActiveStreaming));
+            }
+        }
+
+        public bool HasActiveStreaming => _activeStreamingMessage != null;
+
         public HostSettings? Settings
         {
             get => _settings;
@@ -515,7 +528,7 @@ namespace Host.Win.ViewModels
 
         public bool CanSendChat() => !_isSending && !string.IsNullOrWhiteSpace(ChatInput);
 
-        private static async Task StreamTextAsync(ChatMessage target, string content, System.Threading.CancellationToken cancellationToken)
+        private async Task StreamTextAsync(ChatMessage target, string content, System.Threading.CancellationToken cancellationToken)
         {
             foreach (var ch in content)
             {
@@ -544,6 +557,11 @@ namespace Host.Win.ViewModels
                     target.ResetContentSegments();
                 }
                 target.IsStreaming = false;
+                target.IsCancellable = false;
+                if (ReferenceEquals(ActiveStreamingMessage, target))
+                {
+                    ActiveStreamingMessage = null;
+                }
             }).ConfigureAwait(false);
         }
 
@@ -572,6 +590,7 @@ namespace Host.Win.ViewModels
             message.ToolLabel = string.Empty;
             message.HasToolLabel = false;
             message.IsCancellable = true;
+            ActiveStreamingMessage = message;
             CommandManager.InvalidateRequerySuggested();
 
             var request = new RetryRequest
@@ -632,8 +651,12 @@ namespace Host.Win.ViewModels
             if (!message.HasContentStream)
             {
                 message.IsStreaming = false;
+                message.IsCancellable = false;
+                if (ReferenceEquals(ActiveStreamingMessage, message))
+                {
+                    ActiveStreamingMessage = null;
+                }
             }
-            message.IsCancellable = false;
             SetRetryableMessage(message);
             _inflightTurns.Remove(request.TurnId);
         }
@@ -780,7 +803,6 @@ namespace Host.Win.ViewModels
                     {
                         if (!message.IsAssistant || message.TurnId != turnId) continue;
                         message.HasContentStream = true;
-                        message.IsCancellable = false;
                         message.IsStreaming = true;
                         break;
                     }
@@ -815,6 +837,10 @@ namespace Host.Win.ViewModels
             message.IsCancellable = false;
             message.ToolLabel = "Stopped";
             message.HasToolLabel = true;
+            if (ReferenceEquals(ActiveStreamingMessage, message))
+            {
+                ActiveStreamingMessage = null;
+            }
         }
 
         public void ClearChatHistory()
@@ -910,6 +936,7 @@ namespace Host.Win.ViewModels
             }
             _inflightTurns.Clear();
             ClearChatHistory();
+            ActiveStreamingMessage = null;
             ShowGreeting = true;
             UpdateSession(Guid.NewGuid().ToString());
             Logger?.LogEvent("conversation.reset", new { sessionId = SessionId });
@@ -1377,6 +1404,7 @@ namespace Host.Win.ViewModels
 
                 SetRetryableMessage(null);
                 ChatMessages.Add(streamingMessage);
+                ActiveStreamingMessage = streamingMessage;
                 OnPropertyChanged(nameof(ChatMessages));
             }).ConfigureAwait(false);
 
@@ -1461,8 +1489,12 @@ namespace Host.Win.ViewModels
                 if (!streamingMessage.HasContentStream)
                 {
                     streamingMessage.IsStreaming = false;
+                    streamingMessage.IsCancellable = false;
+                    if (ReferenceEquals(ActiveStreamingMessage, streamingMessage))
+                    {
+                        ActiveStreamingMessage = null;
+                    }
                 }
-                streamingMessage.IsCancellable = false;
                 SetRetryableMessage(streamingMessage);
                 OnPropertyChanged(nameof(ChatMessages));
             }).ConfigureAwait(false);
@@ -1791,6 +1823,10 @@ namespace Host.Win.ViewModels
 
                 message.IsStreaming = false;
                 message.IsCancellable = false;
+                if (ReferenceEquals(ActiveStreamingMessage, message))
+                {
+                    ActiveStreamingMessage = null;
+                }
 
                 lock (_contentDoneTurns)
                 {
