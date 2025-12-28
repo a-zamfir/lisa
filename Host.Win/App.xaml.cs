@@ -111,6 +111,8 @@ namespace Host.Win
                 {
                     AppTheme.Glass => AppTheme.Dark,
                     AppTheme.Dark => AppTheme.Light,
+                    AppTheme.Light => AppTheme.Glass,
+                    AppTheme.Green => AppTheme.Glass, // Green disabled, cycle back to Glass
                     _ => AppTheme.Glass
                 };
                 _themeService.ApplyTheme(newTheme);

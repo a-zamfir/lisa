@@ -1,0 +1,121 @@
+<!-- File: Host.Win/Themes/GreenTheme.xaml -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Color x:Key="OverlayBackgroundColor">#FF0D4D3D</Color>
+    <Color x:Key="OverlayBorderColor">#FF0F5D4A</Color>
+    <Color x:Key="OverlayForegroundColor">#FFF0FDF4</Color>
+    <Color x:Key="SubtleTextColor">#FFA7F3D0</Color>
+    <Color x:Key="PanelBackgroundColor">#FF0A3D2E</Color>
+    <Color x:Key="ContentBackgroundColor">#FF0C4434</Color>
+    <Color x:Key="ButtonBackgroundColor">#FF0F5D4A</Color>
+    <Color x:Key="ButtonBorderColor">#FF14705E</Color>
+    <Color x:Key="TabBorderColor">#FF14705E</Color>
+    <Color x:Key="ActionButtonBorderColor">#FF14705E</Color>
+    <Color x:Key="IconButtonBorderColor">#FF14705E</Color>
+    <Color x:Key="InputBorderColor">#FF14705E</Color>
+    <Color x:Key="ButtonActiveBackgroundColor">#FF10B981</Color>
+    <Color x:Key="ButtonActiveBorderColor">#FF34D399</Color>
+    <Color x:Key="PrimaryButtonBackgroundColor">#FF047857</Color>
+    <Color x:Key="PrimaryButtonHoverColor">#FF059669</Color>
+    <Color x:Key="PrimaryButtonTextColor">#FFF0FDF4</Color>
+    <Color x:Key="InputFocusBorderColor">#FF34D399</Color>
+    <Color x:Key="RadioCheckedFillColor">#FF34D399</Color>
+    <Color x:Key="AssistantBubbleBackgroundColor">#FF0A3D2E</Color>
+    <Color x:Key="AssistantBubbleForegroundColor">#FFDCFCE7</Color>
+    <Color x:Key="AssistantBubbleBorderColor">#FF14705E</Color>
+    <Color x:Key="UserBubbleBackgroundColor">#FF047857</Color>
+    <Color x:Key="UserBubbleForegroundColor">#FFF0FDF4</Color>
+    <Color x:Key="PopupBackgroundColor">#FF0C4434</Color>
+    <Color x:Key="PopupBorderTopColor">#FF14705E</Color>
+    <Color x:Key="PopupBorderMidColor">#FF0F5D4A</Color>
+    <Color x:Key="PopupBorderBottomColor">#FF0A3D2E</Color>
+    <Color x:Key="ApprovalAcceptedBackgroundColor">#10B981</Color>
+    <Color x:Key="ApprovalAcceptedBorderColor">#10B981</Color>
+    <Color x:Key="ApprovalAcceptedForegroundColor">#FFDCFCE7</Color>
+    <Color x:Key="ApprovalRejectedBackgroundColor">#A96A6A</Color>
+    <Color x:Key="ApprovalRejectedBorderColor">#A96A6A</Color>
+    <Color x:Key="ApprovalRejectedForegroundColor">#FFFEE2E2</Color>
+    <Color x:Key="StatusReadyColor">#FF34D399</Color>
+    <Color x:Key="StatusOfflineColor">#FFF27A7A</Color>
+
+    <LinearGradientBrush x:Key="OverlayBackground" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#FF064E3B" Offset="0"/>
+        <GradientStop Color="#FF047857" Offset="0.55"/>
+        <GradientStop Color="#FF065F46" Offset="1"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="OverlayBorder" Color="{StaticResource OverlayBorderColor}"/>
+    <SolidColorBrush x:Key="OverlayForeground" Color="{StaticResource OverlayForegroundColor}"/>
+    <SolidColorBrush x:Key="SubtleText" Color="{StaticResource SubtleTextColor}"/>
+    <SolidColorBrush x:Key="PanelBackground" Color="{StaticResource PanelBackgroundColor}"/>
+    <SolidColorBrush x:Key="ContentBackground" Color="{StaticResource ContentBackgroundColor}"/>
+    <SolidColorBrush x:Key="ButtonBackground" Color="{StaticResource ButtonBackgroundColor}"/>
+    <SolidColorBrush x:Key="ButtonBorder" Color="{StaticResource ButtonBorderColor}"/>
+    <SolidColorBrush x:Key="TabBorder" Color="{StaticResource TabBorderColor}"/>
+    <SolidColorBrush x:Key="ActionButtonBorder" Color="{StaticResource ActionButtonBorderColor}"/>
+    <SolidColorBrush x:Key="IconButtonBorder" Color="{StaticResource IconButtonBorderColor}"/>
+    <SolidColorBrush x:Key="InputBorder" Color="{StaticResource InputBorderColor}"/>
+    <SolidColorBrush x:Key="ButtonActiveBackground" Color="{StaticResource ButtonActiveBackgroundColor}"/>
+    <SolidColorBrush x:Key="ButtonActiveBorder" Color="{StaticResource ButtonActiveBorderColor}"/>
+    <SolidColorBrush x:Key="PrimaryButtonBackground" Color="{StaticResource PrimaryButtonBackgroundColor}"/>
+    <SolidColorBrush x:Key="PrimaryButtonHover" Color="{StaticResource PrimaryButtonHoverColor}"/>
+    <SolidColorBrush x:Key="PrimaryButtonForeground" Color="{StaticResource PrimaryButtonTextColor}"/>
+    <SolidColorBrush x:Key="InputFocusBorder" Color="{StaticResource InputFocusBorderColor}"/>
+    <SolidColorBrush x:Key="RadioCheckedFill" Color="{StaticResource RadioCheckedFillColor}"/>
+    <SolidColorBrush x:Key="AssistantBubbleBackground" Color="{StaticResource AssistantBubbleBackgroundColor}"/>
+    <SolidColorBrush x:Key="AssistantBubbleForeground" Color="{StaticResource AssistantBubbleForegroundColor}"/>
+    <SolidColorBrush x:Key="AssistantBubbleBorder" Color="{StaticResource AssistantBubbleBorderColor}"/>
+    <SolidColorBrush x:Key="UserBubbleBackground" Color="{StaticResource UserBubbleBackgroundColor}"/>
+    <SolidColorBrush x:Key="UserBubbleForeground" Color="{StaticResource UserBubbleForegroundColor}"/>
+    <SolidColorBrush x:Key="PopupBackground" Color="{StaticResource PopupBackgroundColor}"/>
+    <LinearGradientBrush x:Key="PopupBorder" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="{StaticResource PopupBorderTopColor}" Offset="0"/>
+        <GradientStop Color="{StaticResource PopupBorderMidColor}" Offset="0.5"/>
+        <GradientStop Color="{StaticResource PopupBorderBottomColor}" Offset="1"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="ApprovalAcceptedBackground" Color="{StaticResource ApprovalAcceptedBackgroundColor}"/>
+    <SolidColorBrush x:Key="ApprovalAcceptedBorder" Color="{StaticResource ApprovalAcceptedBorderColor}"/>
+    <SolidColorBrush x:Key="ApprovalAcceptedForeground" Color="{StaticResource ApprovalAcceptedForegroundColor}"/>
+    <SolidColorBrush x:Key="ApprovalRejectedBackground" Color="{StaticResource ApprovalRejectedBackgroundColor}"/>
+    <SolidColorBrush x:Key="ApprovalRejectedBorder" Color="{StaticResource ApprovalRejectedBorderColor}"/>
+    <SolidColorBrush x:Key="ApprovalRejectedForeground" Color="{StaticResource ApprovalRejectedForegroundColor}"/>
+    <SolidColorBrush x:Key="ModeButtonActiveForeground" Color="{StaticResource OverlayForegroundColor}"/>
+    <SolidColorBrush x:Key="StatusReadyBrush" Color="{StaticResource StatusReadyColor}"/>
+    <SolidColorBrush x:Key="StatusOfflineBrush" Color="{StaticResource StatusOfflineColor}"/>
+
+    <Style x:Key="ModeButtonStyle" TargetType="Button">
+        <Setter Property="Margin" Value="6 0"/>
+        <Setter Property="Height" Value="40"/>
+        <Setter Property="Background" Value="{StaticResource ButtonBackground}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource ButtonBorder}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Foreground" Value="{StaticResource OverlayForeground}"/>
+        <Setter Property="FontFamily" Value="Segoe UI"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="border"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="12"
+                            Padding="10 6">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource ButtonActiveBorder}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="{StaticResource ButtonActiveBackground}"/>
+                            <Setter Property="Foreground" Value="{StaticResource OverlayForeground}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>
