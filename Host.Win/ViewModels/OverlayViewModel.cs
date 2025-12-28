@@ -88,6 +88,7 @@ namespace Host.Win.ViewModels
         private const int ScreenShareMaxDimensionPx = 1280;
         private const long ScreenShareJpegQuality = 70L;
         private const int ScreenShareHideMs = 5;
+        private const int MaxChatMessages = 50;
 
         public string? AppName
         {
@@ -848,6 +849,15 @@ namespace Host.Win.ViewModels
             ChatMessages.Clear();
         }
 
+        private void AddChatMessage(ChatMessage message)
+        {
+            ChatMessages.Add(message);
+            while (ChatMessages.Count > MaxChatMessages)
+            {
+                ChatMessages.RemoveAt(0);
+            }
+        }
+
         public void RefreshProviderModels()
         {
             ProviderModels.Clear();
@@ -1216,7 +1226,7 @@ namespace Host.Win.ViewModels
                         {
                             transcriptText = response.Transcript.Trim();
                             hasTranscript = true;
-                            ChatMessages.Add(new ChatMessage
+                            AddChatMessage(new ChatMessage
                             {
                                 Sender = "You",
                                 Text = response.Transcript,
@@ -1394,7 +1404,7 @@ namespace Host.Win.ViewModels
             {
                 if (addUserMessage)
                 {
-                    ChatMessages.Add(new ChatMessage { Sender = "You", Text = text, IsAssistant = false });
+                    AddChatMessage(new ChatMessage { Sender = "You", Text = text, IsAssistant = false });
                 }
 
                 if (addUserMessage && inputType == "text")
@@ -1403,7 +1413,7 @@ namespace Host.Win.ViewModels
                 }
 
                 SetRetryableMessage(null);
-                ChatMessages.Add(streamingMessage);
+                AddChatMessage(streamingMessage);
                 ActiveStreamingMessage = streamingMessage;
                 OnPropertyChanged(nameof(ChatMessages));
             }).ConfigureAwait(false);

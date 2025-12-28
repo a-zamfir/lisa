@@ -220,6 +220,13 @@ obj/
 pending_implementations.md
 PENDING_IMPLEMENTATION.md
 FEATURES.md
+claude_findings.md
+DEPENDENCY_MANAGEMENT.md
 
 # Whisper model files
 Agent.Worker/speech/models/
+
+# Security validation test files
+Agent.MCP/tests/validate_security_fixes.py
+Agent.MCP/tests/test_security_fixes.py
+Agent.MCP/tests/test_security_simple.py

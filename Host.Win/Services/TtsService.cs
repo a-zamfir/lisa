@@ -307,6 +307,14 @@ namespace Host.Win.Services
             if (string.Equals(mode, "python", StringComparison.OrdinalIgnoreCase))
             {
                 var pythonPath = string.IsNullOrWhiteSpace(settings?.PiperPythonPath) ? "python" : settings.PiperPythonPath;
+
+                // SECURITY: Block network paths for user-configured executables
+                if (!string.IsNullOrWhiteSpace(settings?.PiperPythonPath) && IsNetworkPath(settings.PiperPythonPath))
+                {
+                    Trace.TraceWarning($"[TTS] Blocked network path for PiperPythonPath: {settings.PiperPythonPath}");
+                    return new PiperCommand(string.Empty, string.Empty, requiresExistingFile: false);
+                }
+
                 if (IsPiperCommand(pythonPath))
                 {
                     return new PiperCommand(pythonPath, string.Empty, requiresExistingFile: false);
@@ -316,6 +324,13 @@ namespace Host.Win.Services
 
             if (!string.IsNullOrWhiteSpace(settings?.PiperExePath))
             {
+                // SECURITY: Block network paths for user-configured executables
+                if (IsNetworkPath(settings.PiperExePath))
+                {
+                    Trace.TraceWarning($"[TTS] Blocked network path for PiperExePath: {settings.PiperExePath}");
+                    return new PiperCommand(string.Empty, string.Empty, requiresExistingFile: false);
+                }
+
                 return new PiperCommand(settings.PiperExePath, string.Empty, requiresExistingFile: true);
             }
 
@@ -327,6 +342,13 @@ namespace Host.Win.Services
         {
             if (!string.IsNullOrWhiteSpace(settings?.PiperVoiceModelPath))
             {
+                // SECURITY: Block network paths for model files
+                if (IsNetworkPath(settings.PiperVoiceModelPath))
+                {
+                    Trace.TraceWarning($"[TTS] Blocked network path for PiperVoiceModelPath: {settings.PiperVoiceModelPath}");
+                    return string.Empty;
+                }
+
                 return settings.PiperVoiceModelPath;
             }
 
@@ -337,6 +359,13 @@ namespace Host.Win.Services
         {
             if (!string.IsNullOrWhiteSpace(settings?.PiperVoiceConfigPath))
             {
+                // SECURITY: Block network paths for config files
+                if (IsNetworkPath(settings.PiperVoiceConfigPath))
+                {
+                    Trace.TraceWarning($"[TTS] Blocked network path for PiperVoiceConfigPath: {settings.PiperVoiceConfigPath}");
+                    return string.Empty;
+                }
+
                 return settings.PiperVoiceConfigPath;
             }
 
@@ -533,6 +562,18 @@ namespace Host.Win.Services
             var trimmed = value.Trim();
             return trimmed.EndsWith("piper", StringComparison.OrdinalIgnoreCase)
                 || trimmed.EndsWith("piper.exe", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsNetworkPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return false;
+            }
+
+            var trimmed = path.Trim();
+            return trimmed.StartsWith("\\\\", StringComparison.Ordinal)
+                || trimmed.StartsWith("//", StringComparison.Ordinal);
         }
 
         private static string SanitizeText(string text)

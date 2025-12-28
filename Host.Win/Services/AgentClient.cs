@@ -23,6 +23,7 @@ namespace Host.Win.Services
         private string? _mcpAuthToken;
         private readonly DateTime _createdAt = DateTime.UtcNow;
         private readonly TimeSpan _healthErrorGrace = TimeSpan.FromSeconds(5);
+        private const int HealthCheckTimeoutMs = 5000; // 5 seconds for health checks
 
         public AgentClient(Uri baseUri)
         {
@@ -48,7 +49,9 @@ namespace Host.Win.Services
         {
             try
             {
-                var response = await SharedClient.GetAsync(new Uri(_baseUri, "/health"), cancellationToken).ConfigureAwait(false);
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                cts.CancelAfter(HealthCheckTimeoutMs);
+                var response = await SharedClient.GetAsync(new Uri(_baseUri, "/health"), cts.Token).ConfigureAwait(false);
                 return response.IsSuccessStatusCode;
             }
             catch (Exception ex)

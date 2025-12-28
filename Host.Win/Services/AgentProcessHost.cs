@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 
 namespace Host.Win.Services
 {
@@ -202,7 +203,8 @@ namespace Host.Win.Services
 
                 try
                 {
-                    File.WriteAllText(_pidFile, _process.Id.ToString());
+                    var commandLine = $"{_process.StartInfo.FileName} {_process.StartInfo.Arguments}";
+                    WritePidFile(_pidFile, _process.Id, commandLine);
                 }
                 catch (Exception ex)
                 {
@@ -274,7 +276,8 @@ namespace Host.Win.Services
         {
             var venvPath = Path.Combine(workingDir, ".venv");
             var pythonExe = Path.Combine(venvPath, "Scripts", "python.exe");
-            var requirements = Path.Combine(workingDir, "requirements.txt");
+            var requirementsLock = Path.Combine(workingDir, "requirements-lock.txt");
+            var requirements = File.Exists(requirementsLock) ? requirementsLock : Path.Combine(workingDir, "requirements.txt");
             var speechRequirements = Path.Combine(workingDir, "requirements-speech.txt");
 
             if (!Directory.Exists(venvPath) || !File.Exists(pythonExe))
@@ -291,12 +294,33 @@ namespace Host.Win.Services
                     RedirectStandardError = true,
                     CreateNoWindow = true
                 };
+                var created = false;
                 try
                 {
+                    if (_verboseLogging)
+                    {
+                        Trace.WriteLine($"Agent venv: Attempting with 'python' command...");
+                    }
                     var createProc = Process.Start(createPsi);
                     createProc?.WaitForExit(15000);
+                    if (createProc != null && createProc.ExitCode == 0)
+                    {
+                        created = true;
+                        if (_verboseLogging)
+                        {
+                            Trace.WriteLine("Agent venv: Created successfully with 'python' command.");
+                        }
+                    }
                 }
-                catch
+                catch (Exception ex)
+                {
+                    if (_verboseLogging)
+                    {
+                        Trace.WriteLine($"Agent venv: 'python' command failed ({ex.Message}), trying 'py -3' fallback...");
+                    }
+                }
+
+                if (!created)
                 {
                     // Try py -3 fallback
                     createPsi.FileName = "py";
@@ -305,12 +329,29 @@ namespace Host.Win.Services
                     {
                         var createProc = Process.Start(createPsi);
                         createProc?.WaitForExit(15000);
+                        if (createProc != null && createProc.ExitCode == 0)
+                        {
+                            created = true;
+                            if (_verboseLogging)
+                            {
+                                Trace.WriteLine("Agent venv: Created successfully with 'py -3' command.");
+                            }
+                        }
                     }
                     catch (Exception ex)
                     {
-                        Trace.TraceError($"Venv creation failed: {ex.Message}");
+                        Trace.TraceError($"Agent venv creation failed: {ex.Message}");
                     }
                 }
+
+                if (!created && _verboseLogging)
+                {
+                    Trace.TraceWarning("Agent venv: Creation may have failed. Checking for python.exe...");
+                }
+            }
+            else if (_verboseLogging)
+            {
+                Trace.WriteLine($"Agent venv: Already exists at {venvPath}");
             }
 
             if (!File.Exists(pythonExe))
@@ -327,12 +368,34 @@ namespace Host.Win.Services
                 if (!string.Equals(hash, existingHash, StringComparison.OrdinalIgnoreCase))
                 {
                     Trace.WriteLine("Installing agent requirements...");
+                    if (_verboseLogging)
+                    {
+                        Trace.WriteLine("Agent bootstrap: Upgrading pip...");
+                    }
                     RunSilently(pythonExe, "-m pip install --upgrade pip", workingDir, verboseLogging: _verboseLogging);
-                    if (RunSilently(pythonExe, "-m pip install -r requirements.txt", workingDir, verboseLogging: _verboseLogging))
+                    if (_verboseLogging)
+                    {
+                        var reqFile = Path.GetFileName(requirements);
+                        Trace.WriteLine($"Agent bootstrap: Installing {reqFile}...");
+                    }
+                    if (RunSilently(pythonExe, $"-m pip install -r {Path.GetFileName(requirements)}", workingDir, verboseLogging: _verboseLogging))
                     {
                         WriteHash(_requirementsHashFile, hash);
+                        Trace.WriteLine("Agent requirements installed successfully.");
+                    }
+                    else
+                    {
+                        Trace.TraceError("Agent requirements installation failed. Check pip output above.");
                     }
                 }
+                else if (_verboseLogging)
+                {
+                    Trace.WriteLine("Agent requirements: Hash unchanged, skipping installation.");
+                }
+            }
+            else if (_verboseLogging)
+            {
+                Trace.WriteLine($"Agent requirements.txt not found at {requirements}");
             }
 
             if (File.Exists(speechRequirements))
@@ -343,16 +406,29 @@ namespace Host.Win.Services
                 if (!string.Equals(hash, existingHash, StringComparison.OrdinalIgnoreCase))
                 {
                     Trace.WriteLine("Installing optional agent speech requirements...");
+                    if (_verboseLogging)
+                    {
+                        Trace.WriteLine("Agent bootstrap: Installing requirements-speech.txt (prefer binary wheels)...");
+                    }
                     // Prefer wheels to avoid long native builds on fresh machines.
                     if (RunSilently(pythonExe, "-m pip install --prefer-binary -r requirements-speech.txt", workingDir, verboseLogging: _verboseLogging))
                     {
                         WriteHash(_speechRequirementsHashFile, hash);
+                        Trace.WriteLine("Agent speech requirements installed successfully.");
                     }
                     else
                     {
                         Trace.TraceWarning("Optional speech requirements failed to install; STT endpoints will run in fallback mode.");
                     }
                 }
+                else if (_verboseLogging)
+                {
+                    Trace.WriteLine("Agent speech requirements: Hash unchanged, skipping installation.");
+                }
+            }
+            else if (_verboseLogging)
+            {
+                Trace.WriteLine($"Agent requirements-speech.txt not found at {speechRequirements}");
             }
 
             return pythonExe;
@@ -449,22 +525,24 @@ namespace Host.Win.Services
             try
             {
                 if (!File.Exists(_pidFile)) return;
-                var text = File.ReadAllText(_pidFile).Trim();
-                if (!int.TryParse(text, out var pid)) return;
-                using var proc = Process.GetProcesses().FirstOrDefault(p => p.Id == pid);
+
+                var pidInfo = ReadPidFile(_pidFile);
+                if (pidInfo == null) return;
+
+                using var proc = Process.GetProcesses().FirstOrDefault(p => p.Id == pidInfo.Value.Pid);
                 if (proc == null) return;
                 if (!proc.HasExited)
                 {
-                    if (IsExpectedAgentProcess(proc))
+                    // Validate this is the expected process before killing
+                    if (!ValidatePidProcess(proc, pidInfo.Value))
                     {
-                        Trace.WriteLine($"Killing existing agent process PID {pid} before start.");
-                        proc.Kill(entireProcessTree: true);
-                        proc.WaitForExit(5000);
+                        Trace.TraceWarning($"PID {pidInfo.Value.Pid} validation failed - refusing to kill.");
+                        return;
                     }
-                    else
-                    {
-                        Trace.TraceWarning($"Refusing to kill PID {pid} (unexpected process).");
-                    }
+
+                    Trace.WriteLine($"Killing existing agent process PID {pidInfo.Value.Pid} before start.");
+                    proc.Kill(entireProcessTree: true);
+                    proc.WaitForExit(5000);
                 }
             }
             catch
@@ -499,6 +577,146 @@ namespace Host.Win.Services
                 // Accessing MainModule can fail; do not kill if we cannot verify.
             }
             return false;
+        }
+
+        private struct PidFileInfo
+        {
+            public int Pid { get; set; }
+            public string CommandLineHash { get; set; }
+            public DateTime Timestamp { get; set; }
+        }
+
+        private static PidFileInfo? ReadPidFile(string path)
+        {
+            try
+            {
+                var text = File.ReadAllText(path).Trim();
+
+                // Try new JSON format first
+                if (text.StartsWith("{", StringComparison.Ordinal))
+                {
+                    var json = JsonSerializer.Deserialize<PidFileInfo>(text);
+                    return json;
+                }
+
+                // Fall back to legacy plain PID format
+                if (int.TryParse(text, out var pid))
+                {
+                    return new PidFileInfo
+                    {
+                        Pid = pid,
+                        CommandLineHash = string.Empty,
+                        Timestamp = DateTime.MinValue
+                    };
+                }
+
+                return null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static void WritePidFile(string path, int pid, string commandLine)
+        {
+            try
+            {
+                var info = new PidFileInfo
+                {
+                    Pid = pid,
+                    CommandLineHash = ComputeCommandLineHash(commandLine),
+                    Timestamp = DateTime.UtcNow
+                };
+                var json = JsonSerializer.Serialize(info);
+                File.WriteAllText(path, json);
+            }
+            catch
+            {
+                // Fall back to legacy format
+                File.WriteAllText(path, pid.ToString());
+            }
+        }
+
+        private bool ValidatePidProcess(Process process, PidFileInfo pidInfo)
+        {
+            try
+            {
+                // Check 1: Is this an expected agent process (existing validation)
+                if (!IsExpectedAgentProcess(process))
+                {
+                    Trace.TraceWarning($"PID {pidInfo.Pid} is not an expected agent process.");
+                    return false;
+                }
+
+                // Check 2: If we have a command line hash, validate it matches
+                if (!string.IsNullOrWhiteSpace(pidInfo.CommandLineHash))
+                {
+                    var cmdLine = GetProcessCommandLine(process);
+                    if (cmdLine != null)
+                    {
+                        var currentHash = ComputeCommandLineHash(cmdLine);
+                        if (currentHash != pidInfo.CommandLineHash)
+                        {
+                            Trace.TraceWarning($"PID {pidInfo.Pid} command line hash mismatch (PID reuse detected).");
+                            return false;
+                        }
+                    }
+                }
+
+                // Check 3: If timestamp is available, ensure it's recent (< 60 seconds old)
+                if (pidInfo.Timestamp != DateTime.MinValue)
+                {
+                    var age = DateTime.UtcNow - pidInfo.Timestamp;
+                    if (age.TotalSeconds > 60)
+                    {
+                        Trace.TraceWarning($"PID {pidInfo.Pid} file is stale ({age.TotalSeconds:F0}s old).");
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning($"PID validation failed: {ex.Message}");
+                return false;
+            }
+        }
+
+        private static string ComputeCommandLineHash(string commandLine)
+        {
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var bytes = System.Text.Encoding.UTF8.GetBytes(commandLine);
+            var hash = sha.ComputeHash(bytes);
+            return Convert.ToHexString(hash);
+        }
+
+        private static string? GetProcessCommandLine(Process process)
+        {
+            try
+            {
+                using var searcher = new System.Management.ManagementObjectSearcher(
+                    $"SELECT CommandLine FROM Win32_Process WHERE ProcessId = {process.Id}");
+                using var results = searcher.Get();
+                foreach (System.Management.ManagementObject obj in results)
+                {
+                    return obj["CommandLine"]?.ToString();
+                }
+            }
+            catch
+            {
+                // Fall back to filename if WMI fails
+                try
+                {
+                    return process.MainModule?.FileName;
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+            return null;
         }
 
         private static string ComputeFileHash(string path)

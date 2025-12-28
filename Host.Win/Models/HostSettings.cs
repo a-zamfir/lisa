@@ -3,6 +3,7 @@ namespace Host.Win.Models
 {
     public sealed class HostSettings
     {
+        public string SettingsVersion { get; set; } = "0.1.0-alpha";
         public string McpHost { get; set; } = "127.0.0.1";
         public int McpPort { get; set; } = 8123;
         public string AgentHost { get; set; } = "127.0.0.1";

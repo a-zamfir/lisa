@@ -29,7 +29,7 @@
             <Setter Property="Height" Value="40"/>
             <Setter Property="Background" Value="{DynamicResource ButtonBackground}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource TabBorder}"/>
-            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
             <Setter Property="FontFamily" Value="Segoe UI"/>
             <Setter Property="FontSize" Value="14"/>
@@ -45,6 +45,9 @@
                                 BorderThickness="{TemplateBinding BorderThickness}"
                                 CornerRadius="12"
                                 Padding="10 6">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="10" ShadowDepth="1" Opacity="0.25"/>
+                            </Border.Effect>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -787,7 +790,7 @@
                                                 <Button Command="{Binding ResetConversationCommand}"
                                                         Background="{DynamicResource ButtonBackground}"
                                                         BorderBrush="{DynamicResource ButtonBorder}"
-                                                        BorderThickness="1"
+                                                        BorderThickness="0"
                                                         Foreground="{DynamicResource OverlayForeground}"
                                                         Height="32"
                                                         Padding="12 0"
@@ -945,6 +948,9 @@
                         <TextBlock Text="{Binding AppName}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource OverlayForeground}"/>
                         <StackPanel Orientation="Horizontal" Margin="12 0 0 0" VerticalAlignment="Center">
                             <Border Background="{DynamicResource ButtonBackground}" CornerRadius="10" Padding="6 2" Margin="0 0 8 0">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="10" ShadowDepth="1" Opacity="0.25"/>
+                                </Border.Effect>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <Ellipse Width="8" Height="8" Fill="{Binding McpStatusBrush}" VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding McpStatusText}"
@@ -955,6 +961,9 @@
                                 </StackPanel>
                             </Border>
                             <Border Background="{DynamicResource ButtonBackground}" CornerRadius="10" Padding="6 2" Margin="0 0 8 0">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="10" ShadowDepth="1" Opacity="0.25"/>
+                                </Border.Effect>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <Ellipse Width="8" Height="8" Fill="{Binding AgentStatusBrush}" VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding AgentStatusText}"
@@ -965,6 +974,9 @@
                                 </StackPanel>
                             </Border>
                             <Border Background="{DynamicResource ButtonBackground}" CornerRadius="10" Padding="6 2">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="10" ShadowDepth="1" Opacity="0.25"/>
+                                </Border.Effect>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <Ellipse Width="8" Height="8" Fill="{Binding ProviderStatusBrush}" VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding ProviderStatusText}"
@@ -1024,6 +1036,9 @@
 
             <!-- Mode buttons + content -->
             <Border Grid.Row="1" Background="{DynamicResource PanelBackground}" Padding="14" CornerRadius="12">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="10" ShadowDepth="1" Opacity="0.25"/>
+                </Border.Effect>
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>

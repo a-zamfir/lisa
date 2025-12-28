@@ -41,6 +41,19 @@ _callback_queue: "asyncio.Queue[Dict[str, Any]]" = asyncio.Queue(maxsize=8192)
 _callback_sender_task: Optional[asyncio.Task] = None
 _APPROVAL_TIMEOUT_S = 30
 
+# Rate limiting: prevent resource exhaustion from concurrent requests
+_GLOBAL_SEMAPHORE = asyncio.Semaphore(3)  # Max 3 concurrent requests globally
+_SESSION_SEMAPHORES: Dict[str, asyncio.Semaphore] = {}  # Max 1 request per session
+_SESSION_SEMAPHORES_LOCK = asyncio.Lock()
+
+
+async def _get_session_semaphore(session_id: str) -> asyncio.Semaphore:
+    """Get or create a semaphore for a session (max 1 concurrent request per session)."""
+    async with _SESSION_SEMAPHORES_LOCK:
+        if session_id not in _SESSION_SEMAPHORES:
+            _SESSION_SEMAPHORES[session_id] = asyncio.Semaphore(1)
+        return _SESSION_SEMAPHORES[session_id]
+
 
 async def init_tool_cache() -> bool:
     global _tool_context, _tool_context_version
@@ -435,12 +448,77 @@ def _send_content_callback(session_id: str, turn_id: str, phase: str, delta: Opt
 
 @router.get("/health")
 async def health():
+    """Health check endpoint - no auth required for monitoring."""
+    from datetime import datetime
     cfg = load_settings()
-    return {"status": "ok", "provider": f"{cfg.host}:{cfg.port}", "model": cfg.model}
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "service": "agent",
+        "provider": f"{cfg.host}:{cfg.port}",
+        "model": cfg.model
+    }
+
+
+@router.get("/ready")
+async def ready():
+    """Readiness check - verifies dependencies are available."""
+    from datetime import datetime
+    cfg = load_settings()
+
+    # Check MCP client connection
+    mcp_ready = _mcp_client.is_connected() if hasattr(_mcp_client, 'is_connected') else True
+
+    # Check if tools are cached
+    tools_cached = _tool_context is not None
+
+    # Check provider configuration
+    provider_configured = bool(cfg.host and cfg.port and cfg.model)
+
+    all_ready = mcp_ready and tools_cached and provider_configured
+
+    return {
+        "status": "ready" if all_ready else "not_ready",
+        "timestamp": datetime.utcnow().isoformat(),
+        "dependencies": {
+            "mcp_client": mcp_ready,
+            "tools_cached": tools_cached,
+            "provider_configured": provider_configured
+        }
+    }
 
 
 @router.post("/input/text", response_model=AgentResponse)
 async def handle_text(req: TextInput, x_mcp_token: str | None = Header(default=None)):
+    # Rate limiting: acquire global and per-session semaphores
+    session_sem = await _get_session_semaphore(req.session_id)
+
+    # Try to acquire session semaphore (non-blocking)
+    if not session_sem.locked():
+        # Session is available
+        pass
+    else:
+        # Session busy - return 429
+        from fastapi import HTTPException, status
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Session {req.session_id} already has an active request. Please wait."
+        )
+
+    # Try to acquire global semaphore (non-blocking check)
+    if _GLOBAL_SEMAPHORE.locked() and _GLOBAL_SEMAPHORE._value == 0:
+        from fastapi import HTTPException, status
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many concurrent requests. Please try again in a moment."
+        )
+
+    async with session_sem:
+        async with _GLOBAL_SEMAPHORE:
+            return await _handle_text_impl(req, x_mcp_token)
+
+
+async def _handle_text_impl(req: TextInput, x_mcp_token: str | None):
     if x_mcp_token:
         os.environ["MCP_AUTH_TOKEN"] = x_mcp_token
     provider_cfg = load_settings()
@@ -622,6 +700,31 @@ async def handle_text(req: TextInput, x_mcp_token: str | None = Header(default=N
 
 @router.post("/input/retry", response_model=AgentResponse)
 async def handle_retry(req: RetryInput, x_mcp_token: str | None = Header(default=None)):
+    # Rate limiting: acquire global and per-session semaphores
+    session_sem = await _get_session_semaphore(req.session_id)
+
+    # Try to acquire session semaphore (non-blocking)
+    if session_sem.locked():
+        from fastapi import HTTPException, status
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Session {req.session_id} already has an active request. Please wait."
+        )
+
+    # Try to acquire global semaphore (non-blocking check)
+    if _GLOBAL_SEMAPHORE.locked() and _GLOBAL_SEMAPHORE._value == 0:
+        from fastapi import HTTPException, status
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many concurrent requests. Please try again in a moment."
+        )
+
+    async with session_sem:
+        async with _GLOBAL_SEMAPHORE:
+            return await _handle_retry_impl(req, x_mcp_token)
+
+
+async def _handle_retry_impl(req: RetryInput, x_mcp_token: str | None):
     if x_mcp_token:
         os.environ["MCP_AUTH_TOKEN"] = x_mcp_token
     start_time = time.monotonic()

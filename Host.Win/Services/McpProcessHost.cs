@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 
 namespace Host.Win.Services
 {
@@ -15,6 +16,7 @@ namespace Host.Win.Services
         private Process? _process;
         private readonly string _mcpPath;
         private readonly int _port;
+        private readonly string _mcpRoot;
         private readonly string _pidFile;
         private readonly string _requirementsHashFile;
         private readonly string _authToken;
@@ -25,6 +27,7 @@ namespace Host.Win.Services
         {
             _mcpPath = mcpPath;
             _port = port;
+            _mcpRoot = Path.GetDirectoryName(mcpPath) ?? Environment.CurrentDirectory;
             _verboseLogging = verboseLogging;
             var localDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LISA");
             Directory.CreateDirectory(localDir);
@@ -128,7 +131,8 @@ namespace Host.Win.Services
 
                 try
                 {
-                    File.WriteAllText(_pidFile, _process.Id.ToString());
+                    var commandLine = $"{_process.StartInfo.FileName} {_process.StartInfo.Arguments}";
+                    WritePidFile(_pidFile, _process.Id, commandLine);
                 }
                 catch (Exception ex)
                 {
@@ -185,7 +189,8 @@ namespace Host.Win.Services
         {
             var venvPath = Path.Combine(workingDir, ".venv");
             var pythonExe = Path.Combine(venvPath, "Scripts", "python.exe");
-            var requirements = Path.Combine(workingDir, "requirements.txt");
+            var requirementsLock = Path.Combine(workingDir, "requirements-lock.txt");
+            var requirements = File.Exists(requirementsLock) ? requirementsLock : Path.Combine(workingDir, "requirements.txt");
 
             if (!Directory.Exists(venvPath) || !File.Exists(pythonExe))
             {
@@ -200,12 +205,33 @@ namespace Host.Win.Services
                     RedirectStandardError = true,
                     CreateNoWindow = true
                 };
+                var created = false;
                 try
                 {
+                    if (_verboseLogging)
+                    {
+                        Trace.WriteLine($"MCP venv: Attempting with 'python' command...");
+                    }
                     var createProc = Process.Start(createPsi);
                     createProc?.WaitForExit(15000);
+                    if (createProc != null && createProc.ExitCode == 0)
+                    {
+                        created = true;
+                        if (_verboseLogging)
+                        {
+                            Trace.WriteLine("MCP venv: Created successfully with 'python' command.");
+                        }
+                    }
                 }
-                catch
+                catch (Exception ex)
+                {
+                    if (_verboseLogging)
+                    {
+                        Trace.WriteLine($"MCP venv: 'python' command failed ({ex.Message}), trying 'py -3' fallback...");
+                    }
+                }
+
+                if (!created)
                 {
                     createPsi.FileName = "py";
                     createPsi.Arguments = "-3 -m venv .venv";
@@ -213,12 +239,29 @@ namespace Host.Win.Services
                     {
                         var createProc = Process.Start(createPsi);
                         createProc?.WaitForExit(15000);
+                        if (createProc != null && createProc.ExitCode == 0)
+                        {
+                            created = true;
+                            if (_verboseLogging)
+                            {
+                                Trace.WriteLine("MCP venv: Created successfully with 'py -3' command.");
+                            }
+                        }
                     }
                     catch (Exception ex)
                     {
                         Trace.TraceError($"MCP venv creation failed: {ex.Message}");
                     }
                 }
+
+                if (!created && _verboseLogging)
+                {
+                    Trace.TraceWarning("MCP venv: Creation may have failed. Checking for python.exe...");
+                }
+            }
+            else if (_verboseLogging)
+            {
+                Trace.WriteLine($"MCP venv: Already exists at {venvPath}");
             }
 
             if (!File.Exists(pythonExe))
@@ -235,12 +278,34 @@ namespace Host.Win.Services
                 if (!string.Equals(hash, existingHash, StringComparison.OrdinalIgnoreCase))
                 {
                     Trace.WriteLine("Installing MCP requirements...");
+                    if (_verboseLogging)
+                    {
+                        Trace.WriteLine("MCP bootstrap: Upgrading pip...");
+                    }
                     RunSilently(pythonExe, "-m pip install --upgrade pip", workingDir, verboseLogging: _verboseLogging);
-                    if (RunSilently(pythonExe, "-m pip install -r requirements.txt", workingDir, verboseLogging: _verboseLogging))
+                    if (_verboseLogging)
+                    {
+                        var reqFile = Path.GetFileName(requirements);
+                        Trace.WriteLine($"MCP bootstrap: Installing {reqFile}...");
+                    }
+                    if (RunSilently(pythonExe, $"-m pip install -r {Path.GetFileName(requirements)}", workingDir, verboseLogging: _verboseLogging))
                     {
                         WriteHash(_requirementsHashFile, hash);
+                        Trace.WriteLine("MCP requirements installed successfully.");
+                    }
+                    else
+                    {
+                        Trace.TraceError("MCP requirements installation failed. Check pip output above.");
                     }
                 }
+                else if (_verboseLogging)
+                {
+                    Trace.WriteLine("MCP requirements: Hash unchanged, skipping installation.");
+                }
+            }
+            else if (_verboseLogging)
+            {
+                Trace.WriteLine($"MCP requirements.txt not found at {requirements}");
             }
 
             return pythonExe;
@@ -290,13 +355,22 @@ namespace Host.Win.Services
             try
             {
                 if (!File.Exists(_pidFile)) return;
-                var text = File.ReadAllText(_pidFile).Trim();
-                if (!int.TryParse(text, out var pid)) return;
-                using var proc = Process.GetProcesses().FirstOrDefault(p => p.Id == pid);
+
+                var pidInfo = ReadPidFile(_pidFile);
+                if (pidInfo == null) return;
+
+                using var proc = Process.GetProcesses().FirstOrDefault(p => p.Id == pidInfo.Value.Pid);
                 if (proc == null) return;
                 if (!proc.HasExited)
                 {
-                    Trace.WriteLine($"Killing existing MCP process PID {pid} before start.");
+                    // Validate this is the expected process before killing
+                    if (!ValidatePidProcess(proc, pidInfo.Value))
+                    {
+                        Trace.TraceWarning($"PID {pidInfo.Value.Pid} validation failed - refusing to kill.");
+                        return;
+                    }
+
+                    Trace.WriteLine($"Killing existing MCP process PID {pidInfo.Value.Pid} before start.");
                     proc.Kill(entireProcessTree: true);
                     proc.WaitForExit(5000);
                 }
@@ -305,6 +379,174 @@ namespace Host.Win.Services
             {
                 // ignore
             }
+            finally
+            {
+                try
+                {
+                    if (File.Exists(_pidFile))
+                    {
+                        File.Delete(_pidFile);
+                    }
+                }
+                catch { }
+            }
+        }
+
+        private struct PidFileInfo
+        {
+            public int Pid { get; set; }
+            public string CommandLineHash { get; set; }
+            public DateTime Timestamp { get; set; }
+        }
+
+        private static PidFileInfo? ReadPidFile(string path)
+        {
+            try
+            {
+                var text = File.ReadAllText(path).Trim();
+
+                // Try new JSON format first
+                if (text.StartsWith("{", StringComparison.Ordinal))
+                {
+                    var json = JsonSerializer.Deserialize<PidFileInfo>(text);
+                    return json;
+                }
+
+                // Fall back to legacy plain PID format
+                if (int.TryParse(text, out var pid))
+                {
+                    return new PidFileInfo
+                    {
+                        Pid = pid,
+                        CommandLineHash = string.Empty,
+                        Timestamp = DateTime.MinValue
+                    };
+                }
+
+                return null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static void WritePidFile(string path, int pid, string commandLine)
+        {
+            try
+            {
+                var info = new PidFileInfo
+                {
+                    Pid = pid,
+                    CommandLineHash = ComputeCommandLineHash(commandLine),
+                    Timestamp = DateTime.UtcNow
+                };
+                var json = JsonSerializer.Serialize(info);
+                File.WriteAllText(path, json);
+            }
+            catch
+            {
+                // Fall back to legacy format
+                File.WriteAllText(path, pid.ToString());
+            }
+        }
+
+        private bool ValidatePidProcess(Process process, PidFileInfo pidInfo)
+        {
+            try
+            {
+                // Check 1: Is this an expected MCP process (verify it's in our MCP directory)
+                if (!IsExpectedMcpProcess(process))
+                {
+                    Trace.TraceWarning($"PID {pidInfo.Pid} is not an expected MCP process.");
+                    return false;
+                }
+
+                // Check 2: If we have a command line hash, validate it matches
+                if (!string.IsNullOrWhiteSpace(pidInfo.CommandLineHash))
+                {
+                    var cmdLine = GetProcessCommandLine(process);
+                    if (cmdLine != null)
+                    {
+                        var currentHash = ComputeCommandLineHash(cmdLine);
+                        if (currentHash != pidInfo.CommandLineHash)
+                        {
+                            Trace.TraceWarning($"PID {pidInfo.Pid} command line hash mismatch (PID reuse detected).");
+                            return false;
+                        }
+                    }
+                }
+
+                // Check 3: If timestamp is available, ensure it's recent (< 60 seconds old)
+                if (pidInfo.Timestamp != DateTime.MinValue)
+                {
+                    var age = DateTime.UtcNow - pidInfo.Timestamp;
+                    if (age.TotalSeconds > 60)
+                    {
+                        Trace.TraceWarning($"PID {pidInfo.Pid} file is stale ({age.TotalSeconds:F0}s old).");
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning($"PID validation failed: {ex.Message}");
+                return false;
+            }
+        }
+
+        private bool IsExpectedMcpProcess(Process process)
+        {
+            try
+            {
+                var exe = process.MainModule?.FileName;
+                if (!string.IsNullOrWhiteSpace(exe))
+                {
+                    return exe.StartsWith(_mcpRoot, StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            catch
+            {
+                // Accessing MainModule can fail; do not kill if we cannot verify.
+            }
+            return false;
+        }
+
+        private static string ComputeCommandLineHash(string commandLine)
+        {
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var bytes = System.Text.Encoding.UTF8.GetBytes(commandLine);
+            var hash = sha.ComputeHash(bytes);
+            return Convert.ToHexString(hash);
+        }
+
+        private static string? GetProcessCommandLine(Process process)
+        {
+            try
+            {
+                using var searcher = new System.Management.ManagementObjectSearcher(
+                    $"SELECT CommandLine FROM Win32_Process WHERE ProcessId = {process.Id}");
+                using var results = searcher.Get();
+                foreach (System.Management.ManagementObject obj in results)
+                {
+                    return obj["CommandLine"]?.ToString();
+                }
+            }
+            catch
+            {
+                // Fall back to filename if WMI fails
+                try
+                {
+                    return process.MainModule?.FileName;
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+            return null;
         }
 
         private static string ComputeFileHash(string path)
