@@ -58,6 +58,8 @@ namespace Host.Win.ViewModels
         private ICommand? _startTalkCommand;
         private ICommand? _replayTtsCommand;
         private ICommand? _attachFileCommand;
+        private ICommand? _toggleMcpServerCommand;
+        private ObservableCollection<McpServerItem> _mcpServers = new();
         private HostSettings? _settings;
         private ICommand? _saveSettingsCommand;
         private ICommand? _toggleCollapseCommand;
@@ -80,6 +82,7 @@ namespace Host.Win.ViewModels
         private double _overlayHeight = ExpandedHeight;
         private readonly SemaphoreSlim _screenShareCaptureGate = new(1, 1);
         public Func<double, Task>? SetOverlayOpacityAsync { get; set; }
+        public Action? RequestScrollToEnd { get; set; }
 
         private const double ExpandedWidth = 720;
         private const double ExpandedHeight = 460;
@@ -289,6 +292,18 @@ namespace Host.Win.ViewModels
             set => SetProperty(ref _attachFileCommand, value);
         }
 
+        public ICommand? ToggleMcpServerCommand
+        {
+            get => _toggleMcpServerCommand;
+            set => SetProperty(ref _toggleMcpServerCommand, value);
+        }
+
+        public ObservableCollection<McpServerItem> McpServers
+        {
+            get => _mcpServers;
+            set => SetProperty(ref _mcpServers, value);
+        }
+
         public bool IsThinkArmed
         {
             get => _isThinkArmed;
@@ -316,7 +331,45 @@ namespace Host.Win.ViewModels
                 ProviderType = _settings?.ProviderType ?? "Ollama";
                 OnPropertyChanged(nameof(VoiceRatePercent));
                 OnPropertyChanged(nameof(VoiceVolumePercent));
+                RefreshMcpServers();
             }
+        }
+
+        /// <summary>
+        /// Populate the McpServers collection from settings.
+        /// </summary>
+        public void RefreshMcpServers()
+        {
+            McpServers.Clear();
+            if (_settings?.McpServers == null) return;
+
+            foreach (var (name, config) in _settings.McpServers)
+            {
+                if (!config.Enabled) continue;
+                McpServers.Add(new McpServerItem(name, config.Description, config.Active));
+            }
+        }
+
+        /// <summary>
+        /// Toggle the active state of an MCP server.
+        /// </summary>
+        public void ToggleMcpServer(McpServerItem server)
+        {
+            server.IsActive = !server.IsActive;
+
+            // Update the underlying config
+            if (_settings?.McpServers != null && _settings.McpServers.TryGetValue(server.Name, out var config))
+            {
+                config.Active = server.IsActive;
+            }
+        }
+
+        /// <summary>
+        /// Get the list of active MCP server names for filtering tools.
+        /// </summary>
+        public List<string> GetActiveMcpServerNames()
+        {
+            return McpServers.Where(s => s.IsActive).Select(s => s.Name).ToList();
         }
 
         public int VoiceRatePercent
@@ -1418,6 +1471,9 @@ namespace Host.Win.ViewModels
                 OnPropertyChanged(nameof(ChatMessages));
             }).ConfigureAwait(false);
 
+            var activeMcps = GetActiveMcpServerNames();
+            Trace.WriteLine($"[MCP] Active MCPs: {string.Join(", ", activeMcps)} (count={activeMcps.Count}, total servers={McpServers.Count})");
+
             var request = new TextInputRequest
             {
                 SessionId = SessionId,
@@ -1425,7 +1481,8 @@ namespace Host.Win.ViewModels
                 Text = text,
                 InputMeta = new InputMetadata
                 {
-                    SessionNonce = SessionNonce
+                    SessionNonce = SessionNonce,
+                    ActiveMcps = activeMcps
                 }
             };
 
@@ -1435,7 +1492,8 @@ namespace Host.Win.ViewModels
                 request.TurnId,
                 input_type = inputType,
                 request.Text,
-                request.InputMeta
+                request.InputMeta,
+                activeMcps
             });
 
             AgentResponse? response = null;
@@ -1846,6 +1904,9 @@ namespace Host.Win.ViewModels
                 {
                     _finalContentByTurn.Remove(turnId);
                 }
+
+                // Request scroll after layout settles to avoid jump
+                RequestScrollToEnd?.Invoke();
             }
         }
 
@@ -1969,6 +2030,30 @@ namespace Host.Win.ViewModels
 
             target ??= ChatMessages.LastOrDefault(message => message.IsAssistant);
             target?.AddToolApprovalLabel(toolName, approved);
+        }
+
+        public void HandleToolAutoApproved(AgentToolCallback callback)
+        {
+            var toolName = callback.ToolName;
+            if (string.IsNullOrWhiteSpace(toolName) && callback.ToolCalls.Count > 0)
+            {
+                toolName = callback.ToolCalls[0];
+            }
+            toolName ??= "tool";
+
+            ChatMessage? target = null;
+            foreach (var message in ChatMessages)
+            {
+                if (!message.IsAssistant) continue;
+                if (message.TurnId == callback.TurnId)
+                {
+                    target = message;
+                    break;
+                }
+            }
+
+            target ??= ChatMessages.LastOrDefault(message => message.IsAssistant);
+            target?.AddAutoApprovedLabel(toolName);
         }
     }
 }

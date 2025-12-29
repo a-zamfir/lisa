@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 
-from agent_mcp.app import app
+from mcp_server.app import app
 
 DEFAULT_PORT = int(os.environ.get("MCP_PORT", "8123"))
 VERBOSE = os.environ.get("LISA_VERBOSE_LOGGING", "").strip().lower() in {"1", "true", "yes", "on"}

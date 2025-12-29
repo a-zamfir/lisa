@@ -30,10 +30,10 @@
     <Color x:Key="PopupBorderMidColor">#7A2C2560</Color>
     <Color x:Key="PopupBorderBottomColor">#5A2C2560</Color>
     <Color x:Key="ApprovalAcceptedBackgroundColor">#4FAE91</Color>
-    <Color x:Key="ApprovalAcceptedBorderColor">#4FAE91</Color>
+    <Color x:Key="ApprovalAcceptedBorderColor">#3D8A73</Color>
     <Color x:Key="ApprovalAcceptedForegroundColor">#FFDCFCE7</Color>
     <Color x:Key="ApprovalRejectedBackgroundColor">#A96A6A</Color>
-    <Color x:Key="ApprovalRejectedBorderColor">#A96A6A</Color>
+    <Color x:Key="ApprovalRejectedBorderColor">#8B5252</Color>
     <Color x:Key="ApprovalRejectedForegroundColor">#FFFEE2E2</Color>
     <Color x:Key="StatusReadyColor">#FF3DD6A6</Color>
     <Color x:Key="StatusOfflineColor">#FFF27A7A</Color>

@@ -79,12 +79,30 @@ namespace Host.Win.Converters
             }
             SetPendingText(rtb, text);
             HookForegroundChanges(rtb);
+
+            // Render immediately on first set (no debounce) to avoid flash
+            var lastRendered = GetLastRenderedText(rtb);
+            if (string.IsNullOrEmpty(lastRendered))
+            {
+                SetLastRenderedText(rtb, text);
+                SetLastRenderTicks(rtb, DateTime.UtcNow.Ticks);
+                try
+                {
+                    rtb.Document = BuildFlowDocument(text, rtb.Foreground as WpfMedia.Brush);
+                }
+                catch
+                {
+                    rtb.Document = BuildPlainDocument(text, rtb.Foreground as WpfMedia.Brush);
+                }
+                return;
+            }
+
             var timer = GetRenderTimer(rtb);
             if (timer == null)
             {
-                timer = new DispatcherTimer(DispatcherPriority.Background)
+                timer = new DispatcherTimer(DispatcherPriority.Render)
                 {
-                    Interval = TimeSpan.FromMilliseconds(120)
+                    Interval = TimeSpan.FromMilliseconds(50)
                 };
                 timer.Tick += (_, _) =>
                 {
@@ -188,7 +206,8 @@ namespace Host.Win.Converters
             {
                 PagePadding = new Thickness(0),
                 FontFamily = new WpfMedia.FontFamily("Segoe UI"),
-                FontSize = 14
+                FontSize = 14,
+                LineHeight = 1
             };
             if (foreground != null)
             {
@@ -234,11 +253,11 @@ namespace Host.Win.Converters
 
                 if (string.IsNullOrWhiteSpace(line))
                 {
-                    doc.Blocks.Add(new Paragraph { Margin = new Thickness(0, 6, 0, 6) });
+                    doc.Blocks.Add(new Paragraph { Margin = new Thickness(0), FontSize = 2 });
                     continue;
                 }
 
-                var paragraph = new Paragraph { Margin = new Thickness(0, 0, 0, 4) };
+                var paragraph = new Paragraph { Margin = new Thickness(0) };
                 foreach (var inline in ParseInline(line, foreground))
                 {
                     paragraph.Inlines.Add(inline);
@@ -251,7 +270,7 @@ namespace Host.Win.Converters
 
         private static Block BuildCodeLine(string line, WpfMedia.Brush? foreground)
         {
-            var paragraph = new Paragraph { Margin = new Thickness(0, 0, 0, 2) };
+            var paragraph = new Paragraph { Margin = new Thickness(0) };
             var run = new Run(line)
             {
                 FontFamily = new WpfMedia.FontFamily("Consolas"),
@@ -307,7 +326,7 @@ namespace Host.Win.Converters
 
             var paragraph = new Paragraph
             {
-                Margin = new Thickness(0, 8, 0, 4),
+                Margin = new Thickness(0, 6, 0, 2),
                 FontSize = size,
                 FontWeight = FontWeights.SemiBold
             };
@@ -371,7 +390,7 @@ namespace Host.Win.Converters
 
         private static Block BuildListItem(string itemText, WpfMedia.Brush? foreground)
         {
-            var paragraph = new Paragraph { Margin = new Thickness(14, 0, 0, 2) };
+            var paragraph = new Paragraph { Margin = new Thickness(14, 0, 0, 0) };
             var bullet = new Run("• ")
             {
                 FontWeight = FontWeights.SemiBold
@@ -394,7 +413,8 @@ namespace Host.Win.Converters
             {
                 PagePadding = new Thickness(0),
                 FontFamily = new WpfMedia.FontFamily("Segoe UI"),
-                FontSize = 14
+                FontSize = 14,
+                LineHeight = 1
             };
             if (foreground != null)
             {

@@ -230,3 +230,20 @@ Agent.Worker/speech/models/
 Agent.MCP/tests/validate_security_fixes.py
 Agent.MCP/tests/test_security_fixes.py
 Agent.MCP/tests/test_security_simple.py
+
+
+# Refactoring elements
+test_init_message.json
+test_simple_stdio.py
+test_stdio.py
+test-stdio-settings.json
+test_mcp_http.py
+test_security_fixes.py
+test_security_simple.py
+validate_security_fixes.py
+MCP_GATEWAY_FIXES.md
+MCP_GATEWAY_SETUP.md
+MCP_REFACTORING.md
+MCP_STDIO_REFACTOR.md
+MCP_TROUBLESHOOTING.md
+.claude

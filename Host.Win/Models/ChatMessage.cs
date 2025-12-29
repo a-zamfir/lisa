@@ -190,6 +190,11 @@ namespace Host.Win.Models
             _contentSegments.Add(ChatContentSegment.ApprovalSegment(toolName, approved));
         }
 
+        public void AddAutoApprovedLabel(string toolName)
+        {
+            _contentSegments.Add(ChatContentSegment.AutoApprovedSegment(toolName));
+        }
+
         private void EnsureTextSegment()
         {
             if (_contentSegments.Count == 0 || _contentSegments[^1].IsApproval)

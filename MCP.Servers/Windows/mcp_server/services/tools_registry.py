@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, List, Optional
 
-from agent_mcp.services.ps import escape_ps_string, parse_uptime, run_powershell, run_ps_json, validate_path
+from mcp_server.services.ps import escape_ps_string, parse_uptime, run_powershell, run_ps_json, validate_path
 
 
 def get_tool_docs() -> List[Dict[str, Any]]:

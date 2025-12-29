@@ -1,4 +1,4 @@
-// File: Host.Win/Services/McpProcessHost.cs
+// File: Host.Win/Services/McpGatewayProcessHost.cs
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -9,32 +9,31 @@ using System.Text.Json;
 namespace Host.Win.Services
 {
     /// <summary>
-    /// Launches and stops the local MCP server.
+    /// Launches and stops the MCP Gateway orchestrator.
     /// </summary>
-    public sealed class McpProcessHost : IDisposable
+    public sealed class McpGatewayProcessHost : IDisposable
     {
         private Process? _process;
-        private readonly string _mcpPath;
+        private readonly string _gatewayPath;
         private readonly int _port;
-        private readonly string _mcpRoot;
+        private readonly string _gatewayRoot;
         private readonly string _pidFile;
         private readonly string _requirementsHashFile;
         private readonly string _authToken;
         private readonly bool _verboseLogging;
         private IntPtr _jobHandle = IntPtr.Zero;
 
-        public McpProcessHost(string mcpPath, int port, bool verboseLogging = false, string? sharedAuthToken = null)
+        public McpGatewayProcessHost(string gatewayPath, int port, bool verboseLogging = false)
         {
-            _mcpPath = mcpPath;
+            _gatewayPath = gatewayPath;
             _port = port;
-            _mcpRoot = Path.GetDirectoryName(mcpPath) ?? Environment.CurrentDirectory;
+            _gatewayRoot = Path.GetDirectoryName(gatewayPath) ?? Environment.CurrentDirectory;
             _verboseLogging = verboseLogging;
             var localDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LISA");
             Directory.CreateDirectory(localDir);
-            _pidFile = Path.Combine(localDir, "mcp.pid");
-            _requirementsHashFile = Path.Combine(localDir, "mcp-requirements.sha256");
-            // Use shared token if provided, otherwise generate new one
-            _authToken = sharedAuthToken ?? Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+            _pidFile = Path.Combine(localDir, "mcp-gateway.pid");
+            _requirementsHashFile = Path.Combine(localDir, "mcp-gateway-requirements.sha256");
+            _authToken = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
         }
 
         public string AuthToken => _authToken;
@@ -42,21 +41,21 @@ namespace Host.Win.Services
         public void Start()
         {
             if (_process != null && !_process.HasExited) return;
-            if (!File.Exists(_mcpPath))
+            if (!File.Exists(_gatewayPath))
             {
-                Trace.TraceWarning($"MCP path not found: {_mcpPath}");
+                Trace.TraceWarning($"MCP Gateway path not found: {_gatewayPath}");
                 return;
             }
 
-            var workingDir = Path.GetDirectoryName(_mcpPath) ?? Environment.CurrentDirectory;
-            Trace.WriteLine($"MCP working dir resolved: {workingDir}");
+            var workingDir = Path.GetDirectoryName(_gatewayPath) ?? Environment.CurrentDirectory;
+            Trace.WriteLine($"MCP Gateway working dir resolved: {workingDir}");
             var pythonPath = EnsureVenv(workingDir);
             if (pythonPath == null)
             {
-                Trace.TraceError("Unable to create or locate Python interpreter for MCP.");
+                Trace.TraceError("Unable to create or locate Python interpreter for MCP Gateway.");
                 return;
             }
-            Trace.WriteLine($"MCP python resolved: {pythonPath}");
+            Trace.WriteLine($"MCP Gateway python resolved: {pythonPath}");
 
             TryKillExistingPid();
 
@@ -70,22 +69,23 @@ namespace Host.Win.Services
                 RedirectStandardError = true,
                 RedirectStandardOutput = true
             };
-            psi.Environment["MCP_PORT"] = _port.ToString();
+            psi.Environment["MCP_GATEWAY_PORT"] = _port.ToString();
+            psi.Environment["MCP_PORT"] = _port.ToString(); // Fallback
             psi.Environment["PYTHONPATH"] = workingDir;
             psi.Environment["MCP_AUTH_TOKEN"] = _authToken;
             psi.Environment["LISA_VERBOSE_LOGGING"] = _verboseLogging ? "1" : "0";
-            Trace.WriteLine($"MCP env: MCP_PORT={_port} verbose={_verboseLogging}");
+            Trace.WriteLine($"MCP Gateway env: MCP_GATEWAY_PORT={_port} verbose={_verboseLogging}");
 
             try
             {
                 _process = Process.Start(psi);
                 if (_process == null)
                 {
-                    Trace.TraceError("Failed to start MCP process.");
+                    Trace.TraceError("Failed to start MCP Gateway process.");
                     return;
                 }
 
-                Trace.WriteLine($"MCP process started on port {_port} (PID {_process.Id}). WorkingDir={workingDir}");
+                Trace.WriteLine($"MCP Gateway process started on port {_port} (PID {_process.Id}). WorkingDir={workingDir}");
                 AttachToJob(_process);
                 _process.OutputDataReceived += (_, args) =>
                 {
@@ -93,7 +93,7 @@ namespace Host.Win.Services
                     {
                         if (_verboseLogging || !args.Data.StartsWith("DEBUG:", StringComparison.OrdinalIgnoreCase))
                         {
-                            Trace.WriteLine($"[MCP] {args.Data}");
+                            Trace.WriteLine($"[MCP Gateway] {args.Data}");
                         }
                     }
                 };
@@ -104,26 +104,26 @@ namespace Host.Win.Services
                         var line = args.Data;
                         if (line.StartsWith("INFO:", StringComparison.OrdinalIgnoreCase))
                         {
-                            Trace.WriteLine($"[MCP] {line}");
+                            Trace.WriteLine($"[MCP Gateway] {line}");
                         }
                         else if (line.StartsWith("DEBUG:", StringComparison.OrdinalIgnoreCase))
                         {
                             if (_verboseLogging)
                             {
-                                Trace.WriteLine($"[MCP] {line}");
+                                Trace.WriteLine($"[MCP Gateway] {line}");
                             }
                         }
                         else if (line.StartsWith("WARNING:", StringComparison.OrdinalIgnoreCase))
                         {
-                            Trace.TraceWarning($"[MCP] {line}");
+                            Trace.TraceWarning($"[MCP Gateway] {line}");
                         }
                         else if (line.StartsWith("ERROR:", StringComparison.OrdinalIgnoreCase) || line.StartsWith("CRITICAL:", StringComparison.OrdinalIgnoreCase))
                         {
-                            Trace.TraceError($"[MCP ERR] {line}");
+                            Trace.TraceError($"[MCP Gateway ERR] {line}");
                         }
                         else
                         {
-                            Trace.TraceWarning($"[MCP] {line}");
+                            Trace.TraceWarning($"[MCP Gateway] {line}");
                         }
                     }
                 };
@@ -137,12 +137,12 @@ namespace Host.Win.Services
                 }
                 catch (Exception ex)
                 {
-                    Trace.TraceWarning($"Failed to write MCP pid file: {ex.Message}");
+                    Trace.TraceWarning($"Failed to write MCP Gateway pid file: {ex.Message}");
                 }
             }
             catch (Exception ex)
             {
-                Trace.TraceError($"Failed to start MCP process: {ex.Message}");
+                Trace.TraceError($"Failed to start MCP Gateway process: {ex.Message}");
             }
         }
 
@@ -159,7 +159,7 @@ namespace Host.Win.Services
             }
             catch (Exception ex)
             {
-                Trace.TraceError($"Failed to stop MCP process: {ex.Message}");
+                Trace.TraceError($"Failed to stop MCP Gateway process: {ex.Message}");
             }
             finally
             {
@@ -195,7 +195,7 @@ namespace Host.Win.Services
 
             if (!Directory.Exists(venvPath) || !File.Exists(pythonExe))
             {
-                Trace.WriteLine("Creating MCP virtual environment...");
+                Trace.WriteLine("Creating MCP Gateway virtual environment...");
                 var createPsi = new ProcessStartInfo
                 {
                     FileName = "python",
@@ -211,7 +211,7 @@ namespace Host.Win.Services
                 {
                     if (_verboseLogging)
                     {
-                        Trace.WriteLine($"MCP venv: Attempting with 'python' command...");
+                        Trace.WriteLine($"MCP Gateway venv: Attempting with 'python' command...");
                     }
                     var createProc = Process.Start(createPsi);
                     createProc?.WaitForExit(15000);
@@ -220,7 +220,7 @@ namespace Host.Win.Services
                         created = true;
                         if (_verboseLogging)
                         {
-                            Trace.WriteLine("MCP venv: Created successfully with 'python' command.");
+                            Trace.WriteLine("MCP Gateway venv: Created successfully with 'python' command.");
                         }
                     }
                 }
@@ -228,7 +228,7 @@ namespace Host.Win.Services
                 {
                     if (_verboseLogging)
                     {
-                        Trace.WriteLine($"MCP venv: 'python' command failed ({ex.Message}), trying 'py -3' fallback...");
+                        Trace.WriteLine($"MCP Gateway venv: 'python' command failed ({ex.Message}), trying 'py -3' fallback...");
                     }
                 }
 
@@ -245,29 +245,29 @@ namespace Host.Win.Services
                             created = true;
                             if (_verboseLogging)
                             {
-                                Trace.WriteLine("MCP venv: Created successfully with 'py -3' command.");
+                                Trace.WriteLine("MCP Gateway venv: Created successfully with 'py -3' command.");
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        Trace.TraceError($"MCP venv creation failed: {ex.Message}");
+                        Trace.TraceError($"MCP Gateway venv creation failed: {ex.Message}");
                     }
                 }
 
                 if (!created && _verboseLogging)
                 {
-                    Trace.TraceWarning("MCP venv: Creation may have failed. Checking for python.exe...");
+                    Trace.TraceWarning("MCP Gateway venv: Creation may have failed. Checking for python.exe...");
                 }
             }
             else if (_verboseLogging)
             {
-                Trace.WriteLine($"MCP venv: Already exists at {venvPath}");
+                Trace.WriteLine($"MCP Gateway venv: Already exists at {venvPath}");
             }
 
             if (!File.Exists(pythonExe))
             {
-                Trace.TraceError("MCP venv creation failed; python.exe missing.");
+                Trace.TraceError("MCP Gateway venv creation failed; python.exe missing.");
                 return null;
             }
 
@@ -275,38 +275,38 @@ namespace Host.Win.Services
             {
                 var hash = ComputeFileHash(requirements);
                 var existingHash = ReadHash(_requirementsHashFile);
-                Trace.WriteLine($"MCP requirements hash: {hash} (stored={existingHash ?? "none"})");
+                Trace.WriteLine($"MCP Gateway requirements hash: {hash} (stored={existingHash ?? "none"})");
                 if (!string.Equals(hash, existingHash, StringComparison.OrdinalIgnoreCase))
                 {
-                    Trace.WriteLine("Installing MCP requirements...");
+                    Trace.WriteLine("Installing MCP Gateway requirements...");
                     if (_verboseLogging)
                     {
-                        Trace.WriteLine("MCP bootstrap: Upgrading pip...");
+                        Trace.WriteLine("MCP Gateway bootstrap: Upgrading pip...");
                     }
                     RunSilently(pythonExe, "-m pip install --upgrade pip", workingDir, verboseLogging: _verboseLogging);
                     if (_verboseLogging)
                     {
                         var reqFile = Path.GetFileName(requirements);
-                        Trace.WriteLine($"MCP bootstrap: Installing {reqFile}...");
+                        Trace.WriteLine($"MCP Gateway bootstrap: Installing {reqFile}...");
                     }
                     if (RunSilently(pythonExe, $"-m pip install -r {Path.GetFileName(requirements)}", workingDir, verboseLogging: _verboseLogging))
                     {
                         WriteHash(_requirementsHashFile, hash);
-                        Trace.WriteLine("MCP requirements installed successfully.");
+                        Trace.WriteLine("MCP Gateway requirements installed successfully.");
                     }
                     else
                     {
-                        Trace.TraceError("MCP requirements installation failed. Check pip output above.");
+                        Trace.TraceError("MCP Gateway requirements installation failed. Check pip output above.");
                     }
                 }
                 else if (_verboseLogging)
                 {
-                    Trace.WriteLine("MCP requirements: Hash unchanged, skipping installation.");
+                    Trace.WriteLine("MCP Gateway requirements: Hash unchanged, skipping installation.");
                 }
             }
             else if (_verboseLogging)
             {
-                Trace.WriteLine($"MCP requirements.txt not found at {requirements}");
+                Trace.WriteLine($"MCP Gateway requirements.txt not found at {requirements}");
             }
 
             return pythonExe;
@@ -335,11 +335,11 @@ namespace Host.Win.Services
                     var ok = proc.ExitCode == 0;
                     if ((!string.IsNullOrWhiteSpace(stdout)) && (verboseLogging || !ok))
                     {
-                        Trace.WriteLine($"[MCP cmd] {fileName} {arguments} -> {stdout}");
+                        Trace.WriteLine($"[MCP Gateway cmd] {fileName} {arguments} -> {stdout}");
                     }
                     if ((!string.IsNullOrWhiteSpace(stderr)) && (verboseLogging || !ok))
                     {
-                        Trace.TraceWarning($"[MCP cmd ERR] {fileName} {arguments} -> {stderr}");
+                        Trace.TraceWarning($"[MCP Gateway cmd ERR] {fileName} {arguments} -> {stderr}");
                     }
                     return ok;
                 }
@@ -364,14 +364,13 @@ namespace Host.Win.Services
                 if (proc == null) return;
                 if (!proc.HasExited)
                 {
-                    // Validate this is the expected process before killing
                     if (!ValidatePidProcess(proc, pidInfo.Value))
                     {
                         Trace.TraceWarning($"PID {pidInfo.Value.Pid} validation failed - refusing to kill.");
                         return;
                     }
 
-                    Trace.WriteLine($"Killing existing MCP process PID {pidInfo.Value.Pid} before start.");
+                    Trace.WriteLine($"Killing existing MCP Gateway process PID {pidInfo.Value.Pid} before start.");
                     proc.Kill(entireProcessTree: true);
                     proc.WaitForExit(5000);
                 }
@@ -406,14 +405,12 @@ namespace Host.Win.Services
             {
                 var text = File.ReadAllText(path).Trim();
 
-                // Try new JSON format first
                 if (text.StartsWith("{", StringComparison.Ordinal))
                 {
                     var json = JsonSerializer.Deserialize<PidFileInfo>(text);
                     return json;
                 }
 
-                // Fall back to legacy plain PID format
                 if (int.TryParse(text, out var pid))
                 {
                     return new PidFileInfo
@@ -447,7 +444,6 @@ namespace Host.Win.Services
             }
             catch
             {
-                // Fall back to legacy format
                 File.WriteAllText(path, pid.ToString());
             }
         }
@@ -456,14 +452,12 @@ namespace Host.Win.Services
         {
             try
             {
-                // Check 1: Is this an expected MCP process (verify it's in our MCP directory)
-                if (!IsExpectedMcpProcess(process))
+                if (!IsExpectedGatewayProcess(process))
                 {
-                    Trace.TraceWarning($"PID {pidInfo.Pid} is not an expected MCP process.");
+                    Trace.TraceWarning($"PID {pidInfo.Pid} is not an expected MCP Gateway process.");
                     return false;
                 }
 
-                // Check 2: If we have a command line hash, validate it matches
                 if (!string.IsNullOrWhiteSpace(pidInfo.CommandLineHash))
                 {
                     var cmdLine = GetProcessCommandLine(process);
@@ -478,7 +472,6 @@ namespace Host.Win.Services
                     }
                 }
 
-                // Check 3: If timestamp is available, ensure it's recent (< 60 seconds old)
                 if (pidInfo.Timestamp != DateTime.MinValue)
                 {
                     var age = DateTime.UtcNow - pidInfo.Timestamp;
@@ -498,14 +491,14 @@ namespace Host.Win.Services
             }
         }
 
-        private bool IsExpectedMcpProcess(Process process)
+        private bool IsExpectedGatewayProcess(Process process)
         {
             try
             {
                 var exe = process.MainModule?.FileName;
                 if (!string.IsNullOrWhiteSpace(exe))
                 {
-                    return exe.StartsWith(_mcpRoot, StringComparison.OrdinalIgnoreCase);
+                    return exe.StartsWith(_gatewayRoot, StringComparison.OrdinalIgnoreCase);
                 }
             }
             catch
@@ -537,7 +530,6 @@ namespace Host.Win.Services
             }
             catch
             {
-                // Fall back to filename if WMI fails
                 try
                 {
                     return process.MainModule?.FileName;
@@ -603,7 +595,7 @@ namespace Host.Win.Services
             }
             catch (Exception ex)
             {
-                Trace.TraceWarning($"Failed to attach MCP to job object: {ex.Message}");
+                Trace.TraceWarning($"Failed to attach MCP Gateway to job object: {ex.Message}");
             }
         }
 

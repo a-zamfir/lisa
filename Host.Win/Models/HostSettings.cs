@@ -4,8 +4,25 @@ namespace Host.Win.Models
     public sealed class HostSettings
     {
         public string SettingsVersion { get; set; } = "0.1.0-alpha";
+
+        // MCP Gateway configuration
         public string McpHost { get; set; } = "127.0.0.1";
-        public int McpPort { get; set; } = 8123;
+        public int McpPort { get; set; } = 8123; // Gateway port
+        public int McpGatewayPort { get; set; } = 8123;
+
+        // MCP Server configurations
+        public Dictionary<string, McpServerConfig>? McpServers { get; set; } = new()
+        {
+            ["windows_automation"] = new McpServerConfig
+            {
+                Enabled = true,
+                Port = 8124,
+                Host = "127.0.0.1",
+                Description = "Windows system automation and diagnostics",
+                ToolPrefix = "win"
+            }
+        };
+
         public string AgentHost { get; set; } = "127.0.0.1";
         public int AgentPort { get; set; } = 5050;
         public string ProviderType { get; set; } = "LM Studio"; // Ollama | LM Studio | OpenAI

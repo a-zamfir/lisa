@@ -27,10 +27,10 @@
     <Color x:Key="UserBubbleForegroundColor">#FFFFFF</Color>
     <Color x:Key="PopupBackgroundColor">#F3F4F6</Color>
     <Color x:Key="ApprovalAcceptedBackgroundColor">#4FAE91</Color>
-    <Color x:Key="ApprovalAcceptedBorderColor">#4FAE91</Color>
+    <Color x:Key="ApprovalAcceptedBorderColor">#3D8A73</Color>
     <Color x:Key="ApprovalAcceptedForegroundColor">#166534</Color>
     <Color x:Key="ApprovalRejectedBackgroundColor">#A96A6A</Color>
-    <Color x:Key="ApprovalRejectedBorderColor">#A96A6A</Color>
+    <Color x:Key="ApprovalRejectedBorderColor">#8B5252</Color>
     <Color x:Key="ApprovalRejectedForegroundColor">#991B1B</Color>
     <Color x:Key="StatusReadyColor">#FF22C55E</Color>
     <Color x:Key="StatusOfflineColor">#FFEF4444</Color>

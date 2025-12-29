@@ -31,9 +31,9 @@ class ConversationStore:
     ) -> None:
         existing = self._system_messages.get(session_id)
         if existing is None or self._tool_versions.get(session_id) != tool_version:
+            # Only include system content - tools are passed separately in the tools[] array
+            # Adding tool_content here would duplicate tokens unnecessarily
             messages = [{"role": "system", "content": system_content}]
-            if tool_content:
-                messages.append({"role": "system", "content": tool_content})
             self._system_messages[session_id] = messages
             self._tool_versions[session_id] = tool_version
 

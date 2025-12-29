@@ -18,6 +18,7 @@ from agent_worker.services.memory_policy import parse_ops, validate_ops
 from agent_worker.services.memory_store import MemoryStore
 from agent_worker.services.memory_trailer import StreamTrailerFilter, extract_memory_trailer
 from agent_worker.services.mcp_client import McpClient
+from agent_worker.services.mcp_client_stdio import StdioMcpClient, get_mcp_client
 from agent_worker.services.provider import call_provider, call_provider_stream, warm_provider_client
 from agent_worker.services.session_state import get_session_nonce, set_session_nonce
 from agent_worker.services.settings import load_settings
@@ -28,12 +29,17 @@ from agent_worker.services.visual_context import pop_latest_frame, peek_latest_f
 
 router = APIRouter()
 _conversations = ConversationStore()
-_mcp_client = McpClient()
+_log = logging.getLogger("agent_worker.text")
+
+# Try to use stdio MCP client if configured, fallback to HTTP client
+USE_STDIO = os.environ.get("MCP_USE_STDIO", "1") == "1"
+_mcp_client = get_mcp_client() if USE_STDIO else McpClient()
+_log.info(f"Using {'stdio' if USE_STDIO else 'HTTP'} MCP client")
+
 _memory_store = MemoryStore()
 _tool_context: Optional[str] = None
 _tool_context_version = 0
 _SYSTEM_CONTEXT = collect_system_context()
-_log = logging.getLogger("agent_worker.text")
 _callback_socket: Optional[socket.socket] = None
 _callback_port: Optional[int] = None
 _callback_lock = threading.Lock()
@@ -57,6 +63,17 @@ async def _get_session_semaphore(session_id: str) -> asyncio.Semaphore:
 
 async def init_tool_cache() -> bool:
     global _tool_context, _tool_context_version
+
+    # Initialize stdio MCP client if using stdio
+    if USE_STDIO and hasattr(_mcp_client, 'initialize'):
+        try:
+            _log.info("Initializing stdio MCP client...")
+            await _mcp_client.initialize()
+            _log.info("stdio MCP client initialized successfully")
+        except Exception as ex:
+            _log.error(f"Failed to initialize stdio MCP client: {ex}")
+            return False
+
     tools_payload = await _mcp_client.list_tools(force_refresh=True)
     await _mcp_client.list_tool_docs(force_refresh=True)
     if isinstance(tools_payload, dict) and not tools_payload.get("error"):
@@ -295,15 +312,34 @@ async def _send_tool_approval_callback(
     await _send_pipe_payload(payload)
 
 
+async def _send_tool_auto_approved_callback(
+    session_id: str,
+    turn_id: str,
+    tool_name: str,
+    friendly_desc: str,
+) -> None:
+    """Send callback to UI when a tool is auto-approved (no user interaction needed)."""
+    payload = {
+        "session_id": session_id,
+        "turn_id": turn_id,
+        "phase": "tool_auto_approved",
+        "tool_name": tool_name,
+        "friendly_desc": friendly_desc,
+    }
+    await _send_pipe_payload(payload)
+
+
 async def _await_tool_approval(session_id: str, turn_id: str, tool_name: str, tool_args: Dict[str, Any]) -> bool:
     meta = _mcp_client.get_tool_meta(tool_name) or {}
     if not meta:
         await _mcp_client.list_tool_docs(force_refresh=True)
         meta = _mcp_client.get_tool_meta(tool_name) or {}
+    friendly_desc = meta.get("friendly_desc") or f"running {tool_name}"
     if meta and not meta.get("approval_required"):
+        # Auto-approved - send callback to show label in UI
+        await _send_tool_auto_approved_callback(session_id, turn_id, tool_name, friendly_desc)
         return True
     approval_id = str(uuid.uuid4())
-    friendly_desc = meta.get("friendly_desc") or f"would like to run {tool_name}."
     approval_manager.create(approval_id)
     await _send_tool_approval_callback(session_id, turn_id, approval_id, tool_name, tool_args, friendly_desc)
     return await approval_manager.wait_for(approval_id, _APPROVAL_TIMEOUT_S)
@@ -529,7 +565,17 @@ async def _handle_text_impl(req: TextInput, x_mcp_token: str | None):
 
     history = _conversations.get_history(req.session_id)
 
-    tools_payload = _mcp_client.get_cached_tools()
+    # Get active MCP servers from request (if specified)
+    active_mcps = None
+    if req.input_meta:
+        _log.info("input_meta received: active_mcps=%s", req.input_meta.active_mcps)
+        if req.input_meta.active_mcps is not None:  # Explicit None check, empty list is valid
+            active_mcps = req.input_meta.active_mcps
+            _log.info("Filtering tools by active MCPs: %s", active_mcps)
+    else:
+        _log.info("No input_meta in request")
+
+    tools_payload = _mcp_client.get_cached_tools(active_servers=active_mcps)
     if isinstance(tools_payload, dict) and tools_payload.get("error"):
         tools_payload = None
     elif isinstance(tools_payload, dict):

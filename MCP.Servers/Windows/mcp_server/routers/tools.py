@@ -9,8 +9,8 @@ import os
 from fastapi import APIRouter, Header, HTTPException, status
 from fastapi.concurrency import run_in_threadpool
 
-from agent_mcp.models import ToolDocsResponse
-from agent_mcp.services.tools_registry import TOOL_MAP, TOOL_REGISTRY, get_tool_docs
+from mcp_server.models import ToolDocsResponse
+from mcp_server.services.tools_registry import TOOL_MAP, TOOL_REGISTRY, get_tool_docs
 
 router = APIRouter()
 
@@ -32,7 +32,7 @@ def health() -> Dict[str, Any]:
     return {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
-        "service": "mcp"
+        "service": "mcp-windows-automation"
     }
 
 

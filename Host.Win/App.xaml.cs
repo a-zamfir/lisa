@@ -29,7 +29,8 @@ namespace Host.Win
         private TtsService? _ttsService;
         private HostSettings? _hostSettings;
         private AgentProcessHost? _agentProcessHost;
-        private McpProcessHost? _mcpProcessHost;
+        private McpGatewayProcessHost? _mcpGatewayProcessHost; // Gateway orchestrator
+        private McpProcessHost? _mcpWindowsProcessHost; // Windows Automation MCP
         private TcpCallbackServer? _agentCallbackServer;
         private TextWriterTraceListener? _verboseTraceListener;
         private readonly string _agentCallbackToken = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
@@ -141,6 +142,7 @@ namespace Host.Win
             overlayVm.StopMessageCommand = new Commands.RelayCommand<Models.ChatMessage>(message => overlayVm.StopMessage(message));
             overlayVm.ResetConversationCommand = new Commands.RelayCommand(() => overlayVm.ResetConversation());
             overlayVm.AttachFileCommand = new Commands.RelayCommand(() => overlayVm.StatusText = "Attach file (coming soon)");
+            overlayVm.ToggleMcpServerCommand = new Commands.RelayCommand<Models.McpServerItem>(server => { if (server != null) overlayVm.ToggleMcpServer(server); });
             overlayVm.ToggleShareCommand = new Commands.RelayCommand(() => overlayVm.ToggleShare());
             overlayVm.StartTalkCommand = new Commands.AsyncRelayCommand(() => overlayVm.StartTalkAsync(), overlayVm.CanStartTalk);
             overlayVm.ReplayTtsCommand = new Commands.AsyncRelayCommand(() => overlayVm.ReplayLastTtsAsync());
@@ -149,19 +151,39 @@ namespace Host.Win
 
             overlayVm.SelectedMode = AssistantMode.Chat;
 
-            // From Host.Win/bin/Debug/... back to repo root then into Agent.Worker/main.py
+            // From Host.Win/bin/Debug/... back to repo root then into services
             var agentScript = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "Agent.Worker", "main.py");
-            var mcpScript = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "Agent.MCP", "main.py");
-            _mcpProcessHost = new McpProcessHost(Path.GetFullPath(mcpScript), port: _hostSettings.McpPort, verboseLogging: _hostSettings.VerboseLogging);
-            _mcpProcessHost.Start();
-            _agentClient?.SetMcpAuthToken(_mcpProcessHost.AuthToken);
+            var gatewayScript = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "MCP.Gateway", "main.py");
+            var windowsMcpScript = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "MCP.Servers", "Windows", "main.py");
+
+            // Start MCP Gateway orchestrator (port 8123)
+            _mcpGatewayProcessHost = new McpGatewayProcessHost(
+                Path.GetFullPath(gatewayScript),
+                port: _hostSettings.McpGatewayPort,
+                verboseLogging: _hostSettings.VerboseLogging);
+            _mcpGatewayProcessHost.Start();
+            _agentClient?.SetMcpAuthToken(_mcpGatewayProcessHost.AuthToken);
+
+            // Start Windows Automation MCP server (port 8124)
+            // IMPORTANT: Share the gateway's auth token so backend servers can authenticate
+            var windowsMcpPort = _hostSettings.McpServers?.GetValueOrDefault("windows_automation")?.Port ?? 8124;
+            var windowsMcpEnabled = _hostSettings.McpServers?.GetValueOrDefault("windows_automation")?.Enabled ?? true;
+            if (windowsMcpEnabled)
+            {
+                _mcpWindowsProcessHost = new McpProcessHost(
+                    Path.GetFullPath(windowsMcpScript),
+                    port: windowsMcpPort,
+                    verboseLogging: _hostSettings.VerboseLogging,
+                    sharedAuthToken: _mcpGatewayProcessHost.AuthToken);
+                _mcpWindowsProcessHost.Start();
+            }
 
             _agentProcessHost = new AgentProcessHost(
                 Path.GetFullPath(agentScript),
                 port: _hostSettings.AgentPort,
                 callbackToken: _agentCallbackToken,
                 callbackPort: AgentCallbackPort,
-                mcpAuthToken: _mcpProcessHost.AuthToken,
+                mcpAuthToken: _mcpGatewayProcessHost.AuthToken,
                 providerApiKey: _hostSettings.ProviderApiKey,
                 verboseLogging: _hostSettings.VerboseLogging);
             _agentCallbackServer = new TcpCallbackServer(AgentCallbackPort, _agentCallbackToken, callback =>
@@ -175,6 +197,10 @@ namespace Host.Win
                      if (callback.Phase == "tool_approval_required")
                      {
                          _ = overlayVm.HandleToolApprovalAsync(callback);
+                     }
+                     else if (callback.Phase == "tool_auto_approved")
+                     {
+                         overlayVm.HandleToolAutoApproved(callback);
                      }
                      else if (callback.Phase == "memory_update_started"
                               || callback.Phase == "memory_update_done"
@@ -212,9 +238,12 @@ namespace Host.Win
             AppDomain.CurrentDomain.ProcessExit += (_, _) => _agentProcessHost?.Stop();
             DispatcherUnhandledException += (_, _) => _agentProcessHost?.Stop();
             Exit += (_, _) => _agentProcessHost?.Stop();
-            AppDomain.CurrentDomain.ProcessExit += (_, _) => _mcpProcessHost?.Stop();
-            DispatcherUnhandledException += (_, _) => _mcpProcessHost?.Stop();
-            Exit += (_, _) => _mcpProcessHost?.Stop();
+            AppDomain.CurrentDomain.ProcessExit += (_, _) => _mcpGatewayProcessHost?.Stop();
+            DispatcherUnhandledException += (_, _) => _mcpGatewayProcessHost?.Stop();
+            Exit += (_, _) => _mcpGatewayProcessHost?.Stop();
+            AppDomain.CurrentDomain.ProcessExit += (_, _) => _mcpWindowsProcessHost?.Stop();
+            DispatcherUnhandledException += (_, _) => _mcpWindowsProcessHost?.Stop();
+            Exit += (_, _) => _mcpWindowsProcessHost?.Stop();
             AppDomain.CurrentDomain.ProcessExit += (_, _) => _agentCallbackServer?.Stop();
             DispatcherUnhandledException += (_, _) => _agentCallbackServer?.Stop();
             Exit += (_, _) => _agentCallbackServer?.Stop();
@@ -239,7 +268,8 @@ namespace Host.Win
                 },
                 onQuit: ShutdownApplication);
 
-            _mcpHealthChecker = new PortHealthChecker(_hostSettings.McpHost, _hostSettings.McpPort, ready =>
+            // Health check targets the gateway (which aggregates all MCP servers)
+            _mcpHealthChecker = new PortHealthChecker(_hostSettings.McpHost, _hostSettings.McpGatewayPort, ready =>
             {
                 overlayVm.UpdateMcpStatus(ready);
             });
@@ -277,12 +307,31 @@ namespace Host.Win
                 _agentClient?.UpdateBaseUri(new Uri($"http://{overlayVm.Settings.AgentHost}:{overlayVm.Settings.AgentPort}"));
                 _agentClient?.SetProviderApiKey(overlayVm.Settings.ProviderApiKey);
 
-                // Restart agent process if needed (port change)
-                _mcpProcessHost?.Dispose();
-                var mcpScriptNew = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "Agent.MCP", "main.py");
-                _mcpProcessHost = new McpProcessHost(Path.GetFullPath(mcpScriptNew), port: overlayVm.Settings.McpPort, verboseLogging: overlayVm.Settings.VerboseLogging);
-                _mcpProcessHost.Start();
-                _agentClient?.SetMcpAuthToken(_mcpProcessHost.AuthToken);
+                // Restart MCP services if needed (port change)
+                _mcpGatewayProcessHost?.Dispose();
+                _mcpWindowsProcessHost?.Dispose();
+
+                var gatewayScriptNew = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "MCP.Gateway", "main.py");
+                _mcpGatewayProcessHost = new McpGatewayProcessHost(
+                    Path.GetFullPath(gatewayScriptNew),
+                    port: overlayVm.Settings.McpGatewayPort,
+                    verboseLogging: overlayVm.Settings.VerboseLogging);
+                _mcpGatewayProcessHost.Start();
+                _agentClient?.SetMcpAuthToken(_mcpGatewayProcessHost.AuthToken);
+
+                // Restart Windows Automation MCP if enabled
+                var windowsMcpPortNew = overlayVm.Settings.McpServers?.GetValueOrDefault("windows_automation")?.Port ?? 8124;
+                var windowsMcpEnabledNew = overlayVm.Settings.McpServers?.GetValueOrDefault("windows_automation")?.Enabled ?? true;
+                if (windowsMcpEnabledNew)
+                {
+                    var windowsMcpScriptNew = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "MCP.Servers", "Windows", "main.py");
+                    _mcpWindowsProcessHost = new McpProcessHost(
+                        Path.GetFullPath(windowsMcpScriptNew),
+                        port: windowsMcpPortNew,
+                        verboseLogging: overlayVm.Settings.VerboseLogging,
+                        sharedAuthToken: _mcpGatewayProcessHost.AuthToken);
+                    _mcpWindowsProcessHost.Start();
+                }
                 _agentProcessHost?.Dispose();
                 var agentScriptNew = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "Agent.Worker", "main.py");
                 _agentProcessHost = new AgentProcessHost(
@@ -290,7 +339,7 @@ namespace Host.Win
                     port: overlayVm.Settings.AgentPort,
                     callbackToken: _agentCallbackToken,
                     callbackPort: AgentCallbackPort,
-                    mcpAuthToken: _mcpProcessHost.AuthToken,
+                    mcpAuthToken: _mcpGatewayProcessHost.AuthToken,
                     providerApiKey: overlayVm.Settings.ProviderApiKey,
                     verboseLogging: overlayVm.Settings.VerboseLogging);
                 _agentProcessHost.Start();
@@ -319,7 +368,7 @@ namespace Host.Win
                 });
                 _agentCallbackServer.Start();
                 _mcpHealthChecker?.Dispose();
-                _mcpHealthChecker = new PortHealthChecker(overlayVm.Settings.McpHost, overlayVm.Settings.McpPort, ready =>
+                _mcpHealthChecker = new PortHealthChecker(overlayVm.Settings.McpHost, overlayVm.Settings.McpGatewayPort, ready =>
                 {
                     overlayVm.UpdateMcpStatus(ready);
                 });
@@ -364,7 +413,8 @@ namespace Host.Win
             _contextCollector?.Dispose();
             _audioPlaybackService?.Dispose();
             _agentProcessHost?.Dispose();
-            _mcpProcessHost?.Dispose();
+            _mcpGatewayProcessHost?.Dispose();
+            _mcpWindowsProcessHost?.Dispose();
             _agentCallbackServer?.Dispose();
             UpdateVerboseTraceListener(false);
             base.OnExit(e);

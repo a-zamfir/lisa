@@ -24,6 +24,7 @@
         <SineEase x:Key="SineEaseInOut" EasingMode="EaseInOut"/>
         <conv:StringEqualsConverter x:Key="EqualityConverter"/>
         <conv:BoolEqualsConverter x:Key="BoolEqualityConverter"/>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
         <Style x:Key="ModeButtonStyle" TargetType="Button">
             <Setter Property="Margin" Value="6 0"/>
             <Setter Property="Height" Value="40"/>
@@ -514,6 +515,46 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="PopupMenuButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Padding" Value="12 0"/>
+            <Setter Property="Margin" Value="0 2"/>
+            <Setter Property="Background" Value="{DynamicResource ButtonBackground}"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                Padding="{TemplateBinding Padding}">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="6" ShadowDepth="1" Opacity="0.15"/>
+                            </Border.Effect>
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="ShareButtonStyle" TargetType="Button">
             <Setter Property="Width" Value="110"/>
             <Setter Property="Height" Value="110"/>
@@ -770,6 +811,67 @@
                                             </StackPanel>
                                         </ToggleButton>
 
+                                        <!-- MCP Server Selector -->
+                                        <ToggleButton x:Name="McpToggle"
+                                                      Style="{StaticResource InputBarIconButtonStyle}"
+                                                      Margin="8 0 0 0"
+                                                      ToolTip="Select MCP Servers">
+                                            <TextBlock Text="/" FontFamily="Segoe UI" FontSize="18" FontWeight="Bold"/>
+                                        </ToggleButton>
+
+                                        <Popup PlacementTarget="{Binding ElementName=McpToggle}"
+                                               IsOpen="{Binding IsChecked, ElementName=McpToggle}"
+                                               Placement="Top"
+                                               StaysOpen="False"
+                                               AllowsTransparency="True">
+                                            <Border Background="{DynamicResource PopupBackground}"
+                                                    BorderBrush="{DynamicResource PopupBorder}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="10"
+                                                    Padding="6"
+                                                    MinWidth="180"
+                                                    MaxHeight="180">
+                                                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                                              HorizontalScrollBarVisibility="Disabled">
+                                                    <ItemsControl ItemsSource="{Binding McpServers}">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Button Style="{StaticResource PopupMenuButtonStyle}"
+                                                                        Command="{Binding DataContext.ToggleMcpServerCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                        CommandParameter="{Binding}">
+                                                                    <StackPanel Orientation="Horizontal">
+                                                                        <TextBlock Text="&#xE73E;"
+                                                                                   FontFamily="Segoe MDL2 Assets"
+                                                                                   FontSize="14"
+                                                                                   Margin="0 0 10 0"
+                                                                                   VerticalAlignment="Center"
+                                                                                   Visibility="{Binding IsActive, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                                                   Foreground="{DynamicResource StatusReadyBrush}"/>
+                                                                        <TextBlock Text="&#xE73E;"
+                                                                                   FontFamily="Segoe MDL2 Assets"
+                                                                                   FontSize="14"
+                                                                                   Margin="0 0 10 0"
+                                                                                   VerticalAlignment="Center"
+                                                                                   Visibility="{Binding IsActive, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"
+                                                                                   Opacity="0"/>
+                                                                        <StackPanel Orientation="Vertical" VerticalAlignment="Center">
+                                                                            <TextBlock Text="{Binding DisplayName}"
+                                                                                       FontWeight="SemiBold"/>
+                                                                            <TextBlock Text="{Binding Description}"
+                                                                                       FontSize="10"
+                                                                                       Opacity="0.6"
+                                                                                       TextTrimming="CharacterEllipsis"
+                                                                                       MaxWidth="160"/>
+                                                                        </StackPanel>
+                                                                    </StackPanel>
+                                                                </Button>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </ScrollViewer>
+                                            </Border>
+                                        </Popup>
+
                                         <ToggleButton x:Name="MoreToggle"
                                                       Style="{StaticResource InputBarIconButtonStyle}"
                                                       Margin="8 0 0 0"
@@ -787,16 +889,10 @@
                                                     BorderThickness="1"
                                                     CornerRadius="10"
                                                     Padding="6">
-                                                <Button Command="{Binding ResetConversationCommand}"
-                                                        Background="{DynamicResource ButtonBackground}"
-                                                        BorderBrush="{DynamicResource ButtonBorder}"
-                                                        BorderThickness="0"
-                                                        Foreground="{DynamicResource OverlayForeground}"
-                                                        Height="32"
-                                                        Padding="12 0"
-                                                        Cursor="Hand">
+                                                <Button Style="{StaticResource PopupMenuButtonStyle}"
+                                                        Command="{Binding ResetConversationCommand}">
                                                     <StackPanel Orientation="Horizontal">
-                                                        <TextBlock Text="&#xE895;" FontFamily="Segoe MDL2 Assets" Margin="0 0 8 0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="&#xE895;" FontFamily="Segoe MDL2 Assets" Margin="0 0 10 0" VerticalAlignment="Center"/>
                                                         <TextBlock Text="Reset conversation" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                 </Button>
@@ -1436,6 +1532,9 @@
                                                                              </TextBlock>
                                                                              <Border CornerRadius="8"
                                                                                      Padding="8 6">
+                                                                                <Border.Effect>
+                                                                                    <DropShadowEffect BlurRadius="6" ShadowDepth="1" Opacity="0.1"/>
+                                                                                </Border.Effect>
                                                                                 <Border.Style>
                                                                                     <Style TargetType="Border">
                                                                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -1470,7 +1569,7 @@
                                                                                             </Style.Triggers>
                                                                                         </Style>
                                                                                     </TextBlock.Style>
-                                                                                    <Run Text="Tool request: "/>
+                                                                                    <Run Text="Tool request: " FontWeight="SemiBold"/>
                                                                                     <Run Text="{Binding ToolName}"/>
                                                                                     <Run Text=" - "/>
                                                                                     <Run Text="{Binding StatusText, Mode=OneWay}" FontWeight="SemiBold"/>
@@ -1578,7 +1677,7 @@
                                                                    Grid.Row="4"
                                                                    Text="{Binding Text}"
                                                                    TextWrapping="Wrap"
-                                                                   Margin="0 4 0 4"
+                                                                   Margin="0 10 0 0"
                                                                    Foreground="{DynamicResource AssistantBubbleForeground}"
                                                                    MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ScrollViewer}}">
                                                             <TextBlock.Style>
@@ -1605,11 +1704,6 @@
                                                                    Margin="0 10 0 0"
                                                                    Foreground="{DynamicResource AssistantBubbleForeground}"
                                                                    MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ScrollViewer}}"
-                                                                   TextOptions.TextFormattingMode="Display"
-                                                                   TextOptions.TextRenderingMode="ClearType"
-                                                                   TextOptions.TextHintingMode="Fixed"
-                                                                   UseLayoutRounding="True"
-                                                                   SnapsToDevicePixels="True"
                                                                    conv:InlineSegments.Segments="{Binding ContentSegments}">
                                                             <TextBlock.Style>
                                                                 <Style TargetType="TextBlock">
