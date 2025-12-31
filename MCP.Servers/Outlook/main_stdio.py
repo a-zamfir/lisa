@@ -45,20 +45,27 @@ def _get_outlook():
     except Exception:
         pass  # Already initialized
 
-    # Try connecting to running Outlook first
+    # Try connecting to running Outlook first (same privilege level)
     try:
         return win32com.client.GetActiveObject("Outlook.Application")
     except Exception:
         pass
 
-    # Fall back to creating/connecting via Dispatch
+    # Fall back to Dispatch - works even if Outlook is open at different privilege
+    # This creates a connection that shares the same Outlook profile/data
     try:
         return win32com.client.Dispatch("Outlook.Application")
+    except Exception:
+        pass
+
+    # Last resort: try EnsureDispatch for early-bound connection
+    try:
+        return win32com.client.gencache.EnsureDispatch("Outlook.Application")
     except Exception as ex:
         raise RuntimeError(
             f"Failed to connect to Outlook: {ex}. "
-            "Make sure Outlook is running and both Outlook and LISA "
-            "are running with the same privileges (both admin or both non-admin)."
+            "Ensure Outlook is installed. If Outlook is running, try running "
+            "both Outlook and LISA with the same privileges (both admin or both normal)."
         )
 
 
@@ -80,21 +87,34 @@ def _format_datetime(dt) -> str:
         return str(dt)
 
 
-def _parse_datetime(dt_str: str) -> datetime:
-    """Parse datetime string to datetime object."""
+def _parse_datetime(dt_str: str) -> str:
+    """Parse datetime string and return format Outlook COM expects.
+
+    Returns a string in 'MM/DD/YYYY HH:MM' format which Outlook
+    interprets as local time.
+    """
     # Try common formats
     formats = [
         "%Y-%m-%dT%H:%M:%S",
         "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%dT%H:%M",
         "%Y-%m-%d %H:%M",
         "%Y-%m-%d",
     ]
+
+    parsed_dt = None
     for fmt in formats:
         try:
-            return datetime.strptime(dt_str, fmt)
+            parsed_dt = datetime.strptime(dt_str, fmt)
+            break
         except ValueError:
             continue
-    raise ValueError(f"Cannot parse datetime: {dt_str}")
+
+    if parsed_dt is None:
+        raise ValueError(f"Cannot parse datetime: {dt_str}")
+
+    # Return in format Outlook treats as local time
+    return parsed_dt.strftime("%m/%d/%Y %H:%M")
 
 
 # ============================================================================

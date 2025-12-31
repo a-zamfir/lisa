@@ -60,15 +60,15 @@
     <Color x:Key="PopupBorderMidColor">#4DFFFFFF</Color>
     <Color x:Key="PopupBorderBottomColor">#33FFFFFF</Color>
 
-    <!-- Status Colors -->
-    <Color x:Key="ApprovalAcceptedBackgroundColor">#80166534</Color>
-    <Color x:Key="ApprovalAcceptedBorderColor">#6622C55E</Color>
-    <Color x:Key="ApprovalAcceptedForegroundColor">#FF86EFAC</Color>
-    <Color x:Key="ApprovalRejectedBackgroundColor">#80991B1B</Color>
-    <Color x:Key="ApprovalRejectedBorderColor">#66EF4444</Color>
+    <!-- Status Colors - Using solid colors like Dark theme for better visibility -->
+    <Color x:Key="ApprovalAcceptedBackgroundColor">#FF0F6B3A</Color>
+    <Color x:Key="ApprovalAcceptedBorderColor">#FF0D5C32</Color>
+    <Color x:Key="ApprovalAcceptedForegroundColor">#FF6EE7A0</Color>
+    <Color x:Key="ApprovalRejectedBackgroundColor">#FF8B2942</Color>
+    <Color x:Key="ApprovalRejectedBorderColor">#FF7A2439</Color>
     <Color x:Key="ApprovalRejectedForegroundColor">#FFFCA5A5</Color>
-    <Color x:Key="StatusReadyColor">#FF86EFAC</Color>
-    <Color x:Key="StatusOfflineColor">#FFFCA5A5</Color>
+    <Color x:Key="StatusReadyColor">#FF6EE7A0</Color>
+    <Color x:Key="StatusOfflineColor">#FFFF6B6B</Color>
 
     <!-- ═══════════════════════════════════════════════════════════════════════════
          BRUSH DEFINITIONS
