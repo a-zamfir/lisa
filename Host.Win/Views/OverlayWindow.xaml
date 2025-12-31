@@ -25,15 +25,16 @@
         <conv:StringEqualsConverter x:Key="EqualityConverter"/>
         <conv:BoolEqualsConverter x:Key="BoolEqualityConverter"/>
         <conv:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+        <!-- Windows 11 Fluent Mode Button - Clean, minimal, no shadows -->
         <Style x:Key="ModeButtonStyle" TargetType="Button">
-            <Setter Property="Margin" Value="6 0"/>
-            <Setter Property="Height" Value="40"/>
-            <Setter Property="Background" Value="{DynamicResource ButtonBackground}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource TabBorder}"/>
+            <Setter Property="Margin" Value="4 0"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
+            <Setter Property="Foreground" Value="{DynamicResource SubtleText}"/>
             <Setter Property="FontFamily" Value="Segoe UI"/>
-            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontSize" Value="13"/>
             <Setter Property="HorizontalContentAlignment" Value="Center"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="Cursor" Value="Hand"/>
@@ -44,16 +45,14 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="12"
-                                Padding="10 6">
-                            <Border.Effect>
-                                <DropShadowEffect BlurRadius="10" ShadowDepth="1" Opacity="0.25"/>
-                            </Border.Effect>
+                                CornerRadius="8"
+                                Padding="12 8">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}"/>
+                                <Setter TargetName="border" Property="Background" Value="{DynamicResource ButtonBackground}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="border" Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
@@ -91,11 +90,12 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
+        <!-- Windows 11 Radio Button -->
         <Style x:Key="ChipRadioStyle" TargetType="RadioButton">
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="Foreground" Value="{DynamicResource SubtleText}"/>
             <Setter Property="Padding" Value="4"/>
-            <Setter Property="Margin" Value="0 0 8 0"/>
+            <Setter Property="Margin" Value="0 0 12 0"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -103,12 +103,12 @@
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="6"/>
+                                <ColumnDefinition Width="8"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <Border x:Name="BulletBorder"
-                                    Width="14" Height="14"
-                                    CornerRadius="7"
+                                    Width="16" Height="16"
+                                    CornerRadius="8"
                                     BorderThickness="1"
                                     BorderBrush="{DynamicResource ButtonBorder}"
                                     Background="Transparent"
@@ -127,33 +127,48 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
                                 <Setter TargetName="BulletFill" Property="Opacity" Value="1"/>
-                                <Setter TargetName="BulletBorder" Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}"/>
+                                <Setter TargetName="BulletBorder" Property="BorderBrush" Value="{DynamicResource RadioCheckedFill}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="BulletBorder" Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="BulletBorder" Property="Opacity" Value="0.6"/>
-                                <Setter TargetName="BulletFill" Property="Opacity" Value="0.3"/>
+                                <Setter TargetName="BulletBorder" Property="Opacity" Value="0.4"/>
+                                <Setter TargetName="BulletFill" Property="Opacity" Value="0.2"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
+        <!-- Windows 11 ComboBox Item -->
         <Style x:Key="SettingsComboBoxItemStyle" TargetType="ComboBoxItem">
-            <Setter Property="Background" Value="{DynamicResource ButtonBackground}"/>
+            <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
-            <Setter Property="Padding" Value="8 6"/>
+            <Setter Property="Padding" Value="10 8"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Style.Triggers>
-                <Trigger Property="IsHighlighted" Value="True">
-                    <Setter Property="Background" Value="{DynamicResource ButtonHoverBackground}"/>
-                </Trigger>
-                <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="{DynamicResource ButtonHoverBackground}"/>
-                </Trigger>
-            </Style.Triggers>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="Bd"
+                                Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}"
+                                CornerRadius="6">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ButtonBackground}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
         <Style x:Key="GreetingFadeInOutOnVisibility" TargetType="FrameworkElement">
             <Setter Property="Opacity" Value="0"/>
@@ -185,11 +200,12 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+        <!-- Windows 11 ComboBox -->
         <Style x:Key="SettingsComboBoxStyle" TargetType="ComboBox">
-            <Setter Property="Height" Value="34"/>
-            <Setter Property="Padding" Value="8 4"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Padding" Value="10 6"/>
             <Setter Property="Background" Value="{DynamicResource ButtonBackground}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource ActionButtonBorder}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource InputBorder}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
@@ -214,7 +230,7 @@
                                                 Background="{TemplateBinding Background}"
                                                 BorderBrush="{TemplateBinding BorderBrush}"
                                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                                CornerRadius="10"
+                                                CornerRadius="8"
                                                 Padding="{TemplateBinding Padding}">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
@@ -263,11 +279,11 @@
                                    AllowsTransparency="True"
                                    Focusable="False"
                                    PopupAnimation="Fade">
-                                <Border Background="{DynamicResource ButtonBackground}"
+                                <Border Background="{DynamicResource PanelBackground}"
                                         BorderBrush="{DynamicResource ButtonBorder}"
                                         BorderThickness="1"
                                         CornerRadius="8"
-                                        Padding="2"
+                                        Padding="4"
                                         Margin="0 4 0 0">
                                     <ScrollViewer CanContentScroll="True">
                                         <StackPanel IsItemsHost="True"/>
@@ -284,17 +300,18 @@
                                 <Setter Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Opacity" Value="0.6"/>
+                                <Setter Property="Opacity" Value="0.4"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
+        <!-- Windows 11 Primary Action Button -->
         <Style x:Key="SendButtonStyle" TargetType="Button" BasedOn="{StaticResource ModeButtonStyle}">
-            <Setter Property="Height" Value="44"/>
-            <Setter Property="Width" Value="100"/>
-            <Setter Property="Padding" Value="12 10"/>
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Width" Value="96"/>
+            <Setter Property="Padding" Value="16 10"/>
             <Setter Property="Background" Value="{DynamicResource PrimaryButtonBackground}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource PrimaryButtonBackground}"/>
             <Setter Property="Foreground" Value="{DynamicResource PrimaryButtonForeground}"/>
@@ -304,35 +321,34 @@
                         <Border x:Name="Border"
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="1"
-                                CornerRadius="10"
+                                BorderThickness="0"
+                                CornerRadius="8"
                                 SnapsToDevicePixels="True">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Border" Property="Background" Value="{DynamicResource PrimaryButtonHover}"/>
-                                <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource PrimaryButtonHover}"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Border" Property="Background" Value="{DynamicResource PrimaryButtonHover}"/>
+                                <Setter TargetName="Border" Property="Opacity" Value="0.9"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Border" Property="Opacity" Value="0.55"/>
-                                <Setter Property="Foreground" Value="{DynamicResource PrimaryButtonForeground}"/>
+                                <Setter TargetName="Border" Property="Opacity" Value="0.4"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
+        <!-- Windows 11 Compact Action Button -->
         <Style x:Key="ChatActionButtonStyle" TargetType="Button">
-            <Setter Property="Width" Value="26"/>
-            <Setter Property="Height" Value="26"/>
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="Height" Value="28"/>
             <Setter Property="Padding" Value="0"/>
-            <Setter Property="Background" Value="{DynamicResource ButtonBackground}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource IconButtonBorder}"/>
-            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Foreground" Value="{DynamicResource SubtleText}"/>
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="Cursor" Value="Hand"/>
@@ -343,19 +359,19 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8">
+                                CornerRadius="6">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}"/>
+                                <Setter TargetName="Border" Property="Background" Value="{DynamicResource ButtonBackground}"/>
                                 <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Border" Property="Background" Value="{DynamicResource ButtonBackground}"/>
+                                <Setter TargetName="Border" Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Opacity" Value="0.5"/>
+                                <Setter Property="Opacity" Value="0.4"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -480,14 +496,15 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <!-- Windows 11 Icon Button - Clean, borderless -->
         <Style x:Key="IconButtonStyle" TargetType="Button">
             <Setter Property="Width" Value="32"/>
             <Setter Property="Height" Value="32"/>
             <Setter Property="Padding" Value="0"/>
-            <Setter Property="Background" Value="{DynamicResource ButtonBackground}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource ButtonBorder}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="{DynamicResource SubtleText}"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -496,30 +513,31 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="10">
+                                CornerRadius="6">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Border" Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
-                                <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource ButtonActiveBorder}"/>
+                                <Setter TargetName="Border" Property="Background" Value="{DynamicResource ButtonBackground}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="Border" Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Opacity" Value="0.5"/>
+                                <Setter Property="Opacity" Value="0.4"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
+        <!-- Windows 11 Popup Menu Item -->
         <Style x:Key="PopupMenuButtonStyle" TargetType="Button">
             <Setter Property="Height" Value="36"/>
             <Setter Property="Padding" Value="12 0"/>
-            <Setter Property="Margin" Value="0 2"/>
-            <Setter Property="Background" Value="{DynamicResource ButtonBackground}"/>
+            <Setter Property="Margin" Value="0 1"/>
+            <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
@@ -532,23 +550,20 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8"
+                                CornerRadius="6"
                                 Padding="{TemplateBinding Padding}">
-                            <Border.Effect>
-                                <DropShadowEffect BlurRadius="6" ShadowDepth="1" Opacity="0.15"/>
-                            </Border.Effect>
                             <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                               VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Border" Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
+                                <Setter TargetName="Border" Property="Background" Value="{DynamicResource ButtonBackground}"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="Border" Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Opacity" Value="0.5"/>
+                                <Setter Property="Opacity" Value="0.4"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -636,12 +651,13 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <!-- Windows 11 Text Input -->
         <Style x:Key="RoundedTextBoxStyle" TargetType="TextBox">
             <Setter Property="Background" Value="{DynamicResource ButtonBackground}"/>
             <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource InputBorder}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="12"/>
+            <Setter Property="Padding" Value="10 8"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TextBox">
@@ -649,7 +665,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="10">
+                                CornerRadius="8">
                             <ScrollViewer x:Name="PART_ContentHost"
                                           Focusable="false"
                                           HorizontalScrollBarVisibility="Hidden"
@@ -658,9 +674,10 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsKeyboardFocused" Value="True">
                                 <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource InputFocusBorder}"/>
+                                <Setter TargetName="Border" Property="BorderThickness" Value="1 1 1 2"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Border" Property="Opacity" Value="0.6"/>
+                                <Setter TargetName="Border" Property="Opacity" Value="0.4"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -668,35 +685,33 @@
             </Setter>
         </Style>
 
+        <!-- Windows 11 Input Bar Icon Button - Clean, no shadows -->
         <Style x:Key="InputBarIconButtonStyle" TargetType="ButtonBase">
-            <Setter Property="Width" Value="34"/>
-            <Setter Property="Height" Value="34"/>
+            <Setter Property="Width" Value="32"/>
+            <Setter Property="Height" Value="32"/>
             <Setter Property="Padding" Value="0"/>
             <Setter Property="Background" Value="{DynamicResource ButtonBackground}"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
+            <Setter Property="Foreground" Value="{DynamicResource SubtleText}"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ButtonBase">
                         <Border x:Name="Border"
                                 Background="{TemplateBinding Background}"
-                                CornerRadius="12">
-                            <Border.Effect>
-                                <DropShadowEffect BlurRadius="10" ShadowDepth="1" Opacity="0.25"/>
-                            </Border.Effect>
+                                CornerRadius="8">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Border" Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
-                                <Setter TargetName="Border" Property="Opacity" Value="0.95"/>
+                                <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="Border" Property="Opacity" Value="0.85"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Border" Property="Opacity" Value="0.55"/>
+                                <Setter TargetName="Border" Property="Opacity" Value="0.4"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -704,38 +719,38 @@
             </Setter>
         </Style>
 
+        <!-- Windows 11 Pill Toggle Button -->
         <Style x:Key="InputBarPillToggleStyle" TargetType="ToggleButton">
-            <Setter Property="Height" Value="34"/>
-            <Setter Property="MinWidth" Value="86"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="MinWidth" Value="80"/>
             <Setter Property="Padding" Value="12 0"/>
             <Setter Property="Background" Value="{DynamicResource ButtonBackground}"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
+            <Setter Property="Foreground" Value="{DynamicResource SubtleText}"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ToggleButton">
                         <Border x:Name="Border"
                                 Background="{TemplateBinding Background}"
-                                CornerRadius="12"
+                                CornerRadius="8"
                                 Padding="{TemplateBinding Padding}">
-                            <Border.Effect>
-                                <DropShadowEffect BlurRadius="10" ShadowDepth="1" Opacity="0.25"/>
-                            </Border.Effect>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
                                 <Setter TargetName="Border" Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Border" Property="Opacity" Value="0.95"/>
+                                <Setter TargetName="Border" Property="Background" Value="{DynamicResource ButtonActiveBackground}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="Border" Property="Opacity" Value="0.85"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Border" Property="Opacity" Value="0.55"/>
+                                <Setter TargetName="Border" Property="Opacity" Value="0.4"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -743,6 +758,7 @@
             </Setter>
         </Style>
 
+        <!-- Windows 11 Chat Input TextBox - Clean, no heavy shadows -->
         <Style x:Key="ChatInputBarTextBoxStyle" TargetType="TextBox">
             <Setter Property="Background" Value="{DynamicResource ButtonBackground}"/>
             <Setter Property="Foreground" Value="{DynamicResource OverlayForeground}"/>
@@ -752,12 +768,9 @@
                     <ControlTemplate TargetType="TextBox">
                         <Border x:Name="Border"
                                 Background="{TemplateBinding Background}"
-                                CornerRadius="14"
+                                CornerRadius="12"
                                 SnapsToDevicePixels="True"
                                 ClipToBounds="True">
-                            <Border.Effect>
-                                <DropShadowEffect BlurRadius="10" ShadowDepth="1" Opacity="0.35"/>
-                            </Border.Effect>
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="*"/>
@@ -978,13 +991,13 @@
         <Grid.RenderTransform>
             <TranslateTransform x:Name="RootTranslate" Y="12"/>
         </Grid.RenderTransform>
-        <!-- Keep shadow on a shape layer; DropShadowEffect on Border can render inconsistently. -->
-        <Rectangle RadiusX="0"
-                   RadiusY="0"
+        <!-- Subtle shadow layer for Windows 11 style depth -->
+        <Rectangle RadiusX="12"
+                   RadiusY="12"
                    Fill="{DynamicResource OverlayBackground}"
                    IsHitTestVisible="False">
             <Rectangle.Effect>
-                <DropShadowEffect BlurRadius="18" ShadowDepth="0" Opacity="0.45" />
+                <DropShadowEffect BlurRadius="24" ShadowDepth="0" Opacity="0.32" Color="#000000"/>
             </Rectangle.Effect>
         </Rectangle>
         <Border x:Name="RootBorder"
@@ -1043,42 +1056,34 @@
                     <StackPanel x:Name="ExpandedHeader" Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="{Binding AppName}" Style="{DynamicResource TitleLargeTextBlockStyle}"/>
                         <StackPanel Orientation="Horizontal" Margin="12 0 0 0" VerticalAlignment="Center">
-                            <Border Background="{DynamicResource ButtonBackground}" CornerRadius="10" Padding="6 2" Margin="0 0 8 0">
-                                <Border.Effect>
-                                    <DropShadowEffect BlurRadius="10" ShadowDepth="1" Opacity="0.25"/>
-                                </Border.Effect>
+                            <!-- Status indicators - Windows 11 minimal style -->
+                            <Border Background="{DynamicResource ButtonBackground}" CornerRadius="6" Padding="8 4" Margin="0 0 6 0">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Ellipse Width="8" Height="8" Fill="{Binding McpStatusBrush}" VerticalAlignment="Center"/>
+                                    <Ellipse Width="6" Height="6" Fill="{Binding McpStatusBrush}" VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding McpStatusText}"
-                                               FontSize="12"
+                                               FontSize="11"
                                                Foreground="{DynamicResource SubtleText}"
-                                               Margin="4 0 0 0"
+                                               Margin="6 0 0 0"
                                                VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Border>
-                            <Border Background="{DynamicResource ButtonBackground}" CornerRadius="10" Padding="6 2" Margin="0 0 8 0">
-                                <Border.Effect>
-                                    <DropShadowEffect BlurRadius="10" ShadowDepth="1" Opacity="0.25"/>
-                                </Border.Effect>
+                            <Border Background="{DynamicResource ButtonBackground}" CornerRadius="6" Padding="8 4" Margin="0 0 6 0">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Ellipse Width="8" Height="8" Fill="{Binding AgentStatusBrush}" VerticalAlignment="Center"/>
+                                    <Ellipse Width="6" Height="6" Fill="{Binding AgentStatusBrush}" VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding AgentStatusText}"
-                                               FontSize="12"
+                                               FontSize="11"
                                                Foreground="{DynamicResource SubtleText}"
-                                               Margin="4 0 0 0"
+                                               Margin="6 0 0 0"
                                                VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Border>
-                            <Border Background="{DynamicResource ButtonBackground}" CornerRadius="10" Padding="6 2">
-                                <Border.Effect>
-                                    <DropShadowEffect BlurRadius="10" ShadowDepth="1" Opacity="0.25"/>
-                                </Border.Effect>
+                            <Border Background="{DynamicResource ButtonBackground}" CornerRadius="6" Padding="8 4">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Ellipse Width="8" Height="8" Fill="{Binding ProviderStatusBrush}" VerticalAlignment="Center"/>
+                                    <Ellipse Width="6" Height="6" Fill="{Binding ProviderStatusBrush}" VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding ProviderStatusText}"
-                                               FontSize="12"
+                                               FontSize="11"
                                                Foreground="{DynamicResource SubtleText}"
-                                               Margin="4 0 0 0"
+                                               Margin="6 0 0 0"
                                                VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Border>
@@ -1130,11 +1135,8 @@
                 </StackPanel>
             </Grid>
 
-            <!-- Mode buttons + content -->
-            <Border Grid.Row="1" Background="{DynamicResource PanelBackground}" Padding="14" CornerRadius="12">
-                <Border.Effect>
-                    <DropShadowEffect BlurRadius="10" ShadowDepth="1" Opacity="0.25"/>
-                </Border.Effect>
+            <!-- Mode buttons + content - Windows 11 clean panel -->
+            <Border Grid.Row="1" Background="{DynamicResource PanelBackground}" Padding="12" CornerRadius="8">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
