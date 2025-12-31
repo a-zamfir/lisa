@@ -118,4 +118,10 @@
             </Setter.Value>
         </Setter>
     </Style>
+
+    <Style x:Key="TitleLargeTextBlockStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="18"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource OverlayForeground}"/>
+    </Style>
 </ResourceDictionary>
