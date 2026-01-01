@@ -45,5 +45,11 @@ namespace Host.Win.Models
         public string PiperVoiceModelPath { get; set; } = string.Empty;
         public string PiperVoiceConfigPath { get; set; } = string.Empty;
         public int? PiperSpeakerId { get; set; }
+
+        // Chatterbox TTS configuration
+        public string TtsEngine { get; set; } = "chatterbox"; // piper | chatterbox
+        public string ChatterboxPythonPath { get; set; } = string.Empty;
+        public string ChatterboxWorkingDir { get; set; } = string.Empty;
+        public string ChatterboxRefAudio { get; set; } = "female_ref.wav";
     }
 }

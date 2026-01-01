@@ -49,6 +49,7 @@ namespace Host.Win
             _audioCaptureService = new AudioCaptureService();
             _audioPlaybackService = new AudioPlaybackService();
             _ttsService = new TtsService();
+            _ttsService.PreWarm(_hostSettings);
             _agentClient = new AgentClient(new Uri($"http://{_hostSettings.AgentHost}:{_hostSettings.AgentPort}"));
             _agentClient.SetProviderApiKey(_hostSettings.ProviderApiKey);
             _themeService = new ThemeService();
