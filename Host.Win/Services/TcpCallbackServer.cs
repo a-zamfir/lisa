@@ -3,6 +3,7 @@ using System;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -32,10 +33,25 @@ namespace Host.Win.Services
         public void Start()
         {
             if (_listener != null) return;
-            _cts = new CancellationTokenSource();
-            _listener = new TcpListener(IPAddress.Loopback, _port);
-            _listener.Start();
-            _listenerTask = Task.Run(() => ListenAsync(_cts.Token));
+
+            try
+            {
+                _cts = new CancellationTokenSource();
+                _listener = new TcpListener(IPAddress.Loopback, _port);
+
+                // Enable SO_REUSEADDR to allow port reuse after unclean shutdown
+                _listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+
+                _listener.Start();
+                _listenerTask = Task.Run(() => ListenAsync(_cts.Token));
+            }
+            catch (Exception ex)
+            {
+                // Cleanup on failed start
+                Trace.TraceError($"Failed to start TCP callback server on port {_port}: {ex.Message}");
+                CleanupResources();
+                throw;
+            }
         }
 
         private async Task ListenAsync(CancellationToken token)
@@ -81,7 +97,7 @@ namespace Host.Win.Services
 
                         var json = Encoding.UTF8.GetString(payloadBuffer);
                         var payload = JsonSerializer.Deserialize<AgentToolCallback>(json);
-                        if (payload != null && string.Equals(payload.Token, _token, StringComparison.Ordinal))
+                        if (payload != null && IsValidToken(payload.Token))
                         {
                             _onCallback(payload);
                         }
@@ -111,16 +127,68 @@ namespace Host.Win.Services
             return offset;
         }
 
+        private bool IsValidToken(string? providedToken)
+        {
+            if (string.IsNullOrEmpty(providedToken) || string.IsNullOrEmpty(_token))
+            {
+                return false;
+            }
+
+            // Use constant-time comparison to prevent timing attacks
+            var providedBytes = Encoding.UTF8.GetBytes(providedToken);
+            var expectedBytes = Encoding.UTF8.GetBytes(_token);
+
+            return CryptographicOperations.FixedTimeEquals(providedBytes, expectedBytes);
+        }
+
         public void Stop()
         {
-            _cts?.Cancel();
-            _listener?.Stop();
+            CleanupResources();
+        }
+
+        private void CleanupResources()
+        {
+            try
+            {
+                _cts?.Cancel();
+            }
+            catch { }
+
+            try
+            {
+                _listener?.Stop();
+            }
+            catch { }
+
+            try
+            {
+                _cts?.Dispose();
+            }
+            catch { }
+
             _listener = null;
+            _cts = null;
+
+            // Wait for listener task to complete (with timeout)
+            try
+            {
+                _listenerTask?.Wait(TimeSpan.FromSeconds(2));
+            }
+            catch { }
+
+            _listenerTask = null;
         }
 
         public void Dispose()
         {
-            Stop();
+            CleanupResources();
+            GC.SuppressFinalize(this);
+        }
+
+        // Finalizer for emergency cleanup if Dispose is not called
+        ~TcpCallbackServer()
+        {
+            CleanupResources();
         }
     }
 }

@@ -39,6 +39,12 @@ namespace Host.Win.Models
         [JsonPropertyName("content_delta")]
         public string? ContentDelta { get; set; }
 
+        [JsonPropertyName("memory_op_count")]
+        public int? MemoryOpCount { get; set; }
+
+        [JsonPropertyName("memory_error")]
+        public string? MemoryError { get; set; }
+
         [JsonPropertyName("token")]
         public string? Token { get; set; }
 

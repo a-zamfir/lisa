@@ -1,5 +1,7 @@
-mcp
+mcp[cli]>=1.2.0
+fastmcp
 fastapi
 orjson
 uvicorn
 typing_extensions
+pywin32

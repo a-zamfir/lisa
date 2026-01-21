@@ -1,9 +1,9 @@
 import os
 from fastapi import FastAPI
 
-from agent_mcp.routers import tools
+from mcp_server.routers import tools
 
-DEFAULT_PORT = int(os.environ.get("MCP_PORT", "8123"))
+DEFAULT_PORT = int(os.environ.get("MCP_PORT", "8124"))
 
 
 def create_app() -> FastAPI:

@@ -26,6 +26,8 @@ namespace Host.Win.Services
 
     public sealed class AudioCaptureService
     {
+        private const int MaxBufferBytes = 10 * 1024 * 1024; // 10MB safety cap
+
         public async Task<AudioCaptureResult> CaptureAsync(VadDetector vad, CancellationToken cancellationToken)
         {
             var device = GetDefaultCaptureDevice();
@@ -67,6 +69,15 @@ namespace Host.Win.Services
             capture.DataAvailable += (_, args) =>
             {
                 if (args.BytesRecorded <= 0) return;
+
+                // Safety check: enforce maximum buffer size to prevent unbounded memory growth
+                if (captureStream.Length + args.BytesRecorded > MaxBufferBytes)
+                {
+                    Trace.TraceWarning($"Audio capture buffer exceeded {MaxBufferBytes / (1024 * 1024)}MB limit. Stopping capture.");
+                    StopCapture();
+                    return;
+                }
+
                 writer.Write(args.Buffer, 0, args.BytesRecorded);
 
                 if (vadBufferCount + args.BytesRecorded > vadBuffer.Length)

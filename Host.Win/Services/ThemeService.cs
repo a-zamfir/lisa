@@ -12,6 +12,7 @@ namespace Host.Win.Services
         private const string LightThemePath = "Themes/LightTheme.xaml";
         private const string DarkThemePath = "Themes/DarkTheme.xaml";
         private const string GlassThemePath = "Themes/GlassTheme.xaml";
+        private const string GreenThemePath = "Themes/GreenTheme.xaml";
 
         public AppTheme GetSystemTheme()
         {
@@ -37,6 +38,7 @@ namespace Host.Win.Services
             {
                 AppTheme.Light => LightThemePath,
                 AppTheme.Glass => GlassThemePath,
+                AppTheme.Green => GreenThemePath,
                 _ => DarkThemePath
             };
             var assemblyName = Assembly.GetExecutingAssembly().GetName().Name;
@@ -48,7 +50,8 @@ namespace Host.Win.Services
                 var source = resources.MergedDictionaries[i].Source?.OriginalString ?? string.Empty;
                 if (source.Contains("LightTheme.xaml", StringComparison.OrdinalIgnoreCase) ||
                     source.Contains("DarkTheme.xaml", StringComparison.OrdinalIgnoreCase) ||
-                    source.Contains("GlassTheme.xaml", StringComparison.OrdinalIgnoreCase))
+                    source.Contains("GlassTheme.xaml", StringComparison.OrdinalIgnoreCase) ||
+                    source.Contains("GreenTheme.xaml", StringComparison.OrdinalIgnoreCase))
                 {
                     resources.MergedDictionaries.RemoveAt(i);
                 }

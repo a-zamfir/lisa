@@ -47,6 +47,8 @@ namespace Host.Win.ViewModels
         private string _greetingName = Environment.UserName;
         private bool _showGreeting = true;
         private bool _isSending;
+        private bool _isThinkArmed;
+        private ChatMessage? _activeStreamingMessage;
         private ICommand? _sendChatCommand;
         private ICommand? _copyMessageCommand;
         private ICommand? _retryMessageCommand;
@@ -55,12 +57,17 @@ namespace Host.Win.ViewModels
         private ICommand? _toggleShareCommand;
         private ICommand? _startTalkCommand;
         private ICommand? _replayTtsCommand;
+        private ICommand? _attachFileCommand;
+        private ICommand? _toggleMcpServerCommand;
+        private ObservableCollection<McpServerItem> _mcpServers = new();
         private HostSettings? _settings;
         private ICommand? _saveSettingsCommand;
         private ICommand? _toggleCollapseCommand;
         private readonly System.Collections.Generic.Dictionary<string, System.Threading.CancellationTokenSource> _inflightTurns = new();
-        private readonly Dictionary<string, StringBuilder> _pendingContentByTurn = new();
         private readonly Dictionary<string, StringBuilder> _pendingThinkingByTurn = new();
+        private readonly Dictionary<string, Queue<char>> _characterBufferByTurn = new();
+        private readonly HashSet<string> _contentDoneTurns = new();
+        private readonly Dictionary<string, string> _finalContentByTurn = new();
         private DispatcherTimer? _streamFlushTimer;
         private string _sessionId = Guid.NewGuid().ToString();
         private string _sessionNonce = GenerateSessionNonce();
@@ -75,6 +82,7 @@ namespace Host.Win.ViewModels
         private double _overlayHeight = ExpandedHeight;
         private readonly SemaphoreSlim _screenShareCaptureGate = new(1, 1);
         public Func<double, Task>? SetOverlayOpacityAsync { get; set; }
+        public Action? RequestScrollToEnd { get; set; }
 
         private const double ExpandedWidth = 720;
         private const double ExpandedHeight = 460;
@@ -83,6 +91,7 @@ namespace Host.Win.ViewModels
         private const int ScreenShareMaxDimensionPx = 1280;
         private const long ScreenShareJpegQuality = 70L;
         private const int ScreenShareHideMs = 5;
+        private const int MaxChatMessages = 50;
 
         public string? AppName
         {
@@ -99,7 +108,22 @@ namespace Host.Win.ViewModels
         public string GreetingName
         {
             get => _greetingName;
-            set => SetProperty(ref _greetingName, value);
+            set
+            {
+                if (!SetProperty(ref _greetingName, value)) return;
+                OnPropertyChanged(nameof(GreetingText));
+            }
+        }
+
+        public string GreetingText
+        {
+            get
+            {
+                var hour = DateTime.Now.Hour;
+                var greeting = hour < 12 ? "Good morning" : (hour < 18 ? "Good afternoon" : "Good evening");
+                var name = string.IsNullOrWhiteSpace(GreetingName) ? Environment.UserName : GreetingName.Trim();
+                return $"{greeting}, {name}!";
+            }
         }
 
         public bool ShowGreeting
@@ -262,6 +286,42 @@ namespace Host.Win.ViewModels
             set => SetProperty(ref _replayTtsCommand, value);
         }
 
+        public ICommand? AttachFileCommand
+        {
+            get => _attachFileCommand;
+            set => SetProperty(ref _attachFileCommand, value);
+        }
+
+        public ICommand? ToggleMcpServerCommand
+        {
+            get => _toggleMcpServerCommand;
+            set => SetProperty(ref _toggleMcpServerCommand, value);
+        }
+
+        public ObservableCollection<McpServerItem> McpServers
+        {
+            get => _mcpServers;
+            set => SetProperty(ref _mcpServers, value);
+        }
+
+        public bool IsThinkArmed
+        {
+            get => _isThinkArmed;
+            set => SetProperty(ref _isThinkArmed, value);
+        }
+
+        public ChatMessage? ActiveStreamingMessage
+        {
+            get => _activeStreamingMessage;
+            private set
+            {
+                if (!SetProperty(ref _activeStreamingMessage, value)) return;
+                OnPropertyChanged(nameof(HasActiveStreaming));
+            }
+        }
+
+        public bool HasActiveStreaming => _activeStreamingMessage != null;
+
         public HostSettings? Settings
         {
             get => _settings;
@@ -271,7 +331,45 @@ namespace Host.Win.ViewModels
                 ProviderType = _settings?.ProviderType ?? "Ollama";
                 OnPropertyChanged(nameof(VoiceRatePercent));
                 OnPropertyChanged(nameof(VoiceVolumePercent));
+                RefreshMcpServers();
             }
+        }
+
+        /// <summary>
+        /// Populate the McpServers collection from settings.
+        /// </summary>
+        public void RefreshMcpServers()
+        {
+            McpServers.Clear();
+            if (_settings?.McpServers == null) return;
+
+            foreach (var (name, config) in _settings.McpServers)
+            {
+                if (!config.Enabled) continue;
+                McpServers.Add(new McpServerItem(name, config.Description, config.Active));
+            }
+        }
+
+        /// <summary>
+        /// Toggle the active state of an MCP server.
+        /// </summary>
+        public void ToggleMcpServer(McpServerItem server)
+        {
+            server.IsActive = !server.IsActive;
+
+            // Update the underlying config
+            if (_settings?.McpServers != null && _settings.McpServers.TryGetValue(server.Name, out var config))
+            {
+                config.Active = server.IsActive;
+            }
+        }
+
+        /// <summary>
+        /// Get the list of active MCP server names for filtering tools.
+        /// </summary>
+        public List<string> GetActiveMcpServerNames()
+        {
+            return McpServers.Where(s => s.IsActive).Select(s => s.Name).ToList();
         }
 
         public int VoiceRatePercent
@@ -484,24 +582,41 @@ namespace Host.Win.ViewModels
 
         public bool CanSendChat() => !_isSending && !string.IsNullOrWhiteSpace(ChatInput);
 
-        private static async Task StreamTextAsync(ChatMessage target, string content, System.Threading.CancellationToken cancellationToken)
+        private async Task StreamTextAsync(ChatMessage target, string content, System.Threading.CancellationToken cancellationToken)
         {
-            var buffer = string.Empty;
             foreach (var ch in content)
             {
                 if (cancellationToken.IsCancellationRequested)
                 {
                     break;
                 }
-                buffer += ch;
                 await RunOnUiAsync(() =>
                 {
-                    target.Text = buffer;
+                    target.HasContentStream = true;
+                    target.IsStreaming = true;
                     target.AppendContentChunk(ch.ToString());
                 }).ConfigureAwait(false);
                 await Task.Delay(12, cancellationToken).ConfigureAwait(false);
             }
-            await RunOnUiAsync(() => target.IsStreaming = false).ConfigureAwait(false);
+
+            await RunOnUiAsync(() =>
+            {
+                target.Text = content;
+                if (target.HasToolApprovals)
+                {
+                    target.KeepOnlyToolApprovals();
+                }
+                else
+                {
+                    target.ResetContentSegments();
+                }
+                target.IsStreaming = false;
+                target.IsCancellable = false;
+                if (ReferenceEquals(ActiveStreamingMessage, target))
+                {
+                    ActiveStreamingMessage = null;
+                }
+            }).ConfigureAwait(false);
         }
 
         public void CopyMessage(ChatMessage? message)
@@ -529,6 +644,7 @@ namespace Host.Win.ViewModels
             message.ToolLabel = string.Empty;
             message.HasToolLabel = false;
             message.IsCancellable = true;
+            ActiveStreamingMessage = message;
             CommandManager.InvalidateRequerySuggested();
 
             var request = new RetryRequest
@@ -558,10 +674,14 @@ namespace Host.Win.ViewModels
                     {
                         if (message.HasContentStream)
                         {
-                            if (string.IsNullOrEmpty(message.Text))
+                            await RunOnUiAsync(() =>
                             {
-                                message.Text = msg.Content;
-                            }
+                                lock (_finalContentByTurn)
+                                {
+                                    _finalContentByTurn[message.TurnId] = msg.Content;
+                                }
+                                EnsureStreamFlushTimer();
+                            }).ConfigureAwait(false);
                         }
                         else
                         {
@@ -582,8 +702,15 @@ namespace Host.Win.ViewModels
                 message.Text = "(no response)";
             }
 
-            message.IsStreaming = false;
-            message.IsCancellable = false;
+            if (!message.HasContentStream)
+            {
+                message.IsStreaming = false;
+                message.IsCancellable = false;
+                if (ReferenceEquals(ActiveStreamingMessage, message))
+                {
+                    ActiveStreamingMessage = null;
+                }
+            }
             SetRetryableMessage(message);
             _inflightTurns.Remove(request.TurnId);
         }
@@ -650,6 +777,33 @@ namespace Host.Win.ViewModels
             });
         }
 
+        public void UpdateMemoryStatus(string turnId, string phase)
+        {
+            RunOnUi(() =>
+            {
+                foreach (var message in ChatMessages)
+                {
+                    if (!message.IsAssistant || message.TurnId != turnId) continue;
+                    if (phase == "memory_update_started")
+                    {
+                        message.IsMemoryUpdating = true;
+                        break;
+                    }
+
+                    if (phase == "memory_update_done" || phase == "memory_update_failed")
+                    {
+                        message.IsMemoryUpdating = false;
+                        var success = phase == "memory_update_done";
+                        var text = success ? "Memory updated." : "Memory update failed.";
+                        message.StatusSegments.Clear();
+                        message.StatusSegments.Add(ChatContentSegment.BadgeSegment(text, success));
+                        break;
+                    }
+                    break;
+                }
+            });
+        }
+
         public void UpdateThinkingStatus(string turnId, string phase, string? delta)
         {
             RunOnUi(() =>
@@ -680,22 +834,33 @@ namespace Host.Win.ViewModels
             {
                 if (phase == "content_chunk" && !string.IsNullOrEmpty(delta))
                 {
-                    QueueStreamDelta(_pendingContentByTurn, turnId, delta);
+                    BufferContentDelta(turnId, delta);
+                    foreach (var message in ChatMessages)
+                    {
+                        if (!message.IsAssistant || message.TurnId != turnId) continue;
+                        message.HasContentStream = true;
+                        message.IsStreaming = true;
+                        break;
+                    }
                     EnsureStreamFlushTimer();
                     return;
                 }
 
                 if (phase == "content_done")
                 {
-                    FlushStreamDeltasForTurn(turnId);
+                    lock (_contentDoneTurns)
+                    {
+                        _contentDoneTurns.Add(turnId);
+                    }
+
                     foreach (var message in ChatMessages)
                     {
                         if (!message.IsAssistant || message.TurnId != turnId) continue;
                         message.HasContentStream = true;
-                        message.IsStreaming = false;
-                        message.IsCancellable = false;
+                        message.IsStreaming = true;
                         break;
                     }
+                    EnsureStreamFlushTimer();
                 }
             });
         }
@@ -708,15 +873,42 @@ namespace Host.Win.ViewModels
                 cts.Cancel();
                 _inflightTurns.Remove(message.TurnId);
             }
+
+            lock (_characterBufferByTurn)
+            {
+                _characterBufferByTurn.Remove(message.TurnId);
+            }
+            lock (_contentDoneTurns)
+            {
+                _contentDoneTurns.Remove(message.TurnId);
+            }
+            lock (_finalContentByTurn)
+            {
+                _finalContentByTurn.Remove(message.TurnId);
+            }
+
             message.IsStreaming = false;
             message.IsCancellable = false;
             message.ToolLabel = "Stopped";
             message.HasToolLabel = true;
+            if (ReferenceEquals(ActiveStreamingMessage, message))
+            {
+                ActiveStreamingMessage = null;
+            }
         }
 
         public void ClearChatHistory()
         {
             ChatMessages.Clear();
+        }
+
+        private void AddChatMessage(ChatMessage message)
+        {
+            ChatMessages.Add(message);
+            while (ChatMessages.Count > MaxChatMessages)
+            {
+                ChatMessages.RemoveAt(0);
+            }
         }
 
         public void RefreshProviderModels()
@@ -807,6 +999,7 @@ namespace Host.Win.ViewModels
             }
             _inflightTurns.Clear();
             ClearChatHistory();
+            ActiveStreamingMessage = null;
             ShowGreeting = true;
             UpdateSession(Guid.NewGuid().ToString());
             Logger?.LogEvent("conversation.reset", new { sessionId = SessionId });
@@ -1086,7 +1279,7 @@ namespace Host.Win.ViewModels
                         {
                             transcriptText = response.Transcript.Trim();
                             hasTranscript = true;
-                            ChatMessages.Add(new ChatMessage
+                            AddChatMessage(new ChatMessage
                             {
                                 Sender = "You",
                                 Text = response.Transcript,
@@ -1264,7 +1457,7 @@ namespace Host.Win.ViewModels
             {
                 if (addUserMessage)
                 {
-                    ChatMessages.Add(new ChatMessage { Sender = "You", Text = text, IsAssistant = false });
+                    AddChatMessage(new ChatMessage { Sender = "You", Text = text, IsAssistant = false });
                 }
 
                 if (addUserMessage && inputType == "text")
@@ -1273,9 +1466,13 @@ namespace Host.Win.ViewModels
                 }
 
                 SetRetryableMessage(null);
-                ChatMessages.Add(streamingMessage);
+                AddChatMessage(streamingMessage);
+                ActiveStreamingMessage = streamingMessage;
                 OnPropertyChanged(nameof(ChatMessages));
             }).ConfigureAwait(false);
+
+            var activeMcps = GetActiveMcpServerNames();
+            Trace.WriteLine($"[MCP] Active MCPs: {string.Join(", ", activeMcps)} (count={activeMcps.Count}, total servers={McpServers.Count})");
 
             var request = new TextInputRequest
             {
@@ -1284,7 +1481,8 @@ namespace Host.Win.ViewModels
                 Text = text,
                 InputMeta = new InputMetadata
                 {
-                    SessionNonce = SessionNonce
+                    SessionNonce = SessionNonce,
+                    ActiveMcps = activeMcps
                 }
             };
 
@@ -1294,7 +1492,8 @@ namespace Host.Win.ViewModels
                 request.TurnId,
                 input_type = inputType,
                 request.Text,
-                request.InputMeta
+                request.InputMeta,
+                activeMcps
             });
 
             AgentResponse? response = null;
@@ -1317,10 +1516,14 @@ namespace Host.Win.ViewModels
                     {
                         if (streamingMessage.HasContentStream)
                         {
-                            if (string.IsNullOrEmpty(streamingMessage.Text))
+                            await RunOnUiAsync(() =>
                             {
-                                await StreamTextAsync(streamingMessage, msg.Content, cts.Token);
-                            }
+                                lock (_finalContentByTurn)
+                                {
+                                    _finalContentByTurn[turnId] = msg.Content;
+                                }
+                                EnsureStreamFlushTimer();
+                            }).ConfigureAwait(false);
                         }
                         else
                         {
@@ -1351,8 +1554,15 @@ namespace Host.Win.ViewModels
 
             await RunOnUiAsync(() =>
             {
-                streamingMessage.IsStreaming = false;
-                streamingMessage.IsCancellable = false;
+                if (!streamingMessage.HasContentStream)
+                {
+                    streamingMessage.IsStreaming = false;
+                    streamingMessage.IsCancellable = false;
+                    if (ReferenceEquals(ActiveStreamingMessage, streamingMessage))
+                    {
+                        ActiveStreamingMessage = null;
+                    }
+                }
                 SetRetryableMessage(streamingMessage);
                 OnPropertyChanged(nameof(ChatMessages));
             }).ConfigureAwait(false);
@@ -1384,7 +1594,11 @@ namespace Host.Win.ViewModels
             var ttsText = response.TtsText;
             if (string.IsNullOrWhiteSpace(ttsText))
             {
-                ttsText = streamingMessage.Text;
+                ttsText = response.Messages.FirstOrDefault(m => m.Role == "assistant")?.Content;
+                if (string.IsNullOrWhiteSpace(ttsText))
+                {
+                    ttsText = streamingMessage.Text;
+                }
             }
 
             if (string.IsNullOrWhiteSpace(ttsText))
@@ -1488,12 +1702,34 @@ namespace Host.Win.ViewModels
                 return;
             }
 
-            _streamFlushTimer = new DispatcherTimer(DispatcherPriority.Background)
+            _streamFlushTimer = new DispatcherTimer(DispatcherPriority.Render)
             {
-                Interval = TimeSpan.FromMilliseconds(33) // ~30fps
+                Interval = TimeSpan.FromSeconds(1.0 / 60.0) // 60fps
             };
             _streamFlushTimer.Tick += (_, _) => FlushStreamDeltas();
             _streamFlushTimer.Start();
+        }
+
+        private void BufferContentDelta(string turnId, string delta)
+        {
+            if (string.IsNullOrEmpty(delta) || string.IsNullOrWhiteSpace(turnId))
+            {
+                return;
+            }
+
+            lock (_characterBufferByTurn)
+            {
+                if (!_characterBufferByTurn.TryGetValue(turnId, out var buffer))
+                {
+                    buffer = new Queue<char>();
+                    _characterBufferByTurn[turnId] = buffer;
+                }
+
+                foreach (var ch in delta)
+                {
+                    buffer.Enqueue(ch);
+                }
+            }
         }
 
         private void FlushStreamDeltasForTurn(string turnId)
@@ -1503,16 +1739,7 @@ namespace Host.Win.ViewModels
                 return;
             }
 
-            string? content = null;
             string? thinking = null;
-
-            lock (_pendingContentByTurn)
-            {
-                if (_pendingContentByTurn.Remove(turnId, out var sb))
-                {
-                    content = sb.ToString();
-                }
-            }
 
             lock (_pendingThinkingByTurn)
             {
@@ -1522,7 +1749,7 @@ namespace Host.Win.ViewModels
                 }
             }
 
-            ApplyStreamDeltas(turnId, content, thinking);
+            ApplyStreamDeltas(turnId, contentDelta: null, thinkingDelta: thinking);
         }
 
         private void FlushStreamDeltas()
@@ -1533,16 +1760,7 @@ namespace Host.Win.ViewModels
             }
 
             var hadPending = false;
-            Dictionary<string, string> content;
             Dictionary<string, string> thinking;
-
-            lock (_pendingContentByTurn)
-            {
-                hadPending |= _pendingContentByTurn.Count > 0;
-                content = _pendingContentByTurn.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToString());
-                _pendingContentByTurn.Clear();
-            }
-
             lock (_pendingThinkingByTurn)
             {
                 hadPending |= _pendingThinkingByTurn.Count > 0;
@@ -1550,21 +1768,145 @@ namespace Host.Win.ViewModels
                 _pendingThinkingByTurn.Clear();
             }
 
-            if (!hadPending)
+            Dictionary<string, string> smoothedContent = new();
+            lock (_characterBufferByTurn)
             {
-                _streamFlushTimer?.Stop();
-                _streamFlushTimer = null;
-                return;
+                hadPending |= _characterBufferByTurn.Count > 0;
+
+                foreach (var (turnId, buffer) in _characterBufferByTurn.ToList())
+                {
+                    if (buffer.Count == 0)
+                    {
+                        _characterBufferByTurn.Remove(turnId);
+                        continue;
+                    }
+
+                    const int charsPerFrame = 3; // 180 chars/sec at 60fps
+                    var charsToTake = buffer.Count <= 3 ? 1 : (buffer.Count <= 10 ? 2 : charsPerFrame);
+                    var sb = new StringBuilder(capacity: charsToTake);
+                    for (var i = 0; i < charsToTake && buffer.Count > 0; i++)
+                    {
+                        sb.Append(buffer.Dequeue());
+                    }
+
+                    if (sb.Length > 0)
+                    {
+                        smoothedContent[turnId] = sb.ToString();
+                    }
+
+                    if (buffer.Count == 0)
+                    {
+                        _characterBufferByTurn.Remove(turnId);
+                    }
+                }
             }
 
-            var allTurnIds = new HashSet<string>(content.Keys);
+            var allTurnIds = new HashSet<string>(smoothedContent.Keys);
             allTurnIds.UnionWith(thinking.Keys);
 
             foreach (var turnId in allTurnIds)
             {
-                content.TryGetValue(turnId, out var contentDelta);
+                smoothedContent.TryGetValue(turnId, out var contentDelta);
                 thinking.TryGetValue(turnId, out var thinkingDelta);
                 ApplyStreamDeltas(turnId, contentDelta, thinkingDelta);
+            }
+
+            FinalizeCompletedContentStreams();
+
+            lock (_characterBufferByTurn)
+            {
+                hadPending |= _characterBufferByTurn.Count > 0;
+            }
+
+            if (!hadPending)
+            {
+                _streamFlushTimer?.Stop();
+                _streamFlushTimer = null;
+            }
+        }
+
+        private void FinalizeCompletedContentStreams()
+        {
+            List<string> turnIds;
+            lock (_contentDoneTurns)
+            {
+                if (_contentDoneTurns.Count == 0)
+                {
+                    return;
+                }
+
+                turnIds = _contentDoneTurns.ToList();
+            }
+
+            foreach (var turnId in turnIds)
+            {
+                lock (_characterBufferByTurn)
+                {
+                    if (_characterBufferByTurn.ContainsKey(turnId))
+                    {
+                        continue;
+                    }
+                }
+
+                ChatMessage? message = null;
+                foreach (var candidate in ChatMessages)
+                {
+                    if (!candidate.IsAssistant || candidate.TurnId != turnId) continue;
+                    message = candidate;
+                    break;
+                }
+
+                if (message == null)
+                {
+                    lock (_contentDoneTurns)
+                    {
+                        _contentDoneTurns.Remove(turnId);
+                    }
+                    lock (_finalContentByTurn)
+                    {
+                        _finalContentByTurn.Remove(turnId);
+                    }
+                    continue;
+                }
+
+                string? finalText;
+                lock (_finalContentByTurn)
+                {
+                    _finalContentByTurn.TryGetValue(turnId, out finalText);
+                }
+
+                finalText ??= string.Concat(message.ContentSegments
+                    .Where(segment => !segment.IsApproval && !segment.IsBadge)
+                    .Select(segment => segment.Text ?? string.Empty));
+
+                message.Text = finalText;
+                if (message.HasToolApprovals)
+                {
+                    message.KeepOnlyToolApprovals();
+                }
+                else
+                {
+                    message.ResetContentSegments();
+                }
+
+                message.IsStreaming = false;
+                message.IsCancellable = false;
+                if (ReferenceEquals(ActiveStreamingMessage, message))
+                {
+                    ActiveStreamingMessage = null;
+                }
+
+                lock (_contentDoneTurns)
+                {
+                    _contentDoneTurns.Remove(turnId);
+                }
+                lock (_finalContentByTurn)
+                {
+                    _finalContentByTurn.Remove(turnId);
+                }
+
+                // Request scroll after layout settles to avoid jump
+                RequestScrollToEnd?.Invoke();
             }
         }
 
@@ -1583,7 +1925,6 @@ namespace Host.Win.ViewModels
                 {
                     message.HasContentStream = true;
                     message.IsStreaming = true;
-                    message.Text += contentDelta;
                     message.AppendContentChunk(contentDelta);
                 }
 
@@ -1689,6 +2030,30 @@ namespace Host.Win.ViewModels
 
             target ??= ChatMessages.LastOrDefault(message => message.IsAssistant);
             target?.AddToolApprovalLabel(toolName, approved);
+        }
+
+        public void HandleToolAutoApproved(AgentToolCallback callback)
+        {
+            var toolName = callback.ToolName;
+            if (string.IsNullOrWhiteSpace(toolName) && callback.ToolCalls.Count > 0)
+            {
+                toolName = callback.ToolCalls[0];
+            }
+            toolName ??= "tool";
+
+            ChatMessage? target = null;
+            foreach (var message in ChatMessages)
+            {
+                if (!message.IsAssistant) continue;
+                if (message.TurnId == callback.TurnId)
+                {
+                    target = message;
+                    break;
+                }
+            }
+
+            target ??= ChatMessages.LastOrDefault(message => message.IsAssistant);
+            target?.AddAutoApprovedLabel(toolName);
         }
     }
 }

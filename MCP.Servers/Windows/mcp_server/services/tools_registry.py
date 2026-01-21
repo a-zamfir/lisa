@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, List, Optional
 
-from agent_mcp.services.ps import parse_uptime, run_powershell, run_ps_json
+from mcp_server.services.ps import escape_ps_string, parse_uptime, run_powershell, run_ps_json, validate_path
 
 
 def get_tool_docs() -> List[Dict[str, Any]]:
@@ -96,6 +96,16 @@ def power_state() -> Dict[str, Any]:
 
 
 def process_inspector(process_name: Optional[str] = None, pid: Optional[int] = None) -> Dict[str, Any]:
+    # Validate PID if provided
+    if pid is not None and (pid < 0 or pid > 999999):
+        return {"error": "Invalid PID", "read_only": True}
+
+    # Validate process_name if provided (only allow safe characters)
+    if process_name:
+        import re
+        if not re.match(r'^[a-zA-Z0-9_\-\.]+$', process_name):
+            return {"error": "Invalid process name format. Only alphanumeric, underscore, dash, and dot allowed.", "read_only": True}
+
     ps = r"""
 param($Pid, $Name)
 $proc = $null
@@ -103,7 +113,8 @@ $windowTitle = $null
 if ($Pid) {
   $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$Pid" | Select-Object ProcessId, Name, ExecutablePath, CommandLine, ParentProcessId
 } elseif ($Name) {
-  $proc = Get-CimInstance Win32_Process -Filter "Name='$Name'" | Select-Object ProcessId, Name, ExecutablePath, CommandLine, ParentProcessId | Select-Object -First 1
+  # SECURITY FIX: Use Where-Object with -eq instead of WMI filter string interpolation
+  $proc = Get-CimInstance Win32_Process | Where-Object { $_.Name -eq $Name } | Select-Object ProcessId, Name, ExecutablePath, CommandLine, ParentProcessId | Select-Object -First 1
 } else {
   Add-Type @"
 using System;
@@ -153,7 +164,14 @@ foreach ($path in @('HKLM:\Software\Microsoft\Windows\CurrentVersion\Run','HKCU:
   startup = $startup
 }
 """
-    payload = run_ps_json(ps.replace("\r\n", "\n"))
+    # Build command with proper parameter passing
+    cmd_parts = [ps.replace("\r\n", "\n")]
+    if pid is not None:
+        cmd_parts.append(f" -Pid {pid}")
+    if process_name:
+        cmd_parts.append(f" -Name {escape_ps_string(process_name)}")
+
+    payload = run_ps_json("".join(cmd_parts))
     return {"result": payload, "read_only": True}
 
 
@@ -188,29 +206,65 @@ if ($Filter) {
 }
 $results | Select-Object -First $Limit
 """
-    payload = run_ps_json(ps.replace("\r\n", "\n") + f"\n -Filter \"{filter_text}\" -Limit {limit}")
+    # SECURITY FIX: Use escaped parameter instead of string interpolation
+    payload = run_ps_json(ps.replace("\r\n", "\n") + f"\n -Filter {escape_ps_string(filter_text)} -Limit {limit}")
     return {"result": payload, "read_only": True}
 
 
-def large_files(root: Optional[str] = None, limit: int = 10) -> Dict[str, Any]:
+def large_files(root: Optional[str] = None, limit: int = 10, max_depth: int = 3) -> Dict[str, Any]:
     limit = max(1, min(limit, 50))
+    max_depth = max(1, min(max_depth, 10))  # Cap at 10 levels
     root = root or os.path.expandvars(r"%USERPROFILE%")
+
+    # SECURITY FIX: Validate path before use
+    try:
+        root = validate_path(root, allow_network=False)
+    except ValueError as ex:
+        return {"error": str(ex), "read_only": True}
+
     ps = r"""
-param($Root, $Limit)
-Get-ChildItem -Path $Root -Recurse -File -ErrorAction SilentlyContinue |
+param($Root, $Limit, $Depth)
+# Exclude common large/irrelevant directories
+$exclude = @('node_modules', 'AppData', '.git', '.venv', 'venv', '__pycache__', 'Windows', 'ProgramData', '$Recycle.Bin')
+Get-ChildItem -LiteralPath $Root -Recurse -File -Depth $Depth -ErrorAction SilentlyContinue |
+  Where-Object {
+    $excluded = $false
+    foreach ($pattern in $exclude) {
+      if ($_.FullName -like "*\$pattern\*") { $excluded = $true; break }
+    }
+    -not $excluded
+  } |
   Sort-Object Length -Descending |
   Select-Object -First $Limit FullName, Length, LastWriteTime
 """
-    payload = run_ps_json(ps.replace("\r\n", "\n") + f"\n -Root \"{root}\" -Limit {limit}")
+    # SECURITY FIX: Use -LiteralPath and escaped parameter
+    payload = run_ps_json(ps.replace("\r\n", "\n") + f"\n -Root {escape_ps_string(root)} -Limit {limit} -Depth {max_depth}")
     return {"result": payload, "read_only": True}
 
 
-def find_duplicates(root: Optional[str] = None, limit: int = 10) -> Dict[str, Any]:
+def find_duplicates(root: Optional[str] = None, limit: int = 10, max_depth: int = 2) -> Dict[str, Any]:
     limit = max(1, min(limit, 50))
+    max_depth = max(1, min(max_depth, 5))  # Cap at 5 levels (hashing is expensive)
     root = root or os.path.expandvars(r"%USERPROFILE%")
+
+    # SECURITY FIX: Validate path before use
+    try:
+        root = validate_path(root, allow_network=False)
+    except ValueError as ex:
+        return {"error": str(ex), "read_only": True}
+
     ps = r"""
-param($Root, $Limit)
-$files = Get-ChildItem -Path $Root -Recurse -File -ErrorAction SilentlyContinue
+param($Root, $Limit, $Depth)
+# Exclude common large/irrelevant directories (hashing is expensive)
+$exclude = @('node_modules', 'AppData', '.git', '.venv', 'venv', '__pycache__', 'Windows', 'ProgramData', '$Recycle.Bin')
+$files = Get-ChildItem -LiteralPath $Root -Recurse -File -Depth $Depth -ErrorAction SilentlyContinue |
+  Where-Object {
+    $excluded = $false
+    foreach ($pattern in $exclude) {
+      if ($_.FullName -like "*\$pattern\*") { $excluded = $true; break }
+    }
+    -not $excluded
+  }
 $hashes = $files | ForEach-Object {
   try {
     $h = Get-FileHash -Path $_.FullName -Algorithm SHA256
@@ -220,16 +274,34 @@ $hashes = $files | ForEach-Object {
 $dupes = $hashes | Group-Object Hash | Where-Object { $_.Count -gt 1 } | Select-Object -First $Limit
 $dupes
 """
-    payload = run_ps_json(ps.replace("\r\n", "\n") + f"\n -Root \"{root}\" -Limit {limit}")
+    # SECURITY FIX: Use -LiteralPath and escaped parameter
+    payload = run_ps_json(ps.replace("\r\n", "\n") + f"\n -Root {escape_ps_string(root)} -Limit {limit} -Depth {max_depth}")
     return {"result": payload, "read_only": True}
 
 
-def disk_usage_by_extension(root: Optional[str] = None, limit: int = 10) -> Dict[str, Any]:
+def disk_usage_by_extension(root: Optional[str] = None, limit: int = 10, max_depth: int = 3) -> Dict[str, Any]:
     limit = max(1, min(limit, 50))
+    max_depth = max(1, min(max_depth, 10))  # Cap at 10 levels
     root = root or os.path.expandvars(r"%USERPROFILE%")
+
+    # SECURITY FIX: Validate path before use
+    try:
+        root = validate_path(root, allow_network=False)
+    except ValueError as ex:
+        return {"error": str(ex), "read_only": True}
+
     ps = r"""
-param($Root, $Limit)
-Get-ChildItem -Path $Root -Recurse -File -ErrorAction SilentlyContinue |
+param($Root, $Limit, $Depth)
+# Exclude common large/irrelevant directories
+$exclude = @('node_modules', 'AppData', '.git', '.venv', 'venv', '__pycache__', 'Windows', 'ProgramData', '$Recycle.Bin')
+Get-ChildItem -LiteralPath $Root -Recurse -File -Depth $Depth -ErrorAction SilentlyContinue |
+  Where-Object {
+    $excluded = $false
+    foreach ($pattern in $exclude) {
+      if ($_.FullName -like "*\$pattern\*") { $excluded = $true; break }
+    }
+    -not $excluded
+  } |
   Group-Object Extension |
   ForEach-Object {
     [pscustomobject]@{ Extension=$_.Name; Count=$_.Count; Size=($_.Group | Measure-Object Length -Sum).Sum }
@@ -237,27 +309,51 @@ Get-ChildItem -Path $Root -Recurse -File -ErrorAction SilentlyContinue |
   Sort-Object Size -Descending |
   Select-Object -First $Limit
 """
-    payload = run_ps_json(ps.replace("\r\n", "\n") + f"\n -Root \"{root}\" -Limit {limit}")
+    # SECURITY FIX: Use -LiteralPath and escaped parameter
+    payload = run_ps_json(ps.replace("\r\n", "\n") + f"\n -Root {escape_ps_string(root)} -Limit {limit} -Depth {max_depth}")
     return {"result": payload, "read_only": True}
 
 
-def recent_changes(root: Optional[str] = None, days: int = 1, limit: int = 20) -> Dict[str, Any]:
+def recent_changes(root: Optional[str] = None, days: int = 1, limit: int = 20, max_depth: int = 3) -> Dict[str, Any]:
     limit = max(1, min(limit, 50))
     days = max(1, min(days, 30))
+    max_depth = max(1, min(max_depth, 10))  # Cap at 10 levels
     root = root or os.path.expandvars(r"%USERPROFILE%")
+
+    # SECURITY FIX: Validate path before use
+    try:
+        root = validate_path(root, allow_network=False)
+    except ValueError as ex:
+        return {"error": str(ex), "read_only": True}
+
     ps = r"""
-param($Root, $Days, $Limit)
+param($Root, $Days, $Limit, $Depth)
+# Exclude common large/irrelevant directories
+$exclude = @('node_modules', 'AppData', '.git', '.venv', 'venv', '__pycache__', 'Windows', 'ProgramData', '$Recycle.Bin')
 $cutoff = (Get-Date).AddDays(-1 * [int]$Days)
-Get-ChildItem -Path $Root -Recurse -File -ErrorAction SilentlyContinue |
-  Where-Object { $_.LastWriteTime -ge $cutoff } |
+Get-ChildItem -LiteralPath $Root -Recurse -File -Depth $Depth -ErrorAction SilentlyContinue |
+  Where-Object {
+    $excluded = $false
+    foreach ($pattern in $exclude) {
+      if ($_.FullName -like "*\$pattern\*") { $excluded = $true; break }
+    }
+    (-not $excluded) -and ($_.LastWriteTime -ge $cutoff)
+  } |
   Sort-Object LastWriteTime -Descending |
   Select-Object -First $Limit FullName, LastWriteTime, Length
 """
-    payload = run_ps_json(ps.replace("\r\n", "\n") + f"\n -Root \"{root}\" -Days {days} -Limit {limit}")
+    # SECURITY FIX: Use -LiteralPath and escaped parameter
+    payload = run_ps_json(ps.replace("\r\n", "\n") + f"\n -Root {escape_ps_string(root)} -Days {days} -Limit {limit} -Depth {max_depth}")
     return {"result": payload, "read_only": True}
 
 
 def file_metadata(path: str) -> Dict[str, Any]:
+    # SECURITY FIX: Validate path before use
+    try:
+        path = validate_path(path, allow_network=False)
+    except ValueError as ex:
+        return {"error": str(ex), "read_only": True}
+
     ps = r"""
 param($Path)
 $item = Get-Item -LiteralPath $Path -ErrorAction SilentlyContinue | Select-Object FullName, Length, CreationTime, LastWriteTime
@@ -268,7 +364,8 @@ try { $zone = Get-Item -LiteralPath $Path -Stream Zone.Identifier -ErrorAction S
   zone = $zone
 }
 """
-    payload = run_ps_json(ps.replace("\r\n", "\n") + f"\n -Path \"{path}\"")
+    # SECURITY FIX: Use escaped parameter (already uses -LiteralPath in PS)
+    payload = run_ps_json(ps.replace("\r\n", "\n") + f"\n -Path {escape_ps_string(path)}")
     return {"result": payload, "read_only": True}
 
 

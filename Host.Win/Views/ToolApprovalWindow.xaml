@@ -4,7 +4,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Tool call request"
         Width="420"
-        Height="220"
+        MinHeight="180"
+        MaxHeight="500"
+        SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         WindowStyle="None"
@@ -14,8 +16,9 @@
         Opacity="0">
     <Window.Resources>
         <Style x:Key="ApprovalButtonStyle" TargetType="Button">
-            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryButtonForeground}"/>
             <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource PopupBorder}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -29,11 +32,10 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ButtonBorder" Property="Background" Value="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"/>
-                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"/>
+                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.92"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.9"/>
+                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.85"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.6"/>
@@ -46,7 +48,7 @@
     </Window.Resources>
     <Border CornerRadius="14"
             Background="{DynamicResource PopupBackground}"
-            BorderBrush="{DynamicResource ButtonBorder}"
+            BorderBrush="{DynamicResource PopupBorder}"
             BorderThickness="1"
             Padding="0">
         <Grid>
@@ -71,12 +73,13 @@
                            FontSize="13"
                            TextWrapping="Wrap"/>
                 <StackPanel Grid.Row="1" Margin="0 10 0 0">
-                    <TextBlock Text="Request parameters"
+                    <TextBlock Text="Tool parameters:"
                                Foreground="{DynamicResource SubtleText}"
-                               FontSize="12"/>
+                               FontSize="13"
+                               FontWeight="SemiBold"/>
                     <TextBlock Text="{Binding ParamsText}"
                                Foreground="{DynamicResource OverlayForeground}"
-                               FontSize="12"
+                               FontSize="13"
                                TextWrapping="Wrap"
                                Margin="0 4 0 0"/>
                 </StackPanel>
@@ -86,17 +89,13 @@
                             Width="100"
                             Height="32"
                             Margin="0 0 10 0"
-                            Background="#A96A6A"
-                            BorderBrush="{DynamicResource ButtonBorder}"
-                            Tag="#8E5A5A"
+                            Background="{DynamicResource ApprovalRejectedBackground}"
                             Style="{StaticResource ApprovalButtonStyle}"/>
                     <Button x:Name="ApproveButton"
                             Content="Approve"
                             Width="100"
                             Height="32"
-                            Background="#4FAE91"
-                            BorderBrush="{DynamicResource ButtonBorder}"
-                            Tag="#3F947B"
+                            Background="{DynamicResource ApprovalAcceptedBackground}"
                             Style="{StaticResource ApprovalButtonStyle}"/>
                 </StackPanel>
             </Grid>

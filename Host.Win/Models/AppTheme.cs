@@ -5,6 +5,7 @@ namespace Host.Win.Models
     {
         Light,
         Dark,
-        Glass
+        Glass,
+        Green
     }
 }

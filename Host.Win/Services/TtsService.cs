@@ -10,10 +10,22 @@ using Host.Win.Models;
 
 namespace Host.Win.Services
 {
-    public sealed class TtsService
+    public sealed class TtsService : IDisposable
     {
         private static readonly TimeSpan PiperTimeout = TimeSpan.FromSeconds(10);
         private const int MaxErrorPreviewChars = 400;
+
+        private readonly ChatterboxService _chatterbox = new();
+        private bool _disposed;
+
+        /// <summary>
+        /// Pre-warms the TTS engine if Chatterbox is configured.
+        /// Call this at app startup to avoid delay on first TTS request.
+        /// </summary>
+        public void PreWarm(HostSettings? settings)
+        {
+            _chatterbox.PreWarm(settings);
+        }
 
         public async Task<TtsResult> GenerateAsync(string text, HostSettings? settings, CancellationToken cancellationToken)
         {
@@ -21,6 +33,12 @@ namespace Host.Win.Services
             if (string.IsNullOrWhiteSpace(text))
             {
                 return TtsResult.Failed("No text to speak.");
+            }
+
+            // Route to Chatterbox if configured
+            if (string.Equals(settings?.TtsEngine, "chatterbox", StringComparison.OrdinalIgnoreCase))
+            {
+                return await GenerateWithChatterboxAsync(text, settings, cancellationToken).ConfigureAwait(false);
             }
 
             var command = ResolvePiperCommand(settings);
@@ -301,12 +319,63 @@ namespace Host.Win.Services
             return await TrySpeakWithSapiAsync(text, settings, cancellationToken).ConfigureAwait(false);
         }
 
+        private async Task<TtsResult> GenerateWithChatterboxAsync(string text, HostSettings? settings, CancellationToken cancellationToken)
+        {
+            var verbose = settings?.VerboseLogging == true;
+
+            try
+            {
+                var audioBytes = await _chatterbox.GenerateAsync(text, settings, cancellationToken).ConfigureAwait(false);
+
+                if (audioBytes != null && audioBytes.Length > 0)
+                {
+                    if (verbose)
+                    {
+                        Trace.WriteLine($"[TTS] Chatterbox generated {audioBytes.Length} bytes.");
+                    }
+                    return TtsResult.FromAudio(audioBytes);
+                }
+
+                // Chatterbox failed, fall back to Piper/SAPI
+                if (verbose)
+                {
+                    Trace.TraceWarning("[TTS] Chatterbox generation failed, falling back to Piper.");
+                }
+
+                return await FallbackToSapiAsync(text, settings, cancellationToken, "Chatterbox generation failed.").ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceError($"[TTS] Chatterbox error: {ex.Message}");
+                return await FallbackToSapiAsync(text, settings, cancellationToken, $"Chatterbox error: {ex.Message}").ConfigureAwait(false);
+            }
+        }
+
+        public void Dispose()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            _chatterbox.Dispose();
+        }
+
         private static PiperCommand ResolvePiperCommand(HostSettings? settings)
         {
             var mode = settings?.PiperMode?.Trim().ToLowerInvariant();
             if (string.Equals(mode, "python", StringComparison.OrdinalIgnoreCase))
             {
                 var pythonPath = string.IsNullOrWhiteSpace(settings?.PiperPythonPath) ? "python" : settings.PiperPythonPath;
+
+                // SECURITY: Block network paths for user-configured executables
+                if (!string.IsNullOrWhiteSpace(settings?.PiperPythonPath) && IsNetworkPath(settings.PiperPythonPath))
+                {
+                    Trace.TraceWarning($"[TTS] Blocked network path for PiperPythonPath: {settings.PiperPythonPath}");
+                    return new PiperCommand(string.Empty, string.Empty, requiresExistingFile: false);
+                }
+
                 if (IsPiperCommand(pythonPath))
                 {
                     return new PiperCommand(pythonPath, string.Empty, requiresExistingFile: false);
@@ -316,6 +385,13 @@ namespace Host.Win.Services
 
             if (!string.IsNullOrWhiteSpace(settings?.PiperExePath))
             {
+                // SECURITY: Block network paths for user-configured executables
+                if (IsNetworkPath(settings.PiperExePath))
+                {
+                    Trace.TraceWarning($"[TTS] Blocked network path for PiperExePath: {settings.PiperExePath}");
+                    return new PiperCommand(string.Empty, string.Empty, requiresExistingFile: false);
+                }
+
                 return new PiperCommand(settings.PiperExePath, string.Empty, requiresExistingFile: true);
             }
 
@@ -327,6 +403,13 @@ namespace Host.Win.Services
         {
             if (!string.IsNullOrWhiteSpace(settings?.PiperVoiceModelPath))
             {
+                // SECURITY: Block network paths for model files
+                if (IsNetworkPath(settings.PiperVoiceModelPath))
+                {
+                    Trace.TraceWarning($"[TTS] Blocked network path for PiperVoiceModelPath: {settings.PiperVoiceModelPath}");
+                    return string.Empty;
+                }
+
                 return settings.PiperVoiceModelPath;
             }
 
@@ -337,6 +420,13 @@ namespace Host.Win.Services
         {
             if (!string.IsNullOrWhiteSpace(settings?.PiperVoiceConfigPath))
             {
+                // SECURITY: Block network paths for config files
+                if (IsNetworkPath(settings.PiperVoiceConfigPath))
+                {
+                    Trace.TraceWarning($"[TTS] Blocked network path for PiperVoiceConfigPath: {settings.PiperVoiceConfigPath}");
+                    return string.Empty;
+                }
+
                 return settings.PiperVoiceConfigPath;
             }
 
@@ -533,6 +623,18 @@ namespace Host.Win.Services
             var trimmed = value.Trim();
             return trimmed.EndsWith("piper", StringComparison.OrdinalIgnoreCase)
                 || trimmed.EndsWith("piper.exe", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsNetworkPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return false;
+            }
+
+            var trimmed = path.Trim();
+            return trimmed.StartsWith("\\\\", StringComparison.Ordinal)
+                || trimmed.StartsWith("//", StringComparison.Ordinal);
         }
 
         private static string SanitizeText(string text)

@@ -17,6 +17,7 @@ namespace Host.Win.Services
             WriteIndented = true
         };
         private const string ApiKeyPrefix = "dpapi:";
+        private const string CurrentVersion = "0.1.0-alpha";
 
         public SettingsService()
         {
@@ -40,12 +41,40 @@ namespace Host.Win.Services
                 var settings = await JsonSerializer.DeserializeAsync<HostSettings>(stream, _jsonOptions).ConfigureAwait(false)
                     ?? new HostSettings();
                 settings.ProviderApiKey = DecryptApiKey(settings.ProviderApiKey);
+
+                // Migration: If version is missing or outdated, apply migrations and save
+                if (string.IsNullOrWhiteSpace(settings.SettingsVersion) || settings.SettingsVersion != CurrentVersion)
+                {
+                    settings = MigrateSettings(settings);
+                    await SaveAsync(settings).ConfigureAwait(false);
+                }
+
                 return settings;
             }
             catch
             {
                 return new HostSettings();
             }
+        }
+
+        private static HostSettings MigrateSettings(HostSettings settings)
+        {
+            // Migration from no version (pre-0.1.0-alpha) to 0.1.0-alpha
+            if (string.IsNullOrWhiteSpace(settings.SettingsVersion))
+            {
+                // No migrations needed yet - just set version
+                settings.SettingsVersion = CurrentVersion;
+            }
+
+            // Future migrations would go here:
+            // if (settings.SettingsVersion == "0.1.0-alpha")
+            // {
+            //     // Migrate to 0.2.0
+            //     settings.NewField = "default value";
+            //     settings.SettingsVersion = "0.2.0";
+            // }
+
+            return settings;
         }
 
         public async Task SaveAsync(HostSettings settings)
@@ -64,6 +93,7 @@ namespace Host.Win.Services
         {
             return new HostSettings
             {
+                SettingsVersion = settings.SettingsVersion,
                 McpHost = settings.McpHost,
                 McpPort = settings.McpPort,
                 AgentHost = settings.AgentHost,
@@ -81,6 +111,7 @@ namespace Host.Win.Services
                 VoiceVolume = settings.VoiceVolume,
                 TtsEnabledInChat = settings.TtsEnabledInChat,
                 VerboseLogging = settings.VerboseLogging,
+                MemoryEnabled = settings.MemoryEnabled,
                 PiperExePath = settings.PiperExePath,
                 PiperMode = settings.PiperMode,
                 PiperPythonPath = settings.PiperPythonPath,

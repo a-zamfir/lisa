@@ -34,11 +34,14 @@ This repository contains:
 ### Phase 2 (Done)
 - Talk mode: local STT with VAD + spoken responses.
 
-### Phase 3 (Current)
+### Phase 3 (Done)
 - Share mode: arm Share and the next prompt includes a one-shot screenshot (vision-capable models).
 
-### Near Term
-- Memory: opt-in local storage for preferences and context.
+### Phase 4 (Done)
+- Memory: opt-in local storage (SQLite + FTS when available) with key/value strings, updated asynchronously.
+
+### Phase 5 (Current)
+- Installer and polish: UX refinement, reliability hardening, and setup smoothness.
 
 ---
 
@@ -109,5 +112,5 @@ On launch, LISA runs in the system tray. Use the tray menu or Ctrl+Space to togg
 - Phase 2: Talk mode (local STT + VAD + tools)
 - Phase 3: Share mode (screen context)
 - Phase 4: Local memory (opt-in, on-disk)
-- Phase 5: Installer, polish
+- Phase 5 (current): Installer, polish
 

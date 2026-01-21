@@ -131,11 +131,21 @@ namespace Host.Win.Views
             {
                 _viewModel.ChatMessages.CollectionChanged += ChatMessages_CollectionChanged;
                 _viewModel.PropertyChanged += ViewModel_PropertyChanged;
+                _viewModel.RequestScrollToEnd = OnRequestScrollToEnd;
                 Width = _viewModel.OverlayWidth;
                 Height = _viewModel.OverlayHeight;
                 UpdateVoiceState();
                 UpdateBackdrop();
             }
+        }
+
+        private void OnRequestScrollToEnd()
+        {
+            // Delay scroll slightly to let layout settle after streaming completes
+            Dispatcher.InvokeAsync(() =>
+            {
+                ChatScrollViewer?.ScrollToEnd();
+            }, System.Windows.Threading.DispatcherPriority.Loaded);
         }
 
         private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)

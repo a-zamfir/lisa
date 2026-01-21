@@ -18,6 +18,8 @@ namespace Host.Win.Services
         private readonly string _logFilePath;
         private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
         private readonly object _fileLock = new();
+        private const long MaxLogFileBytes = 10 * 1024 * 1024; // 10MB
+        private const int MaxLogFiles = 5; // Keep host.log + host.log.1 through host.log.4
         private static readonly HashSet<string> _redactedKeys = new(StringComparer.OrdinalIgnoreCase)
         {
             "providerApiKey",
@@ -72,7 +74,63 @@ namespace Host.Win.Services
             Trace.WriteLine(line);
             lock (_fileLock)
             {
+                RotateIfNeeded();
                 File.AppendAllText(_logFilePath, line + Environment.NewLine);
+            }
+        }
+
+        private void RotateIfNeeded()
+        {
+            try
+            {
+                if (!File.Exists(_logFilePath))
+                {
+                    return;
+                }
+
+                var fileInfo = new FileInfo(_logFilePath);
+                if (fileInfo.Length < MaxLogFileBytes)
+                {
+                    return;
+                }
+
+                // Rotate: host.log.3 -> host.log.4, host.log.2 -> host.log.3, etc.
+                for (var i = MaxLogFiles - 1; i >= 1; i--)
+                {
+                    var oldPath = $"{_logFilePath}.{i}";
+                    var newPath = $"{_logFilePath}.{i + 1}";
+
+                    if (File.Exists(oldPath))
+                    {
+                        if (i + 1 >= MaxLogFiles)
+                        {
+                            // Delete oldest file
+                            File.Delete(oldPath);
+                        }
+                        else
+                        {
+                            // Rotate to next number
+                            if (File.Exists(newPath))
+                            {
+                                File.Delete(newPath);
+                            }
+                            File.Move(oldPath, newPath);
+                        }
+                    }
+                }
+
+                // host.log -> host.log.1
+                var firstBackup = $"{_logFilePath}.1";
+                if (File.Exists(firstBackup))
+                {
+                    File.Delete(firstBackup);
+                }
+                File.Move(_logFilePath, firstBackup);
+            }
+            catch (Exception ex)
+            {
+                // Don't fail logging due to rotation errors
+                Trace.TraceWarning($"Log rotation failed: {ex.Message}");
             }
         }
 

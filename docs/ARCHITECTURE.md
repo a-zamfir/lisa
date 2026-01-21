@@ -27,7 +27,7 @@ flowchart LR
   end
   subgraph Infra["Local Services"]
     LLM[(Local LLM / Provider)]
-    DB[(SQLite + Embeddings)]
+    DB[(SQLite (FTS))]
   end
 
   HK <---> ORCH:::ipc
@@ -165,14 +165,20 @@ sequenceDiagram
 ```
 
 ## Tech Stack
-- Host: .NET 8 WPF, MVVM; WASAPI capture; VAD; screen capture via GDI `CopyFromScreen` (one-shot in Share); NAudio playback; Piper via external process only (GPL, user-installed); JSON settings (SQLite later).
+- Host: .NET 8 WPF, MVVM; WASAPI capture; VAD; screen capture via GDI `CopyFromScreen` (one-shot in Share); NAudio playback; Piper via external process only (GPL, user-installed); JSON settings.
 - Agent Worker: FastAPI; Ollama/provider; MCP client; TCP callbacks; system context builder; prompts as markdown files; MCP auth token injected at startup to warm tool cache.
 - Agent.MCP: FastAPI tools server; PowerShell/WMI under the hood; read-only tools.
 
 ## State & Memory
 - Conversation lives in Agent (by `session_id`); host caches last N for UI.
 - Agent trims history by approximate token cap and max message count.
-- Memory tiers: short-term in process; long-term SQLite (`%LOCALAPPDATA%/LISA/agent.db`); optional FAISS later.
+- Memory tiers:
+  - Short-term: in-process conversation history (per `session_id`).
+  - Long-term (opt-in): SQLite at `%LOCALAPPDATA%/LISA/memory.db` with FTS (when available) + LIKE fallback; retrieved per prompt and injected as a `Long-term memory:` system message with `[mem] key = value` lines.
+- Memory writes are non-blocking:
+  - The assistant appends a hidden trailer `<lisa_memory>{...}</lisa_memory>` to the end of its response.
+  - `Agent.Worker` strips it from the user-visible text, minimally validates ops (non-secret, bounded size), then writes to SQLite asynchronously and emits `memory_update_*` callbacks for UI.
+  - If no relevant memory is found for a prompt, the agent injects a “none found; do not guess personal facts” instruction to reduce hallucinations on recall questions.
 - Storage: host settings at `%LOCALAPPDATA%/LISA/host-settings.json`; agent cache/data under `%LOCALAPPDATA%/LISA/`.
 
 ## Folder Layout (repo)
@@ -203,5 +209,5 @@ sequenceDiagram
 - Phase 1 (done): Chat end-to-end with streaming (content + reasoning), tool calls via Agent.MCP, system prompt + metadata injection, copy/retry/stop, status chips (MCP/Agent/Provider).
 - Phase 2 (done): Talk mode - mic capture, VAD, POST /input/audio, STT, host TTS playback.
 - Phase 3: Screen share snapshots - capture, send images, vision summary in responses.
-- Phase 4: Settings UI + MCP management - sync settings, manage MCP servers, model/provider selection.
-- Phase 5: Memory + embeddings - long-term recall via SQLite + optional FAISS vectors.
+- Phase 4: Memory (opt-in) - long-term recall via SQLite + FTS, auto-saves via hidden JSON trailer, UI indicator + controls.
+- Phase 5: Installer, polish, and optional hybrid retrieval (lexical + embeddings).

@@ -1,44 +1,84 @@
 <!-- File: Host.Win/Themes/GlassTheme.xaml -->
+<!-- Windows 11 Mica-Inspired Translucent Theme -->
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Color x:Key="OverlayBackgroundColor">#B0463C88</Color>
-    <Color x:Key="OverlayBorderColor">#7A2C2560</Color>
-    <Color x:Key="OverlayForegroundColor">#FFF3F6FF</Color>
-    <Color x:Key="SubtleTextColor">#B3D3DDF0</Color>
-    <Color x:Key="PanelBackgroundColor">#7A1E2A3F</Color>
-    <Color x:Key="ContentBackgroundColor">#6E1C2636</Color>
-    <Color x:Key="ButtonBackgroundColor">#B14A3D9C</Color>
-    <Color x:Key="ButtonBorderColor">#8AFFFFFF</Color>
-    <Color x:Key="TabBorderColor">#00FFFFFF</Color>
-    <Color x:Key="ActionButtonBorderColor">#00FFFFFF</Color>
-    <Color x:Key="IconButtonBorderColor">#00FFFFFF</Color>
-    <Color x:Key="InputBorderColor">#00FFFFFF</Color>
-    <Color x:Key="ButtonActiveBackgroundColor">#C35B4FC0</Color>
-    <Color x:Key="ButtonActiveBorderColor">#00FFFFFF</Color>
-    <Color x:Key="PrimaryButtonBackgroundColor">#8A3A5A8C</Color>
-    <Color x:Key="PrimaryButtonHoverColor">#9A4868A4</Color>
-    <Color x:Key="PrimaryButtonTextColor">#FFF8FAFC</Color>
-    <Color x:Key="InputFocusBorderColor">#CC8FB4FF</Color>
-    <Color x:Key="RadioCheckedFillColor">#FFFFFFFF</Color>
-    <Color x:Key="AssistantBubbleBackgroundColor">#8028355E</Color>
-    <Color x:Key="AssistantBubbleForegroundColor">#FFF1F5F9</Color>
-    <Color x:Key="AssistantBubbleBorderColor">#00FFFFFF</Color>
-    <Color x:Key="UserBubbleBackgroundColor">#80314B7A</Color>
-    <Color x:Key="UserBubbleForegroundColor">#FFF8FAFC</Color>
-    <Color x:Key="PopupBackgroundColor">#CC273450</Color>
-    <Color x:Key="ApprovalAcceptedBackgroundColor">#4FAE91</Color>
-    <Color x:Key="ApprovalAcceptedBorderColor">#4FAE91</Color>
-    <Color x:Key="ApprovalAcceptedForegroundColor">#FFDCFCE7</Color>
-    <Color x:Key="ApprovalRejectedBackgroundColor">#A96A6A</Color>
-    <Color x:Key="ApprovalRejectedBorderColor">#A96A6A</Color>
-    <Color x:Key="ApprovalRejectedForegroundColor">#FFFEE2E2</Color>
-    <Color x:Key="StatusReadyColor">#FF3DD6A6</Color>
-    <Color x:Key="StatusOfflineColor">#FFF27A7A</Color>
 
-    <LinearGradientBrush x:Key="OverlayBackground" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Color="#B04B3D8E" Offset="0"/>
-        <GradientStop Color="#B02F4A9C" Offset="0.55"/>
-        <GradientStop Color="#B01F3F7A" Offset="1"/>
+    <!-- ═══════════════════════════════════════════════════════════════════════════
+         DESIGN SYSTEM: Windows 11 Mica Glass
+
+         A refined translucent aesthetic inspired by Windows 11's Mica material.
+         Uses layered transparency with subtle tinting for depth perception.
+
+         Transparency Levels:
+         - Base:           85% opacity (tinted background)
+         - Layer 1:        75% opacity (panels)
+         - Layer 2:        65% opacity (elevated elements)
+         - Borders:        40-50% opacity (subtle definition)
+    ═══════════════════════════════════════════════════════════════════════════ -->
+
+    <!-- Base Surface Colors (with alpha for Mica effect) -->
+    <Color x:Key="OverlayBackgroundColor">#E6242438</Color>
+    <Color x:Key="OverlayBorderColor">#66FFFFFF</Color>
+    <Color x:Key="OverlayForegroundColor">#FFFFFFFF</Color>
+    <Color x:Key="SubtleTextColor">#CCB8B8C8</Color>
+
+    <!-- Panel & Content Backgrounds -->
+    <Color x:Key="PanelBackgroundColor">#B31C1C2E</Color>
+    <Color x:Key="ContentBackgroundColor">#A6181828</Color>
+
+    <!-- Interactive Element Colors -->
+    <Color x:Key="ButtonBackgroundColor">#99303048</Color>
+    <Color x:Key="ButtonBorderColor">#4DFFFFFF</Color>
+    <Color x:Key="TabBorderColor">#00FFFFFF</Color>
+    <Color x:Key="ActionButtonBorderColor">#33FFFFFF</Color>
+    <Color x:Key="IconButtonBorderColor">#33FFFFFF</Color>
+    <Color x:Key="InputBorderColor">#33FFFFFF</Color>
+
+    <!-- Active/Hover States -->
+    <Color x:Key="ButtonActiveBackgroundColor">#B3404060</Color>
+    <Color x:Key="ButtonActiveBorderColor">#80A0A0FF</Color>
+
+    <!-- Primary Action (Accent - soft purple) -->
+    <Color x:Key="PrimaryButtonBackgroundColor">#CC6366F1</Color>
+    <Color x:Key="PrimaryButtonHoverColor">#E67C7FFC</Color>
+    <Color x:Key="PrimaryButtonTextColor">#FFFFFFFF</Color>
+
+    <!-- Input Focus -->
+    <Color x:Key="InputFocusBorderColor">#CC818CF8</Color>
+    <Color x:Key="RadioCheckedFillColor">#FF818CF8</Color>
+
+    <!-- Chat Bubbles -->
+    <Color x:Key="AssistantBubbleBackgroundColor">#80282840</Color>
+    <Color x:Key="AssistantBubbleForegroundColor">#FFFFFFFF</Color>
+    <Color x:Key="AssistantBubbleBorderColor">#33FFFFFF</Color>
+    <Color x:Key="UserBubbleBackgroundColor">#80383858</Color>
+    <Color x:Key="UserBubbleForegroundColor">#FFFFFFFF</Color>
+
+    <!-- Popup/Flyout -->
+    <Color x:Key="PopupBackgroundColor">#E6202038</Color>
+    <Color x:Key="PopupBorderTopColor">#66FFFFFF</Color>
+    <Color x:Key="PopupBorderMidColor">#4DFFFFFF</Color>
+    <Color x:Key="PopupBorderBottomColor">#33FFFFFF</Color>
+
+    <!-- Status Colors - Using solid colors like Dark theme for better visibility -->
+    <Color x:Key="ApprovalAcceptedBackgroundColor">#FF0F6B3A</Color>
+    <Color x:Key="ApprovalAcceptedBorderColor">#FF0D5C32</Color>
+    <Color x:Key="ApprovalAcceptedForegroundColor">#FF6EE7A0</Color>
+    <Color x:Key="ApprovalRejectedBackgroundColor">#FF8B2942</Color>
+    <Color x:Key="ApprovalRejectedBorderColor">#FF7A2439</Color>
+    <Color x:Key="ApprovalRejectedForegroundColor">#FFFCA5A5</Color>
+    <Color x:Key="StatusReadyColor">#FF6EE7A0</Color>
+    <Color x:Key="StatusOfflineColor">#FFFF6B6B</Color>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════════
+         BRUSH DEFINITIONS
+    ═══════════════════════════════════════════════════════════════════════════ -->
+
+    <!-- Mica-style gradient background -->
+    <LinearGradientBrush x:Key="OverlayBackground" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#E6202035" Offset="0"/>
+        <GradientStop Color="#E6252545" Offset="0.5"/>
+        <GradientStop Color="#E61A1A30" Offset="1"/>
     </LinearGradientBrush>
     <SolidColorBrush x:Key="OverlayBorder" Color="{StaticResource OverlayBorderColor}"/>
     <SolidColorBrush x:Key="OverlayForeground" Color="{StaticResource OverlayForegroundColor}"/>
@@ -53,6 +93,7 @@
     <SolidColorBrush x:Key="InputBorder" Color="{StaticResource InputBorderColor}"/>
     <SolidColorBrush x:Key="ButtonActiveBackground" Color="{StaticResource ButtonActiveBackgroundColor}"/>
     <SolidColorBrush x:Key="ButtonActiveBorder" Color="{StaticResource ButtonActiveBorderColor}"/>
+    <SolidColorBrush x:Key="ButtonHoverBackground" Color="{StaticResource ButtonActiveBackgroundColor}"/>
     <SolidColorBrush x:Key="PrimaryButtonBackground" Color="{StaticResource PrimaryButtonBackgroundColor}"/>
     <SolidColorBrush x:Key="PrimaryButtonHover" Color="{StaticResource PrimaryButtonHoverColor}"/>
     <SolidColorBrush x:Key="PrimaryButtonForeground" Color="{StaticResource PrimaryButtonTextColor}"/>
@@ -64,6 +105,11 @@
     <SolidColorBrush x:Key="UserBubbleBackground" Color="{StaticResource UserBubbleBackgroundColor}"/>
     <SolidColorBrush x:Key="UserBubbleForeground" Color="{StaticResource UserBubbleForegroundColor}"/>
     <SolidColorBrush x:Key="PopupBackground" Color="{StaticResource PopupBackgroundColor}"/>
+    <LinearGradientBrush x:Key="PopupBorder" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="{StaticResource PopupBorderTopColor}" Offset="0"/>
+        <GradientStop Color="{StaticResource PopupBorderMidColor}" Offset="0.5"/>
+        <GradientStop Color="{StaticResource PopupBorderBottomColor}" Offset="1"/>
+    </LinearGradientBrush>
     <SolidColorBrush x:Key="ApprovalAcceptedBackground" Color="{StaticResource ApprovalAcceptedBackgroundColor}"/>
     <SolidColorBrush x:Key="ApprovalAcceptedBorder" Color="{StaticResource ApprovalAcceptedBorderColor}"/>
     <SolidColorBrush x:Key="ApprovalAcceptedForeground" Color="{StaticResource ApprovalAcceptedForegroundColor}"/>
@@ -74,15 +120,20 @@
     <SolidColorBrush x:Key="StatusReadyBrush" Color="{StaticResource StatusReadyColor}"/>
     <SolidColorBrush x:Key="StatusOfflineBrush" Color="{StaticResource StatusOfflineColor}"/>
 
+    <!-- ═══════════════════════════════════════════════════════════════════════════
+         CONTROL STYLES
+    ═══════════════════════════════════════════════════════════════════════════ -->
+
+    <!-- Mode Navigation Button - Glass Style -->
     <Style x:Key="ModeButtonStyle" TargetType="Button">
-        <Setter Property="Margin" Value="6 0"/>
-        <Setter Property="Height" Value="40"/>
-        <Setter Property="Background" Value="{StaticResource ButtonBackground}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource ButtonBorder}"/>
-        <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="Foreground" Value="{StaticResource OverlayForeground}"/>
+        <Setter Property="Margin" Value="4 0"/>
+        <Setter Property="Height" Value="36"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Foreground" Value="{StaticResource SubtleText}"/>
         <Setter Property="FontFamily" Value="Segoe UI"/>
-        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="FontSize" Value="13"/>
         <Setter Property="HorizontalContentAlignment" Value="Center"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="Cursor" Value="Hand"/>
@@ -93,13 +144,16 @@
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="12"
-                            Padding="10 6">
+                            CornerRadius="8"
+                            Padding="12 8">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource ButtonActiveBorder}"/>
+                            <Setter TargetName="border" Property="Background" Value="{StaticResource ButtonBackground}"/>
+                            <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource ButtonBorder}"/>
+                            <Setter TargetName="border" Property="BorderThickness" Value="1"/>
+                            <Setter Property="Foreground" Value="{StaticResource OverlayForeground}"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="border" Property="Background" Value="{StaticResource ButtonActiveBackground}"/>
@@ -109,5 +163,12 @@
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+    </Style>
+
+    <!-- Typography Styles -->
+    <Style x:Key="TitleLargeTextBlockStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="16"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource OverlayForeground}"/>
     </Style>
 </ResourceDictionary>

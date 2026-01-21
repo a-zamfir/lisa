@@ -1,0 +1,39 @@
+{
+  "settingsVersion": "0.1.0-alpha",
+  "mcpHost": "127.0.0.1",
+  "mcpPort": 8123,
+  "mcpGatewayPort": 8123,
+  "mcpServers": {
+    "windows_automation": {
+      "enabled": true,
+      "command": "python",
+      "args": ["C:\\path\\to\\LISA\\MCP.Servers\\Windows\\main_stdio.py"],
+      "env": {
+        "LISA_VERBOSE_LOGGING": "1"
+      },
+      "description": "Windows system automation and diagnostics"
+    }
+  },
+  "agentHost": "127.0.0.1",
+  "agentPort": 5050,
+  "providerType": "LM Studio",
+  "providerMode": "Local",
+  "providerHost": "127.0.0.1",
+  "providerPort": 1234,
+  "providerApiKey": "",
+  "providerModel": "mistralai/ministral-3-3b",
+  "providerTemperature": 0.0,
+  "providerThink": true,
+  "voiceType": "default",
+  "voiceRate": 1.0,
+  "voiceVolume": 1.0,
+  "ttsEnabledInChat": true,
+  "verboseLogging": false,
+  "memoryEnabled": false,
+  "piperExePath": "",
+  "piperMode": "exe",
+  "piperPythonPath": "python",
+  "piperVoiceModelPath": "",
+  "piperVoiceConfigPath": "",
+  "piperSpeakerId": null
+}

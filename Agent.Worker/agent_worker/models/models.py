@@ -10,6 +10,7 @@ class InputMeta(BaseModel):
     window_title: Optional[str] = None
     clipboard: Optional[str] = None
     session_nonce: Optional[str] = None
+    active_mcps: Optional[List[str]] = None  # List of active MCP server names
 
 
 class TextInput(BaseModel):
