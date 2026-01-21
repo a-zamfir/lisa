@@ -43,46 +43,12 @@ An agent must not:
 
 ---
 
-## Latency & Performance Constraints
-
-Agents are designed for edge devices.
-
-Guidelines:
-- avoid unnecessary prompt bloat
-- keep context windows tight and bounded
-- stream outputs when possible
-- reuse provider connections
-- never reload models per request
-
-Any change that increases latency or memory usage must be justified.
-
----
-
 ## State & Memory
 
 - Conversation state lives in the agent.
 - The host only keeps short-term UI cache.
-- Long-term memory (if enabled) must be:
-  - explicit
-  - local
-  - inspectable
-  - opt-in
 
 Memory strategies must be documented in `docs/ARCHITECTURE.md`.
-
----
-
-## Temporary Workarounds & Technical Debt
-
-Technical debt is not ignored - it is tracked.
-
-Rules:
-- Any temporary workaround must be:
-  - clearly marked in code (`TODO`, `TEMP`, or equivalent)
-  - documented in `pending_implementation.md`
-- No silent hacks.
-
-Untracked debt is considered a bug.
 
 ---
 
