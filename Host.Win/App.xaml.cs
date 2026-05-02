@@ -7,6 +7,7 @@ using Host.Win.Services;
 using Host.Win.ViewModels;
 using Host.Win.Views;
 using System.IO;
+using System.Text.Json;
 using System.Windows.Threading;
 
 namespace Host.Win
@@ -20,7 +21,6 @@ namespace Host.Win
         private ContextCollector? _contextCollector;
         private ThemeService? _themeService;
         private SettingsService? _settingsService;
-        private PortHealthChecker? _mcpHealthChecker;
         private PortHealthChecker? _agentHealthChecker;
         private PortHealthChecker? _providerHealthChecker;
         private LoggingService? _loggingService;
@@ -29,8 +29,6 @@ namespace Host.Win
         private TtsService? _ttsService;
         private HostSettings? _hostSettings;
         private AgentProcessHost? _agentProcessHost;
-        private McpGatewayProcessHost? _mcpGatewayProcessHost; // Gateway orchestrator
-        private McpProcessHost? _mcpWindowsProcessHost; // Windows Automation MCP
         private TcpCallbackServer? _agentCallbackServer;
         private TextWriterTraceListener? _verboseTraceListener;
         private readonly string _agentCallbackToken = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
@@ -72,11 +70,16 @@ namespace Host.Win
                 TtsService = _ttsService,
                 ContextCollector = _contextCollector
             };
-            overlayVm.UpdateMcpStatus(false);
             overlayVm.UpdateAgentStatus(false);
             overlayVm.UpdateProviderStatus(false);
             overlayVm.ProviderType = _hostSettings.ProviderType;
             overlayVm.RefreshProviderModels();
+
+            var repoRoot = ResolveRepoRoot(AppDomain.CurrentDomain.BaseDirectory);
+            var skillsRoot = Path.Combine(repoRoot, "skills");
+            var skillsReady = IsSkillsReady(skillsRoot, repoRoot);
+            overlayVm.ToolClientLabel = "Skills";
+            overlayVm.UpdateToolStatus(skillsReady);
 
             var initialTheme = AppTheme.Glass;
             _themeService.ApplyTheme(initialTheme);
@@ -143,7 +146,31 @@ namespace Host.Win
             overlayVm.StopMessageCommand = new Commands.RelayCommand<Models.ChatMessage>(message => overlayVm.StopMessage(message));
             overlayVm.ResetConversationCommand = new Commands.RelayCommand(() => overlayVm.ResetConversation());
             overlayVm.AttachFileCommand = new Commands.RelayCommand(() => overlayVm.StatusText = "Attach file (coming soon)");
-            overlayVm.ToggleMcpServerCommand = new Commands.RelayCommand<Models.McpServerItem>(server => { if (server != null) overlayVm.ToggleMcpServer(server); });
+            overlayVm.ClearMemoryCommand = new Commands.AsyncRelayCommand(async () =>
+            {
+                if (_agentClient == null)
+                {
+                    overlayVm.StatusText = "Agent unavailable";
+                    return;
+                }
+
+                overlayVm.StatusText = "Clearing memory...";
+                var response = await _agentClient.ClearMemoryAsync();
+                if (response == null)
+                {
+                    overlayVm.StatusText = "Memory clear failed";
+                    return;
+                }
+                if (!response.Enabled)
+                {
+                    overlayVm.StatusText = "Memory disabled";
+                    return;
+                }
+
+                overlayVm.StatusText = response.Cleared > 0
+                    ? $"Memory cleared ({response.Cleared})"
+                    : "Memory already empty";
+            });
             overlayVm.ToggleShareCommand = new Commands.RelayCommand(() => overlayVm.ToggleShare());
             overlayVm.StartTalkCommand = new Commands.AsyncRelayCommand(() => overlayVm.StartTalkAsync(), overlayVm.CanStartTalk);
             overlayVm.ReplayTtsCommand = new Commands.AsyncRelayCommand(() => overlayVm.ReplayLastTtsAsync());
@@ -153,38 +180,12 @@ namespace Host.Win
             overlayVm.SelectedMode = AssistantMode.Chat;
 
             // From Host.Win/bin/Debug/... back to repo root then into services
-            var agentScript = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "Agent.Worker", "main.py");
-            var gatewayScript = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "MCP.Gateway", "main.py");
-            var windowsMcpScript = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "MCP.Servers", "Windows", "main.py");
-
-            // Start MCP Gateway orchestrator (port 8123)
-            _mcpGatewayProcessHost = new McpGatewayProcessHost(
-                Path.GetFullPath(gatewayScript),
-                port: _hostSettings.McpGatewayPort,
-                verboseLogging: _hostSettings.VerboseLogging);
-            _mcpGatewayProcessHost.Start();
-            _agentClient?.SetMcpAuthToken(_mcpGatewayProcessHost.AuthToken);
-
-            // Start Windows Automation MCP server (port 8124)
-            // IMPORTANT: Share the gateway's auth token so backend servers can authenticate
-            var windowsMcpPort = _hostSettings.McpServers?.GetValueOrDefault("windows_automation")?.Port ?? 8124;
-            var windowsMcpEnabled = _hostSettings.McpServers?.GetValueOrDefault("windows_automation")?.Enabled ?? true;
-            if (windowsMcpEnabled)
-            {
-                _mcpWindowsProcessHost = new McpProcessHost(
-                    Path.GetFullPath(windowsMcpScript),
-                    port: windowsMcpPort,
-                    verboseLogging: _hostSettings.VerboseLogging,
-                    sharedAuthToken: _mcpGatewayProcessHost.AuthToken);
-                _mcpWindowsProcessHost.Start();
-            }
-
+            var agentScript = Path.Combine(repoRoot, "Agent.Worker", "main.py");
             _agentProcessHost = new AgentProcessHost(
                 Path.GetFullPath(agentScript),
                 port: _hostSettings.AgentPort,
                 callbackToken: _agentCallbackToken,
                 callbackPort: AgentCallbackPort,
-                mcpAuthToken: _mcpGatewayProcessHost.AuthToken,
                 providerApiKey: _hostSettings.ProviderApiKey,
                 verboseLogging: _hostSettings.VerboseLogging);
             _agentCallbackServer = new TcpCallbackServer(AgentCallbackPort, _agentCallbackToken, callback =>
@@ -236,15 +237,10 @@ namespace Host.Win
             });
             _agentCallbackServer.Start();
             _agentProcessHost.Start();
+            overlayVm.UpdateToolStatus(IsSkillsReady(skillsRoot, repoRoot));
             AppDomain.CurrentDomain.ProcessExit += (_, _) => _agentProcessHost?.Stop();
             DispatcherUnhandledException += (_, _) => _agentProcessHost?.Stop();
             Exit += (_, _) => _agentProcessHost?.Stop();
-            AppDomain.CurrentDomain.ProcessExit += (_, _) => _mcpGatewayProcessHost?.Stop();
-            DispatcherUnhandledException += (_, _) => _mcpGatewayProcessHost?.Stop();
-            Exit += (_, _) => _mcpGatewayProcessHost?.Stop();
-            AppDomain.CurrentDomain.ProcessExit += (_, _) => _mcpWindowsProcessHost?.Stop();
-            DispatcherUnhandledException += (_, _) => _mcpWindowsProcessHost?.Stop();
-            Exit += (_, _) => _mcpWindowsProcessHost?.Stop();
             AppDomain.CurrentDomain.ProcessExit += (_, _) => _agentCallbackServer?.Stop();
             DispatcherUnhandledException += (_, _) => _agentCallbackServer?.Stop();
             Exit += (_, _) => _agentCallbackServer?.Stop();
@@ -268,13 +264,6 @@ namespace Host.Win
                     _overlayController?.ShowOverlay();
                 },
                 onQuit: ShutdownApplication);
-
-            // Health check targets the gateway (which aggregates all MCP servers)
-            _mcpHealthChecker = new PortHealthChecker(_hostSettings.McpHost, _hostSettings.McpGatewayPort, ready =>
-            {
-                overlayVm.UpdateMcpStatus(ready);
-            });
-            _mcpHealthChecker.Start();
 
             _agentHealthChecker = new PortHealthChecker(_hostSettings.AgentHost, _hostSettings.AgentPort, ready =>
             {
@@ -308,31 +297,7 @@ namespace Host.Win
                 _agentClient?.UpdateBaseUri(new Uri($"http://{overlayVm.Settings.AgentHost}:{overlayVm.Settings.AgentPort}"));
                 _agentClient?.SetProviderApiKey(overlayVm.Settings.ProviderApiKey);
 
-                // Restart MCP services if needed (port change)
-                _mcpGatewayProcessHost?.Dispose();
-                _mcpWindowsProcessHost?.Dispose();
-
-                var gatewayScriptNew = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "MCP.Gateway", "main.py");
-                _mcpGatewayProcessHost = new McpGatewayProcessHost(
-                    Path.GetFullPath(gatewayScriptNew),
-                    port: overlayVm.Settings.McpGatewayPort,
-                    verboseLogging: overlayVm.Settings.VerboseLogging);
-                _mcpGatewayProcessHost.Start();
-                _agentClient?.SetMcpAuthToken(_mcpGatewayProcessHost.AuthToken);
-
-                // Restart Windows Automation MCP if enabled
-                var windowsMcpPortNew = overlayVm.Settings.McpServers?.GetValueOrDefault("windows_automation")?.Port ?? 8124;
-                var windowsMcpEnabledNew = overlayVm.Settings.McpServers?.GetValueOrDefault("windows_automation")?.Enabled ?? true;
-                if (windowsMcpEnabledNew)
-                {
-                    var windowsMcpScriptNew = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "MCP.Servers", "Windows", "main.py");
-                    _mcpWindowsProcessHost = new McpProcessHost(
-                        Path.GetFullPath(windowsMcpScriptNew),
-                        port: windowsMcpPortNew,
-                        verboseLogging: overlayVm.Settings.VerboseLogging,
-                        sharedAuthToken: _mcpGatewayProcessHost.AuthToken);
-                    _mcpWindowsProcessHost.Start();
-                }
+                overlayVm.UpdateToolStatus(IsSkillsReady(skillsRoot, repoRoot));
                 _agentProcessHost?.Dispose();
                 var agentScriptNew = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "Agent.Worker", "main.py");
                 _agentProcessHost = new AgentProcessHost(
@@ -340,10 +305,10 @@ namespace Host.Win
                     port: overlayVm.Settings.AgentPort,
                     callbackToken: _agentCallbackToken,
                     callbackPort: AgentCallbackPort,
-                    mcpAuthToken: _mcpGatewayProcessHost.AuthToken,
                     providerApiKey: overlayVm.Settings.ProviderApiKey,
                     verboseLogging: overlayVm.Settings.VerboseLogging);
                 _agentProcessHost.Start();
+                overlayVm.UpdateToolStatus(IsSkillsReady(skillsRoot, repoRoot));
                 _agentCallbackServer?.Stop();
                 _agentCallbackServer = new TcpCallbackServer(AgentCallbackPort, _agentCallbackToken, callback =>
                 {
@@ -368,12 +333,7 @@ namespace Host.Win
                     });
                 });
                 _agentCallbackServer.Start();
-                _mcpHealthChecker?.Dispose();
-                _mcpHealthChecker = new PortHealthChecker(overlayVm.Settings.McpHost, overlayVm.Settings.McpGatewayPort, ready =>
-                {
-                    overlayVm.UpdateMcpStatus(ready);
-                });
-                _mcpHealthChecker.Start();
+                overlayVm.UpdateToolStatus(IsSkillsReady(skillsRoot, repoRoot));
 
                 _agentHealthChecker?.Dispose();
                 _agentHealthChecker = new PortHealthChecker(overlayVm.Settings.AgentHost, overlayVm.Settings.AgentPort, ready =>
@@ -404,7 +364,6 @@ namespace Host.Win
         protected override void OnExit(ExitEventArgs e)
         {
             Trace.WriteLine("Host.Win exiting.");
-            _mcpHealthChecker?.Dispose();
             _agentHealthChecker?.Dispose();
             _providerHealthChecker?.Dispose();
             _hotkeyManager?.Dispose();
@@ -414,8 +373,6 @@ namespace Host.Win
             _contextCollector?.Dispose();
             _audioPlaybackService?.Dispose();
             _agentProcessHost?.Dispose();
-            _mcpGatewayProcessHost?.Dispose();
-            _mcpWindowsProcessHost?.Dispose();
             _agentCallbackServer?.Dispose();
             UpdateVerboseTraceListener(false);
             base.OnExit(e);
@@ -459,12 +416,96 @@ namespace Host.Win
                 _verboseTraceListener = new TextWriterTraceListener(writer);
                 Trace.Listeners.Add(_verboseTraceListener);
                 Trace.AutoFlush = true;
-                Trace.WriteLine($"Verbose trace logging enabled: {tracePath}");
+                Trace.WriteLine($"[Host/logging] verbose trace enabled: {tracePath}");
             }
             catch (Exception ex)
             {
                 Trace.TraceWarning($"Failed to enable verbose trace logging: {ex.Message}");
             }
+        }
+
+        private static bool IsSkillsReady(string skillsRoot, string repoRoot)
+        {
+            if (!Directory.Exists(skillsRoot))
+            {
+                return false;
+            }
+
+            var pythonExe = Path.Combine(repoRoot, "Agent.Worker", ".venv", "Scripts", "python.exe");
+            if (!File.Exists(pythonExe))
+            {
+                return false;
+            }
+
+            try
+            {
+                foreach (var skillDir in Directory.EnumerateDirectories(skillsRoot))
+                {
+                    var skillFile = Path.Combine(skillDir, "SKILL.md");
+                    if (!File.Exists(skillFile))
+                    {
+                        continue;
+                    }
+
+                    var toolsPath = Path.Combine(skillDir, "tools.json");
+                    if (!File.Exists(toolsPath))
+                    {
+                        continue;
+                    }
+
+                    using var manifestDoc = JsonDocument.Parse(File.ReadAllText(toolsPath));
+                    if (!manifestDoc.RootElement.TryGetProperty("tools", out var tools)
+                        || tools.ValueKind != JsonValueKind.Array)
+                    {
+                        continue;
+                    }
+
+                    foreach (var tool in tools.EnumerateArray())
+                    {
+                        if (!tool.TryGetProperty("command", out var commandValue)
+                            || commandValue.ValueKind != JsonValueKind.String)
+                        {
+                            continue;
+                        }
+
+                        var commandPath = commandValue.GetString();
+                        if (string.IsNullOrWhiteSpace(commandPath))
+                        {
+                            continue;
+                        }
+
+                        var fullCommandPath = Path.GetFullPath(Path.Combine(skillDir, commandPath));
+                        if (File.Exists(fullCommandPath))
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                return false;
+            }
+
+            return false;
+        }
+
+        private static string ResolveRepoRoot(string baseDirectory)
+        {
+            var current = new DirectoryInfo(baseDirectory);
+            for (var i = 0; i < 6 && current != null; i++)
+            {
+                var skillsRoot = Path.Combine(current.FullName, "skills");
+                var agentMain = Path.Combine(current.FullName, "Agent.Worker", "main.py");
+                if (Directory.Exists(skillsRoot) && File.Exists(agentMain))
+                {
+                    return current.FullName;
+                }
+
+                current = current.Parent;
+            }
+
+            return Path.GetFullPath(Path.Combine(baseDirectory, "..", "..", "..", ".."));
         }
     }
 }

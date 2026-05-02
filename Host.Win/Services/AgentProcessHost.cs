@@ -13,6 +13,8 @@ namespace Host.Win.Services
     /// </summary>
     public sealed class AgentProcessHost : IDisposable
     {
+        private const string BootstrapPrefix = "[Agent/bootstrap]";
+        private const string RuntimePrefix = "[Agent/runtime]";
         private Process? _process;
         private readonly string _agentPath;
         private readonly int _port;
@@ -22,7 +24,6 @@ namespace Host.Win.Services
         private readonly string _speechRequirementsHashFile;
         private readonly string _callbackToken;
         private readonly int _callbackPort;
-        private readonly string _mcpAuthToken;
         private readonly string _providerApiKey;
         private readonly bool _verboseLogging;
         private IntPtr _jobHandle = IntPtr.Zero;
@@ -32,7 +33,6 @@ namespace Host.Win.Services
             int port,
             string? callbackToken = null,
             int callbackPort = 0,
-            string? mcpAuthToken = null,
             string? providerApiKey = null,
             bool verboseLogging = false)
         {
@@ -41,7 +41,6 @@ namespace Host.Win.Services
             _agentRoot = Path.GetDirectoryName(agentPath) ?? Environment.CurrentDirectory;
             _callbackToken = callbackToken ?? string.Empty;
             _callbackPort = callbackPort;
-            _mcpAuthToken = mcpAuthToken ?? string.Empty;
             _providerApiKey = providerApiKey ?? string.Empty;
             _verboseLogging = verboseLogging;
             var localDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LISA");
@@ -61,14 +60,14 @@ namespace Host.Win.Services
             }
 
             var workingDir = Path.GetDirectoryName(_agentPath) ?? Environment.CurrentDirectory;
-            Trace.WriteLine($"Agent working dir resolved: {workingDir}");
+            Trace.WriteLine($"{BootstrapPrefix} working_dir={workingDir}");
             var pythonPath = EnsureVenv(workingDir);
             if (pythonPath == null)
             {
-                Trace.TraceError("Unable to create or locate Python interpreter for agent.");
+                Trace.TraceError($"{BootstrapPrefix} unable to create or locate Python interpreter.");
                 return;
             }
-            Trace.WriteLine($"Agent python resolved: {pythonPath}");
+            Trace.WriteLine($"{BootstrapPrefix} python={pythonPath}");
 
             EnsureWhisperModelAvailable(pythonPath, workingDir);
 
@@ -102,27 +101,25 @@ namespace Host.Win.Services
             {
                 psi.Environment["LISA_CALLBACK_TCP_PORT"] = _callbackPort.ToString();
             }
-            if (!string.IsNullOrWhiteSpace(_mcpAuthToken))
-            {
-                psi.Environment["MCP_AUTH_TOKEN"] = _mcpAuthToken;
-            }
             if (!string.IsNullOrWhiteSpace(_providerApiKey))
             {
-                psi.Environment["PROVIDER_API_KEY"] = _providerApiKey;
-            }
-            psi.Environment["LISA_VERBOSE_LOGGING"] = _verboseLogging ? "1" : "0";
-            psi.Environment["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1";
-            psi.Environment["HF_HUB_OFFLINE"] = "1";
-            psi.Environment["FASTER_WHISPER_MODEL"] = "small";
-            psi.Environment["FASTER_WHISPER_MODEL_DIR"] = Path.Combine(workingDir, "speech", "models", "whisper-small");
-            Trace.WriteLine($"Agent env: AGENT_PORT={_port} LISA_CALLBACK_TCP_PORT={_callbackPort} verbose={_verboseLogging}");
+            psi.Environment["PROVIDER_API_KEY"] = _providerApiKey;
+        }
+        psi.Environment["LISA_VERBOSE_LOGGING"] = _verboseLogging ? "1" : "0";
+        psi.Environment["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1";
+        psi.Environment["HF_HUB_OFFLINE"] = "1";
+        ConfigureSttEnvironment(psi, workingDir);
+        if (_verboseLogging)
+        {
+            Trace.WriteLine($"{BootstrapPrefix} env: AGENT_PORT={_port} LISA_CALLBACK_TCP_PORT={_callbackPort} verbose={_verboseLogging}");
+        }
 
             try
             {
                 _process = Process.Start(psi);
                 if (_process == null)
                 {
-                    Trace.TraceWarning("Primary agent launch failed with 'python'. Trying 'py -3'.");
+                    Trace.TraceWarning($"{BootstrapPrefix} primary launch failed with 'python'; trying 'py -3'");
                     psi = CreatePsi("py");
                     psi.Arguments = $"-3 -m uvicorn main:app --host 127.0.0.1 --port {_port} --log-level {uvicornLogLevel} --no-access-log";
                     psi.Environment["AGENT_PORT"] = _port.ToString();
@@ -139,34 +136,29 @@ namespace Host.Win.Services
                     {
                         psi.Environment["LISA_CALLBACK_TCP_PORT"] = _callbackPort.ToString();
                     }
-                    if (!string.IsNullOrWhiteSpace(_mcpAuthToken))
-                    {
-                        psi.Environment["MCP_AUTH_TOKEN"] = _mcpAuthToken;
-                    }
                     if (!string.IsNullOrWhiteSpace(_providerApiKey))
                     {
-                        psi.Environment["PROVIDER_API_KEY"] = _providerApiKey;
-                    }
-                    psi.Environment["LISA_VERBOSE_LOGGING"] = _verboseLogging ? "1" : "0";
-                    psi.Environment["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1";
-                    psi.Environment["HF_HUB_OFFLINE"] = "1";
-                    psi.Environment["FASTER_WHISPER_MODEL"] = "small";
-                    psi.Environment["FASTER_WHISPER_MODEL_DIR"] = Path.Combine(workingDir, "speech", "models", "whisper-small");
-                    _process = Process.Start(psi);
+                    psi.Environment["PROVIDER_API_KEY"] = _providerApiKey;
                 }
+                psi.Environment["LISA_VERBOSE_LOGGING"] = _verboseLogging ? "1" : "0";
+                psi.Environment["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1";
+                psi.Environment["HF_HUB_OFFLINE"] = "1";
+                ConfigureSttEnvironment(psi, workingDir);
+                _process = Process.Start(psi);
+            }
 
                 if (_process == null)
                 {
-                    Trace.TraceError("Failed to start agent process (python/py not found?).");
+                    Trace.TraceError($"{BootstrapPrefix} failed to start agent process (python/py not found?)");
                     return;
                 }
 
-                Trace.WriteLine($"Agent process started on port {_port} (PID {_process.Id}). WorkingDir={workingDir}");
+                Trace.WriteLine($"{RuntimePrefix} started pid={_process.Id} port={_port} working_dir={workingDir}");
                 AttachToJob(_process);
                 _process.OutputDataReceived += (_, args) =>
                 {
                     if (!string.IsNullOrWhiteSpace(args.Data))
-                        Trace.WriteLine($"[Agent] {args.Data}");
+                        Trace.WriteLine($"{RuntimePrefix} {args.Data}");
                 };
                 _process.ErrorDataReceived += (_, args) =>
                 {
@@ -175,26 +167,26 @@ namespace Host.Win.Services
                         var line = args.Data;
                         if (line.StartsWith("INFO:", StringComparison.OrdinalIgnoreCase))
                         {
-                            Trace.WriteLine($"[Agent] {line}");
+                            Trace.WriteLine($"{RuntimePrefix} {line}");
                         }
                         else if (line.StartsWith("DEBUG:", StringComparison.OrdinalIgnoreCase))
                         {
                             if (_verboseLogging)
                             {
-                                Trace.WriteLine($"[Agent] {line}");
+                                Trace.WriteLine($"{RuntimePrefix} {line}");
                             }
                         }
                         else if (line.StartsWith("WARNING:", StringComparison.OrdinalIgnoreCase))
                         {
-                            Trace.TraceWarning($"[Agent] {line}");
+                            Trace.TraceWarning($"{RuntimePrefix} {line}");
                         }
                         else if (line.StartsWith("ERROR:", StringComparison.OrdinalIgnoreCase) || line.StartsWith("CRITICAL:", StringComparison.OrdinalIgnoreCase))
                         {
-                            Trace.TraceError($"[Agent ERR] {line}");
+                            Trace.TraceError($"{RuntimePrefix} {line}");
                         }
                         else
                         {
-                            Trace.TraceWarning($"[Agent] {line}");
+                            Trace.TraceWarning($"{RuntimePrefix} {line}");
                         }
                     }
                 };
@@ -208,12 +200,12 @@ namespace Host.Win.Services
                 }
                 catch (Exception ex)
                 {
-                    Trace.TraceWarning($"Failed to write agent pid file: {ex.Message}");
+                    Trace.TraceWarning($"{BootstrapPrefix} failed to write pid file: {ex.Message}");
                 }
             }
             catch (Exception ex)
             {
-                Trace.TraceError($"Failed to start agent process: {ex.Message}");
+                Trace.TraceError($"{BootstrapPrefix} failed to start agent process: {ex.Message}");
             }
         }
 
@@ -221,6 +213,12 @@ namespace Host.Win.Services
         {
             try
             {
+                if (IsWhisperCppConfigured(workingDir))
+                {
+                    Trace.WriteLine($"{BootstrapPrefix} whisper.cpp detected; skipping faster-whisper download");
+                    return;
+                }
+
                 var modelDir = Path.Combine(workingDir, "speech", "models", "whisper-small");
                 if (Directory.Exists(modelDir))
                 {
@@ -241,13 +239,13 @@ namespace Host.Win.Services
                 // Only attempt download when faster-whisper is available; speech deps are optional.
                 if (!RunSilently(pythonExe, "-c \"import faster_whisper\"", workingDir, timeoutMs: 20000, verboseLogging: _verboseLogging))
                 {
-                    Trace.WriteLine("faster-whisper not installed; skipping Whisper model download.");
+                    Trace.WriteLine($"{BootstrapPrefix} faster-whisper not installed; skipping Whisper model download");
                     return;
                 }
 
                 Directory.CreateDirectory(modelDir);
 
-                Trace.WriteLine($"Whisper model missing; attempting download to: {modelDir}");
+                Trace.WriteLine($"{BootstrapPrefix} whisper model missing; downloading to {modelDir}");
                 var ok = RunSilently(
                     pythonExe,
                     $"-u \"{downloadScript}\" --model small --output \"{modelDir}\"",
@@ -263,13 +261,73 @@ namespace Host.Win.Services
 
                 if (!ok)
                 {
-                    Trace.TraceWarning("Whisper model download failed; Talk mode STT may be unavailable until the model is downloaded.");
+                    Trace.TraceWarning($"{BootstrapPrefix} Whisper model download failed; Talk mode STT may be unavailable");
                 }
             }
             catch (Exception ex)
             {
-                Trace.TraceWarning($"Whisper model bootstrap failed: {ex.Message}");
+                Trace.TraceWarning($"{BootstrapPrefix} Whisper model bootstrap failed: {ex.Message}");
             }
+        }
+
+        private static void ConfigureSttEnvironment(ProcessStartInfo psi, string workingDir)
+        {
+            var backend = Environment.GetEnvironmentVariable("STT_BACKEND");
+            psi.Environment["STT_BACKEND"] = string.IsNullOrWhiteSpace(backend) ? "auto" : backend;
+
+            psi.Environment["FASTER_WHISPER_MODEL"] = "small";
+            psi.Environment["FASTER_WHISPER_MODEL_DIR"] = Path.Combine(workingDir, "speech", "models", "whisper-small");
+
+            var whisperExe = Environment.GetEnvironmentVariable("WHISPERCPP_EXE");
+            var whisperModel = Environment.GetEnvironmentVariable("WHISPERCPP_MODEL");
+            var whisperLang = Environment.GetEnvironmentVariable("WHISPERCPP_LANGUAGE");
+            var whisperArgs = Environment.GetEnvironmentVariable("WHISPERCPP_ARGS");
+            var whisperDevice = Environment.GetEnvironmentVariable("WHISPERCPP_DEVICE");
+
+            if (string.IsNullOrWhiteSpace(whisperExe))
+            {
+                whisperExe = Path.Combine(workingDir, "speech", "whispercpp", "whisper.exe");
+            }
+            if (string.IsNullOrWhiteSpace(whisperModel))
+            {
+                whisperModel = Path.Combine(workingDir, "speech", "models", "whispercpp", "ggml-small.bin");
+            }
+
+            if (File.Exists(whisperExe))
+            {
+                psi.Environment["WHISPERCPP_EXE"] = whisperExe;
+            }
+            if (File.Exists(whisperModel))
+            {
+                psi.Environment["WHISPERCPP_MODEL"] = whisperModel;
+            }
+            if (!string.IsNullOrWhiteSpace(whisperLang))
+            {
+                psi.Environment["WHISPERCPP_LANGUAGE"] = whisperLang;
+            }
+            if (!string.IsNullOrWhiteSpace(whisperArgs))
+            {
+                psi.Environment["WHISPERCPP_ARGS"] = whisperArgs;
+            }
+            if (!string.IsNullOrWhiteSpace(whisperDevice))
+            {
+                psi.Environment["WHISPERCPP_DEVICE"] = whisperDevice;
+            }
+        }
+
+        private static bool IsWhisperCppConfigured(string workingDir)
+        {
+            var exe = Environment.GetEnvironmentVariable("WHISPERCPP_EXE");
+            var model = Environment.GetEnvironmentVariable("WHISPERCPP_MODEL");
+            if (string.IsNullOrWhiteSpace(exe))
+            {
+                exe = Path.Combine(workingDir, "speech", "whispercpp", "whisper.exe");
+            }
+            if (string.IsNullOrWhiteSpace(model))
+            {
+                model = Path.Combine(workingDir, "speech", "models", "whispercpp", "ggml-small.bin");
+            }
+            return File.Exists(exe) && File.Exists(model);
         }
 
         private string? EnsureVenv(string workingDir)
@@ -283,7 +341,7 @@ namespace Host.Win.Services
             if (!Directory.Exists(venvPath) || !File.Exists(pythonExe))
             {
                 // Dev-only bootstrapping; production should ship a packaged runtime.
-                Trace.WriteLine("Creating agent virtual environment...");
+                Trace.WriteLine($"{BootstrapPrefix} creating virtual environment");
                 var createPsi = new ProcessStartInfo
                 {
                     FileName = "python",
@@ -299,7 +357,7 @@ namespace Host.Win.Services
                 {
                     if (_verboseLogging)
                     {
-                        Trace.WriteLine($"Agent venv: Attempting with 'python' command...");
+                        Trace.WriteLine($"{BootstrapPrefix} creating venv with python");
                     }
                     var createProc = Process.Start(createPsi);
                     createProc?.WaitForExit(15000);
@@ -308,7 +366,7 @@ namespace Host.Win.Services
                         created = true;
                         if (_verboseLogging)
                         {
-                            Trace.WriteLine("Agent venv: Created successfully with 'python' command.");
+                            Trace.WriteLine($"{BootstrapPrefix} venv created with python");
                         }
                     }
                 }
@@ -316,7 +374,7 @@ namespace Host.Win.Services
                 {
                     if (_verboseLogging)
                     {
-                        Trace.WriteLine($"Agent venv: 'python' command failed ({ex.Message}), trying 'py -3' fallback...");
+                        Trace.WriteLine($"{BootstrapPrefix} python venv creation failed; trying py -3");
                     }
                 }
 
@@ -334,29 +392,29 @@ namespace Host.Win.Services
                             created = true;
                             if (_verboseLogging)
                             {
-                                Trace.WriteLine("Agent venv: Created successfully with 'py -3' command.");
+                                Trace.WriteLine($"{BootstrapPrefix} venv created with py -3");
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        Trace.TraceError($"Agent venv creation failed: {ex.Message}");
+                        Trace.TraceError($"{BootstrapPrefix} venv creation failed: {ex.Message}");
                     }
                 }
 
                 if (!created && _verboseLogging)
                 {
-                    Trace.TraceWarning("Agent venv: Creation may have failed. Checking for python.exe...");
+                    Trace.TraceWarning($"{BootstrapPrefix} venv creation may have failed; checking python.exe");
                 }
             }
             else if (_verboseLogging)
             {
-                Trace.WriteLine($"Agent venv: Already exists at {venvPath}");
+                Trace.WriteLine($"{BootstrapPrefix} venv exists: {venvPath}");
             }
 
             if (!File.Exists(pythonExe))
             {
-                Trace.TraceError("Venv creation failed; python.exe missing.");
+                Trace.TraceError($"{BootstrapPrefix} venv creation failed; python.exe missing");
                 return null;
             }
 
@@ -364,71 +422,77 @@ namespace Host.Win.Services
             {
                 var hash = ComputeFileHash(requirements);
                 var existingHash = ReadHash(_requirementsHashFile);
-                Trace.WriteLine($"Agent requirements hash: {hash} (stored={existingHash ?? "none"})");
+                if (_verboseLogging)
+                {
+                    Trace.WriteLine($"{BootstrapPrefix} requirements hash={hash} stored={existingHash ?? "none"}");
+                }
                 if (!string.Equals(hash, existingHash, StringComparison.OrdinalIgnoreCase))
                 {
-                    Trace.WriteLine("Installing agent requirements...");
+                    Trace.WriteLine($"{BootstrapPrefix} syncing python requirements");
                     if (_verboseLogging)
                     {
-                        Trace.WriteLine("Agent bootstrap: Upgrading pip...");
+                        Trace.WriteLine($"{BootstrapPrefix} upgrading pip");
                     }
                     RunSilently(pythonExe, "-m pip install --upgrade pip", workingDir, verboseLogging: _verboseLogging);
                     if (_verboseLogging)
                     {
                         var reqFile = Path.GetFileName(requirements);
-                        Trace.WriteLine($"Agent bootstrap: Installing {reqFile}...");
+                        Trace.WriteLine($"{BootstrapPrefix} installing {reqFile}");
                     }
                     if (RunSilently(pythonExe, $"-m pip install -r {Path.GetFileName(requirements)}", workingDir, verboseLogging: _verboseLogging))
                     {
                         WriteHash(_requirementsHashFile, hash);
-                        Trace.WriteLine("Agent requirements installed successfully.");
+                        Trace.WriteLine($"{BootstrapPrefix} requirements sync complete");
                     }
                     else
                     {
-                        Trace.TraceError("Agent requirements installation failed. Check pip output above.");
+                        Trace.TraceError($"{BootstrapPrefix} requirements sync failed; see verbose trace log for raw pip output");
                     }
                 }
                 else if (_verboseLogging)
                 {
-                    Trace.WriteLine("Agent requirements: Hash unchanged, skipping installation.");
+                    Trace.WriteLine($"{BootstrapPrefix} requirements unchanged");
                 }
             }
             else if (_verboseLogging)
             {
-                Trace.WriteLine($"Agent requirements.txt not found at {requirements}");
+                Trace.WriteLine($"{BootstrapPrefix} requirements file not found: {requirements}");
             }
 
             if (File.Exists(speechRequirements))
             {
                 var hash = ComputeFileHash(speechRequirements);
                 var existingHash = ReadHash(_speechRequirementsHashFile);
-                Trace.WriteLine($"Agent speech requirements hash: {hash} (stored={existingHash ?? "none"})");
+                if (_verboseLogging)
+                {
+                    Trace.WriteLine($"{BootstrapPrefix} speech requirements hash={hash} stored={existingHash ?? "none"}");
+                }
                 if (!string.Equals(hash, existingHash, StringComparison.OrdinalIgnoreCase))
                 {
-                    Trace.WriteLine("Installing optional agent speech requirements...");
+                    Trace.WriteLine($"{BootstrapPrefix} syncing optional speech requirements");
                     if (_verboseLogging)
                     {
-                        Trace.WriteLine("Agent bootstrap: Installing requirements-speech.txt (prefer binary wheels)...");
+                        Trace.WriteLine($"{BootstrapPrefix} installing requirements-speech.txt");
                     }
                     // Prefer wheels to avoid long native builds on fresh machines.
                     if (RunSilently(pythonExe, "-m pip install --prefer-binary -r requirements-speech.txt", workingDir, verboseLogging: _verboseLogging))
                     {
                         WriteHash(_speechRequirementsHashFile, hash);
-                        Trace.WriteLine("Agent speech requirements installed successfully.");
+                        Trace.WriteLine($"{BootstrapPrefix} speech requirements sync complete");
                     }
                     else
                     {
-                        Trace.TraceWarning("Optional speech requirements failed to install; STT endpoints will run in fallback mode.");
+                        Trace.TraceWarning($"{BootstrapPrefix} optional speech requirements failed; STT will run in fallback mode");
                     }
                 }
                 else if (_verboseLogging)
                 {
-                    Trace.WriteLine("Agent speech requirements: Hash unchanged, skipping installation.");
+                    Trace.WriteLine($"{BootstrapPrefix} speech requirements unchanged");
                 }
             }
             else if (_verboseLogging)
             {
-                Trace.WriteLine($"Agent requirements-speech.txt not found at {speechRequirements}");
+                Trace.WriteLine($"{BootstrapPrefix} requirements-speech.txt not found: {speechRequirements}");
             }
 
             return pythonExe;
@@ -462,20 +526,23 @@ namespace Host.Win.Services
                     var stderr = proc.StandardError.ReadToEnd();
                     proc.WaitForExit(timeoutMs);
                     var ok = proc.ExitCode == 0;
-                    if ((!string.IsNullOrWhiteSpace(stdout)) && (verboseLogging || !ok))
+                    if (verboseLogging && (!string.IsNullOrWhiteSpace(stdout) || !string.IsNullOrWhiteSpace(stderr)))
                     {
-                        Trace.WriteLine($"[Agent cmd] {fileName} {arguments} -> {stdout}");
+                        TraceLogUtil.AppendVerboseDetail(
+                            "Agent/bootstrap",
+                            $"cmd={fileName} {arguments}\nexit_code={proc.ExitCode}\nstdout:\n{stdout}\n\nstderr:\n{stderr}");
                     }
-                    if ((!string.IsNullOrWhiteSpace(stderr)) && (verboseLogging || !ok))
+                    if (!ok)
                     {
-                        Trace.TraceWarning($"[Agent cmd ERR] {fileName} {arguments} -> {stderr}");
+                        var summary = TraceLogUtil.SummarizeText(!string.IsNullOrWhiteSpace(stderr) ? stderr : stdout);
+                        Trace.TraceWarning($"{BootstrapPrefix} command failed: {Path.GetFileName(fileName)} {arguments} :: {summary}");
                     }
                     return ok;
                 }
             }
             catch (Exception ex)
             {
-                Trace.TraceError($"Command failed: {fileName} {arguments} ({ex.Message})");
+                Trace.TraceError($"{BootstrapPrefix} command failed: {Path.GetFileName(fileName)} {arguments} ({ex.Message})");
             }
             return false;
         }

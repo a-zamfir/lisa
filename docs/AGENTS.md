@@ -1,106 +1,87 @@
-# AGENTS.md
+# Agent Guidelines
 
 ## Purpose
 
-LISA must:
-- operate fully locally
-- be low-latency and resource-efficient
-- prefer standard, composable patterns
-- avoid hidden coupling with the host or tools
-- remain safe, predictable, and debuggable
+LISA agents must remain:
 
----
+- local-first
+- low-latency
+- predictable
+- debuggable
+- safe around automation
 
-## Core Principles
+## Core Responsibilities
 
-### 1. Local-first, edge-first
-- All agent logic must run locally by default.
-- No remote hosted inference is assumed.
-- Network calls must be explicit, optional, and configurable, and local IPC must be authenticated.
+The agent is responsible for:
 
-### 2. Clear separation of responsibilities
-- Agent: reasoning, planning, tool selection, state.
-- Host (Windows): UX, OS APIs, audio/screen capture, playback.
-- MCP tools: system inspection and automation primitives.
+- interpreting user intent
+- maintaining conversation state
+- deciding when a skill/tool is required
+- invoking skills
+- synthesizing responses
+- returning structured outputs to the host
 
----
+The host is responsible for:
 
-## Agent Responsibilities
+- UI
+- mic capture
+- screen capture
+- playback
+- settings
+- permission/approval surfaces
 
-An agent may:
-- interpret user intent
-- maintain conversation state
-- decide when tools are required
-- call MCP tools
-- synthesize responses (text-first)
-- return structured outputs to the host
+## Tooling Model
 
-An agent must not:
-- block on long-running tasks without progress signals
-- embed UI logic
-- embed platform-specific assumptions
-- silently fail or guess when a tool call is required
+The active tooling model is skills-first.
 
----
+- skills are repo-local
+- discovery comes from `SKILL.md`
+- callable tools come from `tools.json`
+- execution is CLI-based
+- v1 uses Python entrypoints only
 
-## Latency & Performance Constraints
+Agents should reason in terms of skills and tools only.
 
-Agents are designed for edge devices.
+## Performance Rules
 
-Guidelines:
-- avoid unnecessary prompt bloat
-- keep context windows tight and bounded
-- stream outputs when possible
-- reuse provider connections
-- never reload models per request
+- keep prompts bounded
+- avoid repeated registry/context bloat
+- stream whenever possible
+- do not reload heavy dependencies per request
+- prefer deterministic tool flows over speculative retries
 
-Any change that increases latency or memory usage must be justified.
+## Memory Rules
 
----
+Long-term memory must stay:
 
-## State & Memory
+- local
+- inspectable
+- bounded
+- opt-in
 
-- Conversation state lives in the agent.
-- The host only keeps short-term UI cache.
-- Long-term memory (if enabled) must be:
-  - explicit
-  - local
-  - inspectable
-  - opt-in
+If relevant memory is not found, the agent should ask instead of guessing.
 
-Memory strategies must be documented in `docs/ARCHITECTURE.md`.
+## Failure Rules
 
----
+Agents must not:
 
-## Temporary Workarounds & Technical Debt
+- silently ignore a required skill/tool call
+- guess tool results
+- hide failed tool execution
+- block for long periods without progress signals
 
-Technical debt is not ignored - it is tracked.
+If a tool cannot run, the agent should surface that clearly and continue safely.
 
-Rules:
-- Any temporary workaround must be:
-  - clearly marked in code (`TODO`, `TEMP`, or equivalent)
-  - documented in `pending_implementation.md`
-- No silent hacks.
+## Engineering Rules
 
-Untracked debt is considered a bug.
-
----
-
-## Standards & Engineering Practices
-
-- Prefer industry-standard libraries and protocols.
-- Avoid bespoke formats unless justified.
-- Favor readability and debuggability over cleverness.
-- Deterministic behavior > creative behavior for automation.
-
-Agent logic should be testable in isolation.
-
----
+- prefer standard formats and predictable contracts
+- keep runtime boundaries explicit
+- keep tool execution testable in isolation
+- document technical debt instead of normalizing it
 
 ## Related Documents
 
-- `docs/ARCHITECTURE.md` - system architecture and design decisions
-- `docs/DEVELOPER.md` - developer-facing feature and integration guide
-- `features.md` (gitignored) - product-level features, ideas, and roadmap
-- `pending_implementation.md` (gitignored) - known issues, gaps, workarounds, and technical debt
-
+- `README.md`
+- `docs/ARCHITECTURE.md`
+- `docs/DEVELOPER.md`
+- `docs/skills.md`

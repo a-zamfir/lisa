@@ -2,10 +2,10 @@ fastapi
 uvicorn
 httpx
 orjson
+pywin32
 langgraph
 pydantic
 numpy
 soundfile
 python-multipart
 faster-whisper>=1.2.1
-mcp[cli]>=1.2.0

@@ -46,7 +46,7 @@ def collect_system_context() -> str:
     account = f"{domain}\\{username}" if domain else username
     hostname = socket.gethostname()
     os_version = platform.platform()
-    locale_code, _ = locale.getdefaultlocale() or (None, None)
+    locale_code = locale.getlocale()[0]
     encoding = locale.getpreferredencoding(False)
     tz = now.tzname() or "UTC"
     tz_offset = now.strftime("%z")

@@ -5,7 +5,8 @@ Small local Python project that turns a text string into speech and plays it.
 ## Requirements
 
 - Python 3.11
-- Optional: CUDA if you want GPU inference
+- Optional: CUDA (NVIDIA GPU) for GPU inference
+- Note: AMD GPUs are not supported on Windows (ROCm is Linux-only)
 
 ## Setup
 
@@ -76,7 +77,8 @@ python app.py "Hello Andrei" --model turbo --audio-prompt .\female_ref.wav
 ## Notes
 
 - For Turbo, a short (around 10 seconds) reference clip is recommended for voice cloning.
-- Use `--device cpu` if you do not have a GPU.
+- Use `--device cpu` if you do not have a GPU or have an AMD GPU on Windows.
+- By default (`--device auto`), the app will use NVIDIA CUDA if available, otherwise CPU.
 - The first run will download model weights (several GB) and can take a while; subsequent runs are faster.
 - Sampling flags use the model defaults unless you explicitly pass them.
 - For faster base/multilingual inference, use `--fast` (uses lower CFG weight).

@@ -18,11 +18,7 @@ namespace Host.Win.Models
         [JsonPropertyName("session_nonce")]
         public string? SessionNonce { get; set; }
 
-        /// <summary>
-        /// List of active MCP server names to filter tools.
-        /// Only tools from these servers will be included in the request.
-        /// </summary>
-        [JsonPropertyName("active_mcps")]
-        public List<string>? ActiveMcps { get; set; }
+        [JsonPropertyName("active_skills_categories")]
+        public List<string>? ActiveSkillsCategories { get; set; }
     }
 }

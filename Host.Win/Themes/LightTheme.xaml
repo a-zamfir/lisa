@@ -48,12 +48,13 @@
     <Color x:Key="InputFocusBorderColor">#FF0078D4</Color>
     <Color x:Key="RadioCheckedFillColor">#FF0078D4</Color>
 
-    <!-- Chat Bubbles -->
+    <!-- Chat Bubbles - Enhanced depth with subtle shadows -->
     <Color x:Key="AssistantBubbleBackgroundColor">#FFFFFFFF</Color>
     <Color x:Key="AssistantBubbleForegroundColor">#FF1A1A1A</Color>
-    <Color x:Key="AssistantBubbleBorderColor">#FFE8E8E8</Color>
+    <Color x:Key="AssistantBubbleBorderColor">#FFE0E0E0</Color>
     <Color x:Key="UserBubbleBackgroundColor">#FF0078D4</Color>
     <Color x:Key="UserBubbleForegroundColor">#FFFFFFFF</Color>
+    <Color x:Key="UserBubbleBorderColor">#FF006CBD</Color>
 
     <!-- Popup/Flyout -->
     <Color x:Key="PopupBackgroundColor">#FFFFFFFF</Color>
@@ -97,6 +98,7 @@
     <SolidColorBrush x:Key="AssistantBubbleBorder" Color="{StaticResource AssistantBubbleBorderColor}"/>
     <SolidColorBrush x:Key="UserBubbleBackground" Color="{StaticResource UserBubbleBackgroundColor}"/>
     <SolidColorBrush x:Key="UserBubbleForeground" Color="{StaticResource UserBubbleForegroundColor}"/>
+    <SolidColorBrush x:Key="UserBubbleBorder" Color="{StaticResource UserBubbleBorderColor}"/>
     <SolidColorBrush x:Key="PopupBackground" Color="{StaticResource PopupBackgroundColor}"/>
     <SolidColorBrush x:Key="PopupBorder" Color="{StaticResource OverlayBorderColor}"/>
     <SolidColorBrush x:Key="ApprovalAcceptedBackground" Color="{StaticResource ApprovalAcceptedBackgroundColor}"/>

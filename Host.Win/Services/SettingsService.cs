@@ -19,11 +19,24 @@ namespace Host.Win.Services
         private const string ApiKeyPrefix = "dpapi:";
         private const string CurrentVersion = "0.1.0-alpha";
 
-        public SettingsService()
+        public SettingsService(string? settingsPath = null)
         {
-            var basePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LISA");
-            Directory.CreateDirectory(basePath);
-            _settingsPath = Path.Combine(basePath, "host-settings.json");
+            if (string.IsNullOrWhiteSpace(settingsPath))
+            {
+                var basePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LISA");
+                Directory.CreateDirectory(basePath);
+                _settingsPath = Path.Combine(basePath, "host-settings.json");
+            }
+            else
+            {
+                var fullPath = Path.GetFullPath(settingsPath);
+                var directory = Path.GetDirectoryName(fullPath);
+                if (!string.IsNullOrWhiteSpace(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+                _settingsPath = fullPath;
+            }
         }
 
         public async Task<HostSettings> LoadAsync()
@@ -94,8 +107,6 @@ namespace Host.Win.Services
             return new HostSettings
             {
                 SettingsVersion = settings.SettingsVersion,
-                McpHost = settings.McpHost,
-                McpPort = settings.McpPort,
                 AgentHost = settings.AgentHost,
                 AgentPort = settings.AgentPort,
                 ProviderType = settings.ProviderType,
@@ -117,7 +128,11 @@ namespace Host.Win.Services
                 PiperPythonPath = settings.PiperPythonPath,
                 PiperVoiceModelPath = settings.PiperVoiceModelPath,
                 PiperVoiceConfigPath = settings.PiperVoiceConfigPath,
-                PiperSpeakerId = settings.PiperSpeakerId
+                PiperSpeakerId = settings.PiperSpeakerId,
+                TtsEngine = settings.TtsEngine,
+                ChatterboxPythonPath = settings.ChatterboxPythonPath,
+                ChatterboxWorkingDir = settings.ChatterboxWorkingDir,
+                ChatterboxRefAudio = settings.ChatterboxRefAudio
             };
         }
 

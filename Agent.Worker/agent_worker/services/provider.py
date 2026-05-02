@@ -185,6 +185,11 @@ def _extract_stream_content(data: object) -> str:
                 return str(content)
         choices = data.get("choices")
         if isinstance(choices, list) and choices:
+            msg = choices[0].get("message", {})
+            if isinstance(msg, dict):
+                content = msg.get("content")
+                if content:
+                    return str(content)
             delta = choices[0].get("delta", {})
             if isinstance(delta, dict):
                 content = delta.get("content")
@@ -202,6 +207,11 @@ def _extract_stream_thinking(data: object) -> str:
                 return str(thinking)
         choices = data.get("choices")
         if isinstance(choices, list) and choices:
+            msg = choices[0].get("message", {})
+            if isinstance(msg, dict):
+                thinking = msg.get("thinking")
+                if thinking:
+                    return str(thinking)
             delta = choices[0].get("delta", {})
             if isinstance(delta, dict):
                 thinking = delta.get("thinking")
@@ -219,6 +229,11 @@ def _extract_stream_tool_calls(data: object) -> List[Dict[str, Any]]:
                 return tool_calls
         choices = data.get("choices")
         if isinstance(choices, list) and choices:
+            msg = choices[0].get("message", {})
+            if isinstance(msg, dict):
+                tool_calls = msg.get("tool_calls")
+                if isinstance(tool_calls, list) and tool_calls:
+                    return tool_calls
             delta = choices[0].get("delta", {})
             if isinstance(delta, dict):
                 tool_calls = delta.get("tool_calls")

@@ -1,0 +1,207 @@
+{
+  "tools": [
+    {
+      "id": "system_overview",
+      "name": "System overview",
+      "description": "CPU/RAM/Disk usage, uptime, battery, and power mode.",
+      "friendly_desc": "would like to check your system specifications and usage.",
+      "command": "scripts/run.py",
+      "cli_args": ["--tool", "system_overview"],
+      "args_schema": {
+        "type": "object",
+        "properties": {}
+      },
+      "read_only": true,
+      "requires_approval": true,
+      "timeout_ms": 15000,
+      "max_output_kb": 64
+    },
+    {
+      "id": "top_processes",
+      "name": "Top processes",
+      "description": "Top processes by CPU usage.",
+      "friendly_desc": "would like to inspect your top running processes.",
+      "command": "scripts/run.py",
+      "cli_args": ["--tool", "top_processes"],
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "limit": { "type": "integer" }
+        }
+      },
+      "read_only": true,
+      "requires_approval": true,
+      "timeout_ms": 15000,
+      "max_output_kb": 64
+    },
+    {
+      "id": "network_usage",
+      "name": "Network usage",
+      "description": "Network adapter stats and VPN status.",
+      "friendly_desc": "would like to check your network and VPN status.",
+      "command": "scripts/run.py",
+      "cli_args": ["--tool", "network_usage"],
+      "args_schema": {
+        "type": "object",
+        "properties": {}
+      },
+      "read_only": true,
+      "requires_approval": true,
+      "timeout_ms": 15000,
+      "max_output_kb": 64
+    },
+    {
+      "id": "power_state",
+      "name": "Power state",
+      "description": "Battery status, active power scheme, and sleep capability.",
+      "friendly_desc": "would like to check your battery and power state.",
+      "command": "scripts/run.py",
+      "cli_args": ["--tool", "power_state"],
+      "args_schema": {
+        "type": "object",
+        "properties": {}
+      },
+      "read_only": true,
+      "requires_approval": true,
+      "timeout_ms": 15000,
+      "max_output_kb": 64
+    },
+    {
+      "id": "process_inspector",
+      "name": "Process inspector",
+      "description": "Active window process details, args, parent/child, signature, startup origins.",
+      "friendly_desc": "would like to inspect details about a running process.",
+      "command": "scripts/run.py",
+      "cli_args": ["--tool", "process_inspector"],
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "process_name": { "type": "string" },
+          "pid": { "type": "integer" }
+        }
+      },
+      "read_only": true,
+      "requires_approval": true,
+      "timeout_ms": 20000,
+      "max_output_kb": 128
+    },
+    {
+      "id": "startup_entries",
+      "name": "Startup entries",
+      "description": "Startup origins from registry and task scheduler.",
+      "friendly_desc": "would like to review system startup entries.",
+      "command": "scripts/run.py",
+      "cli_args": ["--tool", "startup_entries"],
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "filter_text": { "type": "string" },
+          "limit": { "type": "integer" }
+        }
+      },
+      "read_only": true,
+      "requires_approval": true,
+      "timeout_ms": 20000,
+      "max_output_kb": 128
+    },
+    {
+      "id": "large_files",
+      "name": "Large files",
+      "description": "Locate large files under a root path.",
+      "friendly_desc": "would like to scan for large files on your disk.",
+      "command": "scripts/run.py",
+      "cli_args": ["--tool", "large_files"],
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "root": { "type": "string" },
+          "limit": { "type": "integer" },
+          "max_depth": { "type": "integer" }
+        }
+      },
+      "read_only": true,
+      "requires_approval": true,
+      "timeout_ms": 30000,
+      "max_output_kb": 256
+    },
+    {
+      "id": "find_duplicates",
+      "name": "Find duplicates",
+      "description": "Find duplicate files by hash.",
+      "friendly_desc": "would like to scan for duplicate files.",
+      "command": "scripts/run.py",
+      "cli_args": ["--tool", "find_duplicates"],
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "root": { "type": "string" },
+          "limit": { "type": "integer" },
+          "max_depth": { "type": "integer" }
+        }
+      },
+      "read_only": true,
+      "requires_approval": true,
+      "timeout_ms": 60000,
+      "max_output_kb": 256
+    },
+    {
+      "id": "disk_usage_by_extension",
+      "name": "Disk usage by extension",
+      "description": "Explain disk usage by file extension.",
+      "friendly_desc": "would like to analyze disk usage by file type.",
+      "command": "scripts/run.py",
+      "cli_args": ["--tool", "disk_usage_by_extension"],
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "root": { "type": "string" },
+          "limit": { "type": "integer" },
+          "max_depth": { "type": "integer" }
+        }
+      },
+      "read_only": true,
+      "requires_approval": true,
+      "timeout_ms": 30000,
+      "max_output_kb": 256
+    },
+    {
+      "id": "recent_changes",
+      "name": "Recent changes",
+      "description": "Recent file changes under a root path.",
+      "friendly_desc": "would like to review recent file changes.",
+      "command": "scripts/run.py",
+      "cli_args": ["--tool", "recent_changes"],
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "root": { "type": "string" },
+          "days": { "type": "integer" },
+          "limit": { "type": "integer" },
+          "max_depth": { "type": "integer" }
+        }
+      },
+      "read_only": true,
+      "requires_approval": true,
+      "timeout_ms": 30000,
+      "max_output_kb": 256
+    },
+    {
+      "id": "file_metadata",
+      "name": "File metadata",
+      "description": "File metadata and zone info.",
+      "friendly_desc": "would like to inspect file metadata.",
+      "command": "scripts/run.py",
+      "cli_args": ["--tool", "file_metadata"],
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" }
+        }
+      },
+      "read_only": true,
+      "requires_approval": true,
+      "timeout_ms": 15000,
+      "max_output_kb": 128
+    }
+  ]
+}

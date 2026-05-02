@@ -29,19 +29,19 @@ namespace Host.Win.Services
             "authorization",
             "bearer",
             "token",
-            "mcp_auth_token",
             "lisa_callback_token",
-            "x-mcp-token",
             "x-provider-api-key",
             "secret",
             "password"
         };
 
-        public LoggingService()
+        public LoggingService(string? basePath = null)
         {
-            var basePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LISA", "logs");
-            Directory.CreateDirectory(basePath);
-            _logFilePath = Path.Combine(basePath, "host.log");
+            var resolvedBasePath = string.IsNullOrWhiteSpace(basePath)
+                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LISA", "logs")
+                : Path.GetFullPath(basePath);
+            Directory.CreateDirectory(resolvedBasePath);
+            _logFilePath = Path.Combine(resolvedBasePath, "host.log");
         }
 
         public void LogEvent(string eventType, object payload)

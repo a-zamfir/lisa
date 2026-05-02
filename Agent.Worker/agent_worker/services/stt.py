@@ -3,6 +3,9 @@ from __future__ import annotations
 import io
 import logging
 import os
+import shlex
+import subprocess
+import tempfile
 import time
 import wave
 from typing import Tuple
@@ -14,12 +17,31 @@ _MODEL = None
 _LOAD_ERROR: str | None = None
 _MODEL_DEVICE: str | None = None
 _MODEL_COMPUTE: str | None = None
+_WHISPERCPP_LOAD_ERROR: str | None = None
+_BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 _MODEL_DIR = os.path.abspath(
     os.environ.get(
         "FASTER_WHISPER_MODEL_DIR",
-        os.path.join(os.path.dirname(__file__), "..", "speech", "models", "whisper-small"),
+        os.path.join(_BASE_DIR, "speech", "models", "whisper-small"),
     )
 )
+_WHISPERCPP_EXE_DEFAULT = os.path.join(_BASE_DIR, "speech", "whispercpp", "whisper.exe")
+_WHISPERCPP_MODEL_DEFAULT = os.path.join(_BASE_DIR, "speech", "models", "whispercpp", "ggml-small.bin")
+
+
+def _get_backend() -> str:
+    return os.environ.get("STT_BACKEND", "auto").strip().lower()
+
+
+def _get_whispercpp_paths() -> Tuple[str, str]:
+    exe = os.environ.get("WHISPERCPP_EXE", _WHISPERCPP_EXE_DEFAULT)
+    model = os.environ.get("WHISPERCPP_MODEL", _WHISPERCPP_MODEL_DEFAULT)
+    return os.path.abspath(exe), os.path.abspath(model)
+
+
+def _whispercpp_available() -> bool:
+    exe, model = _get_whispercpp_paths()
+    return os.path.isfile(exe) and os.path.isfile(model)
 
 
 def _load_model():
@@ -109,7 +131,41 @@ def _load_model():
 
 
 def load_model():
+    backend = _get_backend()
+    exe, model = _get_whispercpp_paths()
+    available = _whispercpp_available()
+    logger.info(
+        "stt backend=%s whispercpp exe=%s model=%s available=%s",
+        backend,
+        exe,
+        model,
+        available,
+    )
+    if backend == "whispercpp":
+        return _load_whispercpp()
+    if backend == "auto" and available:
+        return _load_whispercpp()
     return _load_model()
+
+
+def _load_whispercpp():
+    global _MODEL_DEVICE, _MODEL_COMPUTE, _WHISPERCPP_LOAD_ERROR
+    if _WHISPERCPP_LOAD_ERROR is not None:
+        raise RuntimeError(_WHISPERCPP_LOAD_ERROR)
+
+    exe, model = _get_whispercpp_paths()
+    if not os.path.isfile(exe) or not os.path.isfile(model):
+        _WHISPERCPP_LOAD_ERROR = (
+            "whisper.cpp STT not configured. "
+            "Set WHISPERCPP_EXE and WHISPERCPP_MODEL to valid paths."
+        )
+        raise RuntimeError(_WHISPERCPP_LOAD_ERROR)
+
+    device = os.environ.get("WHISPERCPP_DEVICE", "auto").strip().lower() or "auto"
+    _MODEL_DEVICE = device
+    _MODEL_COMPUTE = "whispercpp"
+    logger.info("stt whispercpp ready exe=%s model=%s device=%s", exe, model, device)
+    return None
 
 
 def _decode_audio(audio_bytes: bytes) -> Tuple[np.ndarray, int]:
@@ -178,6 +234,23 @@ def transcribe_audio(audio_bytes: bytes) -> Tuple[str, int, int, str | None, str
     decode_ms = int((time.monotonic() - decode_start) * 1000)
     print(f"[stt] decode bytes={len(audio_bytes)} samples={len(audio)} sr={sample_rate} decode_ms={decode_ms}")
 
+    backend = _get_backend()
+    if backend in {"whispercpp", "auto"} and _whispercpp_available():
+        try:
+            transcript, stt_ms, device, compute = _transcribe_whispercpp(audio)
+            logger.info("stt decode_ms=%s stt_ms=%s sample_rate=%s", decode_ms, stt_ms, sample_rate)
+            return transcript, decode_ms, stt_ms, device, compute
+        except Exception as exc:
+            if backend == "whispercpp":
+                raise
+            logger.warning("whispercpp failed; falling back to faster-whisper: %s", exc)
+
+    transcript, stt_ms, device, compute = _transcribe_faster_whisper(audio)
+    logger.info("stt decode_ms=%s stt_ms=%s sample_rate=%s", decode_ms, stt_ms, sample_rate)
+    return transcript, decode_ms, stt_ms, device, compute
+
+
+def _transcribe_faster_whisper(audio: np.ndarray) -> Tuple[str, int, str | None, str | None]:
     model = _load_model()
     stt_start = time.monotonic()
     segments, _info = model.transcribe(
@@ -189,6 +262,75 @@ def transcribe_audio(audio_bytes: bytes) -> Tuple[str, int, int, str | None, str
     )
     transcript = " ".join(seg.text.strip() for seg in segments).strip()
     stt_ms = int((time.monotonic() - stt_start) * 1000)
+    return transcript, stt_ms, _MODEL_DEVICE, _MODEL_COMPUTE
 
-    logger.info("stt decode_ms=%s stt_ms=%s sample_rate=%s", decode_ms, stt_ms, sample_rate)
-    return transcript, decode_ms, stt_ms, _MODEL_DEVICE, _MODEL_COMPUTE
+
+def _write_wav(path: str, audio: np.ndarray, sample_rate: int = 16000) -> None:
+    pcm = np.clip(audio, -1.0, 1.0)
+    pcm16 = (pcm * 32767.0).astype(np.int16)
+    with wave.open(path, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(pcm16.tobytes())
+
+
+def _parse_whispercpp_stdout(stdout: str) -> str:
+    lines = []
+    for line in stdout.splitlines():
+        clean = line.strip()
+        if not clean:
+            continue
+        if clean.startswith("[") or clean.startswith("whisper"):
+            continue
+        lines.append(clean)
+    return " ".join(lines).strip()
+
+
+def _transcribe_whispercpp(audio: np.ndarray) -> Tuple[str, int, str | None, str | None]:
+    _load_whispercpp()
+    exe, model = _get_whispercpp_paths()
+    language = os.environ.get("WHISPERCPP_LANGUAGE", "en").strip() or "en"
+    extra_args = shlex.split(os.environ.get("WHISPERCPP_ARGS", ""))
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        wav_path = os.path.join(tmp_dir, "audio.wav")
+        _write_wav(wav_path, audio, 16000)
+        output_base = os.path.join(tmp_dir, "result")
+        output_txt = f"{output_base}.txt"
+
+        base_cmd = [exe, "-m", model, "-f", wav_path, "-l", language, "-nt"]
+        output_cmd = base_cmd + ["-otxt", "-of", output_base] + extra_args
+
+        stt_start = time.monotonic()
+        result = subprocess.run(
+            output_cmd,
+            capture_output=True,
+            text=True,
+            cwd=os.path.dirname(exe),
+            timeout=120,
+        )
+
+        if result.returncode != 0:
+            logger.warning("whispercpp failed (%s); retrying without output flags", result.stderr.strip())
+            result = subprocess.run(
+                base_cmd + extra_args,
+                capture_output=True,
+                text=True,
+                cwd=os.path.dirname(exe),
+                timeout=120,
+            )
+            if result.returncode != 0:
+                raise RuntimeError(result.stderr.strip() or "whispercpp failed")
+
+        transcript = ""
+        if os.path.isfile(output_txt):
+            with open(output_txt, "r", encoding="utf-8", errors="ignore") as handle:
+                transcript = handle.read().strip()
+        if not transcript:
+            transcript = _parse_whispercpp_stdout(result.stdout)
+
+        stt_ms = int((time.monotonic() - stt_start) * 1000)
+        device = _MODEL_DEVICE or "whispercpp"
+        compute = _MODEL_COMPUTE or "whispercpp"
+        return transcript, stt_ms, device, compute

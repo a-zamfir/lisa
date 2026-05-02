@@ -36,7 +36,7 @@ def parse_args() -> argparse.Namespace:
         "--device",
         choices=["auto", "cpu", "cuda"],
         default="auto",
-        help="Inference device selection.",
+        help="Inference device selection (auto, cpu, or cuda for NVIDIA).",
     )
     parser.add_argument(
         "--output",
@@ -94,7 +94,11 @@ def parse_args() -> argparse.Namespace:
 
 def resolve_device(device_arg: str) -> str:
     if device_arg == "auto":
-        return "cuda" if torch.cuda.is_available() else "cpu"
+        # Try CUDA (NVIDIA GPUs, or ROCm on Linux)
+        if torch.cuda.is_available():
+            return "cuda"
+        # Fallback to CPU
+        return "cpu"
     return device_arg
 
 
@@ -110,6 +114,9 @@ def get_text(text_arg: str | None) -> str:
 def describe_device(device: str) -> str:
     if device == "cuda":
         name = torch.cuda.get_device_name(0)
+        # Check if this is ROCm (AMD) or CUDA (NVIDIA)
+        if hasattr(torch.version, 'hip') and torch.version.hip is not None:
+            return f"rocm ({name})"
         return f"cuda ({name})"
     return device
 

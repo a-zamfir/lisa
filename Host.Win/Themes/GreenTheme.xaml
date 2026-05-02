@@ -47,12 +47,13 @@
     <Color x:Key="InputFocusBorderColor">#FF34D399</Color>
     <Color x:Key="RadioCheckedFillColor">#FF34D399</Color>
 
-    <!-- Chat Bubbles -->
+    <!-- Chat Bubbles - Enhanced depth -->
     <Color x:Key="AssistantBubbleBackgroundColor">#FF145142</Color>
     <Color x:Key="AssistantBubbleForegroundColor">#FFDCFCE7</Color>
     <Color x:Key="AssistantBubbleBorderColor">#FF1B6656</Color>
     <Color x:Key="UserBubbleBackgroundColor">#FF10B981</Color>
     <Color x:Key="UserBubbleForegroundColor">#FF052E1B</Color>
+    <Color x:Key="UserBubbleBorderColor">#FF0D9668</Color>
 
     <!-- Popup/Flyout -->
     <Color x:Key="PopupBackgroundColor">#FF103B30</Color>
@@ -104,6 +105,7 @@
     <SolidColorBrush x:Key="AssistantBubbleBorder" Color="{StaticResource AssistantBubbleBorderColor}"/>
     <SolidColorBrush x:Key="UserBubbleBackground" Color="{StaticResource UserBubbleBackgroundColor}"/>
     <SolidColorBrush x:Key="UserBubbleForeground" Color="{StaticResource UserBubbleForegroundColor}"/>
+    <SolidColorBrush x:Key="UserBubbleBorder" Color="{StaticResource UserBubbleBorderColor}"/>
     <SolidColorBrush x:Key="PopupBackground" Color="{StaticResource PopupBackgroundColor}"/>
     <LinearGradientBrush x:Key="PopupBorder" StartPoint="0,0" EndPoint="0,1">
         <GradientStop Color="{StaticResource PopupBorderTopColor}" Offset="0"/>

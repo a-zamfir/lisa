@@ -16,8 +16,8 @@
          - Borders:        40-50% opacity (subtle definition)
     ═══════════════════════════════════════════════════════════════════════════ -->
 
-    <!-- Base Surface Colors (with alpha for Mica effect) -->
-    <Color x:Key="OverlayBackgroundColor">#E6242438</Color>
+    <!-- Base Surface Colors -->
+    <Color x:Key="OverlayBackgroundColor">#FF242438</Color>
     <Color x:Key="OverlayBorderColor">#66FFFFFF</Color>
     <Color x:Key="OverlayForegroundColor">#FFFFFFFF</Color>
     <Color x:Key="SubtleTextColor">#CCB8B8C8</Color>
@@ -47,12 +47,13 @@
     <Color x:Key="InputFocusBorderColor">#CC818CF8</Color>
     <Color x:Key="RadioCheckedFillColor">#FF818CF8</Color>
 
-    <!-- Chat Bubbles -->
+    <!-- Chat Bubbles - Enhanced depth with glass borders -->
     <Color x:Key="AssistantBubbleBackgroundColor">#80282840</Color>
     <Color x:Key="AssistantBubbleForegroundColor">#FFFFFFFF</Color>
-    <Color x:Key="AssistantBubbleBorderColor">#33FFFFFF</Color>
+    <Color x:Key="AssistantBubbleBorderColor">#40FFFFFF</Color>
     <Color x:Key="UserBubbleBackgroundColor">#80383858</Color>
     <Color x:Key="UserBubbleForegroundColor">#FFFFFFFF</Color>
+    <Color x:Key="UserBubbleBorderColor">#33FFFFFF</Color>
 
     <!-- Popup/Flyout -->
     <Color x:Key="PopupBackgroundColor">#E6202038</Color>
@@ -74,11 +75,11 @@
          BRUSH DEFINITIONS
     ═══════════════════════════════════════════════════════════════════════════ -->
 
-    <!-- Mica-style gradient background -->
+    <!-- Opaque outer shell; glass effect stays in inner panels/elements -->
     <LinearGradientBrush x:Key="OverlayBackground" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Color="#E6202035" Offset="0"/>
-        <GradientStop Color="#E6252545" Offset="0.5"/>
-        <GradientStop Color="#E61A1A30" Offset="1"/>
+        <GradientStop Color="#FF202035" Offset="0"/>
+        <GradientStop Color="#FF252545" Offset="0.5"/>
+        <GradientStop Color="#FF1A1A30" Offset="1"/>
     </LinearGradientBrush>
     <SolidColorBrush x:Key="OverlayBorder" Color="{StaticResource OverlayBorderColor}"/>
     <SolidColorBrush x:Key="OverlayForeground" Color="{StaticResource OverlayForegroundColor}"/>
@@ -104,6 +105,7 @@
     <SolidColorBrush x:Key="AssistantBubbleBorder" Color="{StaticResource AssistantBubbleBorderColor}"/>
     <SolidColorBrush x:Key="UserBubbleBackground" Color="{StaticResource UserBubbleBackgroundColor}"/>
     <SolidColorBrush x:Key="UserBubbleForeground" Color="{StaticResource UserBubbleForegroundColor}"/>
+    <SolidColorBrush x:Key="UserBubbleBorder" Color="{StaticResource UserBubbleBorderColor}"/>
     <SolidColorBrush x:Key="PopupBackground" Color="{StaticResource PopupBackgroundColor}"/>
     <LinearGradientBrush x:Key="PopupBorder" StartPoint="0,0" EndPoint="0,1">
         <GradientStop Color="{StaticResource PopupBorderTopColor}" Offset="0"/>

@@ -29,6 +29,32 @@ namespace Host.Win.Views
             InitializeComponent();
             DataContextChanged += OnDataContextChanged;
             SizeChanged += (_, _) => UpdateWindowRegion();
+            Loaded += OnWindowLoaded;
+        }
+
+        private void OnWindowLoaded(object sender, RoutedEventArgs e)
+        {
+            if (ChatScrollViewer != null)
+            {
+                ChatScrollViewer.PreviewMouseWheel += OnChatScrollViewerMouseWheel;
+            }
+        }
+
+        private void OnChatScrollViewerMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
+        {
+            if (ChatScrollViewer == null) return;
+
+            e.Handled = true;
+
+            // Significantly reduce scroll speed for fine control
+            // Default delta is typically 120 per notch, we reduce to ~30 pixels per notch
+            double scrollAmount = e.Delta * 0.25;
+            double newOffset = ChatScrollViewer.VerticalOffset - scrollAmount;
+
+            // Clamp to valid range
+            newOffset = Math.Max(0, Math.Min(ChatScrollViewer.ScrollableHeight, newOffset));
+
+            ChatScrollViewer.ScrollToVerticalOffset(newOffset);
         }
 
         public void ShowAtBottomRight(Screen screen, double margin)
@@ -232,8 +258,10 @@ namespace Host.Win.Views
 
         private void UpdateBackdrop()
         {
-            var useGlass = _viewModel?.CurrentTheme == AppTheme.Glass;
-            WindowBackdropService.ApplyGlass(_hwnd, useGlass);
+            // Keep the overlay's glass theme in XAML only.
+            // HWND-level acrylic/backdrop ignores the rounded overlay shape and
+            // reintroduces a square composited surface behind transparent corners.
+            WindowBackdropService.ApplyGlass(_hwnd, enabled: false);
         }
 
         private void UpdateWindowRegion()
@@ -243,9 +271,15 @@ namespace Host.Win.Views
                 return;
             }
 
-            // Overlay is intentionally square-cornered; ensure no OS/GDI rounding is applied.
+            var dpi = VisualTreeHelper.GetDpi(this);
+            var regionRadiusDip = 16d;
+            if (TryFindResource("OverlayWindowRegionRadiusDip") is double resourceRadius && resourceRadius > 0)
+            {
+                regionRadiusDip = resourceRadius;
+            }
+
             WindowBackdropService.TrySetRoundedCorners(_hwnd, WindowBackdropService.WindowCornerPreference.DoNotRound);
-            WindowBackdropService.ClearWindowRegion(_hwnd);
+            WindowBackdropService.ApplyRoundedCorners(_hwnd, ActualWidth, ActualHeight, regionRadiusDip, dpi.DpiScaleX, dpi.DpiScaleY);
         }
 
         private void EnsureVoiceStoryboards()
@@ -340,6 +374,7 @@ namespace Host.Win.Views
             };
             ThinkingTrailRotate.BeginAnimation(RotateTransform.AngleProperty, rotate);
         }
+        
 
         private void StopProcessingAnimation()
         {

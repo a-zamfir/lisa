@@ -1,0 +1,231 @@
+{
+  "defaults": {
+    "env": {
+      "AGENT_BROWSER_SOCKET_DIR": "%LOCALAPPDATA%\\LISA\\skills\\agent-browser\\socket",
+      "AGENT_BROWSER_PROFILE": "%LOCALAPPDATA%\\LISA\\skills\\agent-browser\\profile",
+      "AGENT_BROWSER_DOWNLOAD_PATH": "%LOCALAPPDATA%\\LISA\\skills\\agent-browser\\downloads",
+      "AGENT_BROWSER_SCREENSHOT_DIR": "%LOCALAPPDATA%\\LISA\\skills\\agent-browser\\screenshots"
+    },
+    "ensure_dirs": [
+      "AGENT_BROWSER_SOCKET_DIR",
+      "AGENT_BROWSER_PROFILE",
+      "AGENT_BROWSER_DOWNLOAD_PATH",
+      "AGENT_BROWSER_SCREENSHOT_DIR"
+    ],
+    "timeout_ms": 30000,
+    "max_output_kb": 256
+  },
+  "tools": [
+    {
+      "id": "agent_browser_open",
+      "name": "Browser open",
+      "description": "Open a URL in a named browser session.",
+      "friendly_desc": "would like to open a webpage in a browser session.",
+      "execution_mode": "native-cli",
+      "command": "node_modules/.bin/agent-browser.cmd",
+      "cli_args": ["open"],
+      "arg_flags": {
+        "session": { "flag": "--session" },
+        "url": { "position": 0 }
+      },
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string" },
+          "session": { "type": "string" }
+        },
+        "required": ["url"]
+      },
+      "read_only": true,
+      "requires_approval": true
+    },
+    {
+      "id": "agent_browser_snapshot",
+      "name": "Browser snapshot",
+      "description": "Capture the current page state as JSON with interactive refs.",
+      "friendly_desc": "would like to inspect the current webpage state.",
+      "execution_mode": "native-cli",
+      "command": "node_modules/.bin/agent-browser.cmd",
+      "cli_args": ["snapshot", "-i", "--json"],
+      "arg_flags": {
+        "session": { "flag": "--session" },
+        "selector": { "flag": "-s" },
+        "compact": { "flag": "-c" },
+        "depth": { "flag": "-d" }
+      },
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "session": { "type": "string" },
+          "selector": { "type": "string" },
+          "compact": { "type": "boolean" },
+          "depth": { "type": "integer" }
+        }
+      },
+      "read_only": true,
+      "requires_approval": false,
+      "max_output_kb": 1024
+    },
+    {
+      "id": "agent_browser_click",
+      "name": "Browser click",
+      "description": "Click an element by snapshot ref.",
+      "friendly_desc": "would like to click an element in the browser.",
+      "execution_mode": "native-cli",
+      "command": "node_modules/.bin/agent-browser.cmd",
+      "cli_args": ["click"],
+      "arg_flags": {
+        "session": { "flag": "--session" },
+        "ref": { "position": 0 }
+      },
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "ref": { "type": "string" },
+          "session": { "type": "string" }
+        },
+        "required": ["ref"]
+      },
+      "read_only": false,
+      "requires_approval": true
+    },
+    {
+      "id": "agent_browser_fill",
+      "name": "Browser fill",
+      "description": "Fill an input field by snapshot ref.",
+      "friendly_desc": "would like to fill a field in the browser.",
+      "execution_mode": "native-cli",
+      "command": "node_modules/.bin/agent-browser.cmd",
+      "cli_args": ["fill"],
+      "arg_flags": {
+        "session": { "flag": "--session" },
+        "ref": { "position": 0 },
+        "text": { "position": 1 }
+      },
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "ref": { "type": "string" },
+          "text": { "type": "string" },
+          "session": { "type": "string" }
+        },
+        "required": ["ref", "text"]
+      },
+      "read_only": false,
+      "requires_approval": true
+    },
+    {
+      "id": "agent_browser_press",
+      "name": "Browser press key",
+      "description": "Send a key press to the active page.",
+      "friendly_desc": "would like to send a key press in the browser.",
+      "execution_mode": "native-cli",
+      "command": "node_modules/.bin/agent-browser.cmd",
+      "cli_args": ["press"],
+      "arg_flags": {
+        "session": { "flag": "--session" },
+        "key": { "position": 0 }
+      },
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "key": { "type": "string" },
+          "session": { "type": "string" }
+        },
+        "required": ["key"]
+      },
+      "read_only": false,
+      "requires_approval": true
+    },
+    {
+      "id": "agent_browser_wait",
+      "name": "Browser wait",
+      "description": "Wait for an element, text, URL, load state, or delay.",
+      "friendly_desc": "would like to wait for the browser page to reach a specific state.",
+      "command": "scripts/run.py",
+      "cli_args": ["--tool", "agent_browser_wait"],
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "ref": { "type": "string" },
+          "milliseconds": { "type": "integer" },
+          "text": { "type": "string" },
+          "url": { "type": "string" },
+          "load": { "type": "string" },
+          "session": { "type": "string" }
+        }
+      },
+      "read_only": true,
+      "requires_approval": false,
+      "timeout_ms": 35000
+    },
+    {
+      "id": "agent_browser_get_text",
+      "name": "Browser get text",
+      "description": "Extract text from an element by ref.",
+      "friendly_desc": "would like to extract text from the current webpage.",
+      "execution_mode": "native-cli",
+      "command": "node_modules/.bin/agent-browser.cmd",
+      "cli_args": ["get", "text", "--json"],
+      "arg_flags": {
+        "session": { "flag": "--session" },
+        "ref": { "position": 0 }
+      },
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "ref": { "type": "string" },
+          "session": { "type": "string" }
+        },
+        "required": ["ref"]
+      },
+      "read_only": true,
+      "requires_approval": false
+    },
+    {
+      "id": "agent_browser_get_attr",
+      "name": "Browser get attribute",
+      "description": "Extract an attribute value from an element by ref.",
+      "friendly_desc": "would like to extract an attribute value from the current webpage.",
+      "execution_mode": "native-cli",
+      "command": "node_modules/.bin/agent-browser.cmd",
+      "cli_args": ["get", "attr", "--json"],
+      "arg_flags": {
+        "session": { "flag": "--session" },
+        "ref": { "position": 0 },
+        "attribute": { "position": 1 }
+      },
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "ref": { "type": "string" },
+          "attribute": { "type": "string" },
+          "session": { "type": "string" }
+        },
+        "required": ["ref", "attribute"]
+      },
+      "read_only": true,
+      "requires_approval": false
+    },
+    {
+      "id": "agent_browser_close",
+      "name": "Browser close",
+      "description": "Close the current browser session.",
+      "friendly_desc": "would like to close the browser session.",
+      "execution_mode": "native-cli",
+      "command": "node_modules/.bin/agent-browser.cmd",
+      "cli_args": ["close"],
+      "arg_flags": {
+        "session": { "flag": "--session" }
+      },
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "session": { "type": "string" }
+        }
+      },
+      "read_only": false,
+      "requires_approval": true
+    }
+  ]
+}

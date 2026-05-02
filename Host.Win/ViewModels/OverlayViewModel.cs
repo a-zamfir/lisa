@@ -32,15 +32,16 @@ namespace Host.Win.ViewModels
         private bool _isLightTheme;
         private AppTheme _currentTheme = AppTheme.Glass;
         private string _themeIcon = "\uE708"; // Sun by default
-        private bool _isMcpReady;
+        private bool _isToolClientReady;
         private bool _isAgentReady;
         private bool _isProviderReady;
+        private string _toolClientLabel = "Skills";
         private RelayCommand? _toggleThemeCommand;
         private RelayCommand<AssistantMode>? _setModeCommand;
-        private string? _mcpStatusText = "Checking...";
+        private string? _toolStatusText = "Checking...";
         private string? _agentStatusText = "Checking...";
         private string? _providerStatusText = "Checking...";
-        private System.Windows.Media.Brush? _mcpStatusBrush;
+        private System.Windows.Media.Brush? _toolStatusBrush;
         private System.Windows.Media.Brush? _agentStatusBrush;
         private System.Windows.Media.Brush? _providerStatusBrush;
         private string _chatInput = string.Empty;
@@ -58,10 +59,9 @@ namespace Host.Win.ViewModels
         private ICommand? _startTalkCommand;
         private ICommand? _replayTtsCommand;
         private ICommand? _attachFileCommand;
-        private ICommand? _toggleMcpServerCommand;
-        private ObservableCollection<McpServerItem> _mcpServers = new();
         private HostSettings? _settings;
         private ICommand? _saveSettingsCommand;
+        private ICommand? _clearMemoryCommand;
         private ICommand? _toggleCollapseCommand;
         private readonly System.Collections.Generic.Dictionary<string, System.Threading.CancellationTokenSource> _inflightTurns = new();
         private readonly Dictionary<string, StringBuilder> _pendingThinkingByTurn = new();
@@ -174,6 +174,16 @@ namespace Host.Win.ViewModels
             set => SetProperty(ref _themeIcon, value);
         }
 
+        public string ToolClientLabel
+        {
+            get => _toolClientLabel;
+            set
+            {
+                if (!SetProperty(ref _toolClientLabel, value)) return;
+                UpdateToolStatus(_isToolClientReady);
+            }
+        }
+
         public RelayCommand? ToggleThemeCommand
         {
             get => _toggleThemeCommand;
@@ -186,10 +196,10 @@ namespace Host.Win.ViewModels
             set => SetProperty(ref _setModeCommand, value);
         }
 
-        public string? McpStatusText
+        public string? ToolStatusText
         {
-            get => _mcpStatusText;
-            set => SetProperty(ref _mcpStatusText, value);
+            get => _toolStatusText;
+            set => SetProperty(ref _toolStatusText, value);
         }
 
         public string? ProviderStatusText
@@ -204,10 +214,10 @@ namespace Host.Win.ViewModels
             set => SetProperty(ref _agentStatusText, value);
         }
 
-        public System.Windows.Media.Brush? McpStatusBrush
+        public System.Windows.Media.Brush? ToolStatusBrush
         {
-            get => _mcpStatusBrush;
-            set => SetProperty(ref _mcpStatusBrush, value);
+            get => _toolStatusBrush;
+            set => SetProperty(ref _toolStatusBrush, value);
         }
 
         public System.Windows.Media.Brush? ProviderStatusBrush
@@ -292,18 +302,6 @@ namespace Host.Win.ViewModels
             set => SetProperty(ref _attachFileCommand, value);
         }
 
-        public ICommand? ToggleMcpServerCommand
-        {
-            get => _toggleMcpServerCommand;
-            set => SetProperty(ref _toggleMcpServerCommand, value);
-        }
-
-        public ObservableCollection<McpServerItem> McpServers
-        {
-            get => _mcpServers;
-            set => SetProperty(ref _mcpServers, value);
-        }
-
         public bool IsThinkArmed
         {
             get => _isThinkArmed;
@@ -331,45 +329,7 @@ namespace Host.Win.ViewModels
                 ProviderType = _settings?.ProviderType ?? "Ollama";
                 OnPropertyChanged(nameof(VoiceRatePercent));
                 OnPropertyChanged(nameof(VoiceVolumePercent));
-                RefreshMcpServers();
             }
-        }
-
-        /// <summary>
-        /// Populate the McpServers collection from settings.
-        /// </summary>
-        public void RefreshMcpServers()
-        {
-            McpServers.Clear();
-            if (_settings?.McpServers == null) return;
-
-            foreach (var (name, config) in _settings.McpServers)
-            {
-                if (!config.Enabled) continue;
-                McpServers.Add(new McpServerItem(name, config.Description, config.Active));
-            }
-        }
-
-        /// <summary>
-        /// Toggle the active state of an MCP server.
-        /// </summary>
-        public void ToggleMcpServer(McpServerItem server)
-        {
-            server.IsActive = !server.IsActive;
-
-            // Update the underlying config
-            if (_settings?.McpServers != null && _settings.McpServers.TryGetValue(server.Name, out var config))
-            {
-                config.Active = server.IsActive;
-            }
-        }
-
-        /// <summary>
-        /// Get the list of active MCP server names for filtering tools.
-        /// </summary>
-        public List<string> GetActiveMcpServerNames()
-        {
-            return McpServers.Where(s => s.IsActive).Select(s => s.Name).ToList();
         }
 
         public int VoiceRatePercent
@@ -400,6 +360,12 @@ namespace Host.Win.ViewModels
         {
             get => _saveSettingsCommand;
             set => SetProperty(ref _saveSettingsCommand, value);
+        }
+
+        public ICommand? ClearMemoryCommand
+        {
+            get => _clearMemoryCommand;
+            set => SetProperty(ref _clearMemoryCommand, value);
         }
 
         public ICommand? ToggleCollapseCommand
@@ -522,18 +488,19 @@ namespace Host.Win.ViewModels
         {
             CurrentTheme = theme;
             IsLightTheme = theme == AppTheme.Light;
-            UpdateMcpStatus(_isMcpReady);
+            UpdateToolStatus(_isToolClientReady);
             UpdateAgentStatus(_isAgentReady);
             UpdateProviderStatus(_isProviderReady);
         }
 
-        public void UpdateMcpStatus(bool ready)
+        public void UpdateToolStatus(bool ready)
         {
-            _isMcpReady = ready;
+            _isToolClientReady = ready;
             var resourceKey = ready ? "StatusReadyBrush" : "StatusOfflineBrush";
             var brush = System.Windows.Application.Current.Resources[resourceKey] as System.Windows.Media.Brush;
-            McpStatusBrush = brush ?? (ready ? System.Windows.Media.Brushes.LimeGreen : System.Windows.Media.Brushes.IndianRed);
-            McpStatusText = ready ? "MCP Ready" : "MCP Offline";
+            ToolStatusBrush = brush ?? (ready ? System.Windows.Media.Brushes.LimeGreen : System.Windows.Media.Brushes.IndianRed);
+            var label = string.IsNullOrWhiteSpace(ToolClientLabel) ? "Tools" : ToolClientLabel.Trim();
+            ToolStatusText = ready ? $"{label} Ready" : $"{label} Offline";
         }
 
         public void UpdateProviderStatus(bool ready)
@@ -663,15 +630,25 @@ namespace Host.Win.ViewModels
                 input_type = "text"
             });
 
-            var response = await AgentClient.SendRetryAsync(request, cts.Token);
-            if (response != null)
+            var canceled = false;
+            try
             {
-                ApplyToolLabel(message, response.ToolCalls);
-                ApplyReasoning(message, response.Reasoning, response.ThinkingMs);
-                foreach (var msg in response.Messages)
+                var response = await AgentClient.SendRetryAsync(request, cts.Token).ConfigureAwait(false);
+                if (cts.IsCancellationRequested)
                 {
-                    if (msg.Role == "assistant")
+                    canceled = true;
+                }
+                else if (response != null)
+                {
+                    ApplyToolLabel(message, response.ToolCalls);
+                    ApplyReasoning(message, response.Reasoning, response.ThinkingMs);
+                    foreach (var msg in response.Messages)
                     {
+                        if (msg.Role != "assistant")
+                        {
+                            continue;
+                        }
+
                         if (message.HasContentStream)
                         {
                             await RunOnUiAsync(() =>
@@ -685,34 +662,52 @@ namespace Host.Win.ViewModels
                         }
                         else
                         {
-                            await StreamTextAsync(message, msg.Content, cts.Token);
+                            await StreamTextAsync(message, msg.Content, cts.Token).ConfigureAwait(false);
                         }
                     }
+                    Logger?.LogEvent("response.text.retry", new
+                    {
+                        response.SessionId,
+                        response.TurnId,
+                        input_type = "text",
+                        messages = response.Messages
+                    });
                 }
-                Logger?.LogEvent("response.text.retry", new
+                else
                 {
-                    response.SessionId,
-                    response.TurnId,
-                    input_type = "text",
-                    messages = response.Messages
+                    message.Text = "(no response)";
+                }
+            }
+            catch (OperationCanceledException) when (cts.IsCancellationRequested)
+            {
+                canceled = true;
+                Logger?.LogEvent("response.text.retry.canceled", new
+                {
+                    request.SessionId,
+                    request.TurnId,
+                    input_type = "text"
                 });
             }
-            else
+            finally
             {
-                message.Text = "(no response)";
-            }
+                _inflightTurns.Remove(request.TurnId);
+                cts.Dispose();
 
-            if (!message.HasContentStream)
-            {
-                message.IsStreaming = false;
-                message.IsCancellable = false;
-                if (ReferenceEquals(ActiveStreamingMessage, message))
+                if (!message.HasContentStream)
                 {
-                    ActiveStreamingMessage = null;
+                    message.IsStreaming = false;
+                    message.IsCancellable = false;
+                    if (ReferenceEquals(ActiveStreamingMessage, message))
+                    {
+                        ActiveStreamingMessage = null;
+                    }
+                }
+
+                if (!canceled)
+                {
+                    SetRetryableMessage(message);
                 }
             }
-            SetRetryableMessage(message);
-            _inflightTurns.Remove(request.TurnId);
         }
 
         private void SetRetryableMessage(ChatMessage? active)
@@ -1471,8 +1466,7 @@ namespace Host.Win.ViewModels
                 OnPropertyChanged(nameof(ChatMessages));
             }).ConfigureAwait(false);
 
-            var activeMcps = GetActiveMcpServerNames();
-            Trace.WriteLine($"[MCP] Active MCPs: {string.Join(", ", activeMcps)} (count={activeMcps.Count}, total servers={McpServers.Count})");
+            Trace.WriteLine("[Skills] Active categories: all installed");
 
             var request = new TextInputRequest
             {
@@ -1482,7 +1476,7 @@ namespace Host.Win.ViewModels
                 InputMeta = new InputMetadata
                 {
                     SessionNonce = SessionNonce,
-                    ActiveMcps = activeMcps
+                    ActiveSkillsCategories = null
                 }
             };
 
@@ -1492,28 +1486,37 @@ namespace Host.Win.ViewModels
                 request.TurnId,
                 input_type = inputType,
                 request.Text,
-                request.InputMeta,
-                activeMcps
+                request.InputMeta
             });
 
             AgentResponse? response = null;
-            if (AgentClient != null)
+            var canceled = false;
+            try
             {
-                response = await AgentClient.SendTextAsync(request, cts.Token).ConfigureAwait(false);
-            }
-
-            if (response != null)
-            {
-                await RunOnUiAsync(() =>
+                if (AgentClient != null)
                 {
-                    ApplyToolLabel(streamingMessage, response.ToolCalls);
-                    ApplyReasoning(streamingMessage, response.Reasoning, response.ThinkingMs);
-                }).ConfigureAwait(false);
+                    response = await AgentClient.SendTextAsync(request, cts.Token).ConfigureAwait(false);
+                }
 
-                foreach (var msg in response.Messages)
+                if (cts.IsCancellationRequested)
                 {
-                    if (msg.Role == "assistant")
+                    canceled = true;
+                }
+                else if (response != null)
+                {
+                    await RunOnUiAsync(() =>
                     {
+                        ApplyToolLabel(streamingMessage, response.ToolCalls);
+                        ApplyReasoning(streamingMessage, response.Reasoning, response.ThinkingMs);
+                    }).ConfigureAwait(false);
+
+                    foreach (var msg in response.Messages)
+                    {
+                        if (msg.Role != "assistant")
+                        {
+                            continue;
+                        }
+
                         if (streamingMessage.HasContentStream)
                         {
                             await RunOnUiAsync(() =>
@@ -1527,51 +1530,73 @@ namespace Host.Win.ViewModels
                         }
                         else
                         {
-                            await StreamTextAsync(streamingMessage, msg.Content, cts.Token);
+                            await StreamTextAsync(streamingMessage, msg.Content, cts.Token).ConfigureAwait(false);
                         }
                     }
+
+                    Logger?.LogEvent("response.text", new
+                    {
+                        response.SessionId,
+                        response.TurnId,
+                        input_type = inputType,
+                        messages = response.Messages
+                    });
+                }
+                else
+                {
+                    await RunOnUiAsync(() => streamingMessage.Text = "(no response)").ConfigureAwait(false);
+                    Logger?.LogEvent("response.text.missing", new
+                    {
+                        request.SessionId,
+                        request.TurnId
+                    });
                 }
 
-                Logger?.LogEvent("response.text", new
+                if (!canceled)
                 {
-                    response.SessionId,
-                    response.TurnId,
-                    input_type = inputType,
-                    messages = response.Messages
-                });
+                    await HandleTtsAsync(response, streamingMessage, cts.Token).ConfigureAwait(false);
+                }
             }
-            else
+            catch (OperationCanceledException) when (cts.IsCancellationRequested)
             {
-                await RunOnUiAsync(() => streamingMessage.Text = "(no response)").ConfigureAwait(false);
-                Logger?.LogEvent("response.text.missing", new
+                canceled = true;
+                Logger?.LogEvent("response.text.canceled", new
                 {
                     request.SessionId,
-                    request.TurnId
+                    request.TurnId,
+                    input_type = inputType
                 });
             }
-
-            await HandleTtsAsync(response, streamingMessage, cts.Token).ConfigureAwait(false);
-
-            await RunOnUiAsync(() =>
+            finally
             {
-                if (!streamingMessage.HasContentStream)
+                _inflightTurns.Remove(turnId);
+                cts.Dispose();
+
+                await RunOnUiAsync(() =>
                 {
-                    streamingMessage.IsStreaming = false;
-                    streamingMessage.IsCancellable = false;
-                    if (ReferenceEquals(ActiveStreamingMessage, streamingMessage))
+                    if (!streamingMessage.HasContentStream)
                     {
-                        ActiveStreamingMessage = null;
+                        streamingMessage.IsStreaming = false;
+                        streamingMessage.IsCancellable = false;
+                        if (ReferenceEquals(ActiveStreamingMessage, streamingMessage))
+                        {
+                            ActiveStreamingMessage = null;
+                        }
                     }
-                }
-                SetRetryableMessage(streamingMessage);
-                OnPropertyChanged(nameof(ChatMessages));
-            }).ConfigureAwait(false);
 
-            _inflightTurns.Remove(turnId);
-            if (markSending)
-            {
-                _isSending = false;
-                await RunOnUiAsync(() => CommandManager.InvalidateRequerySuggested()).ConfigureAwait(false);
+                    if (!canceled)
+                    {
+                        SetRetryableMessage(streamingMessage);
+                    }
+
+                    OnPropertyChanged(nameof(ChatMessages));
+                }).ConfigureAwait(false);
+
+                if (markSending)
+                {
+                    _isSending = false;
+                    await RunOnUiAsync(() => CommandManager.InvalidateRequerySuggested()).ConfigureAwait(false);
+                }
             }
         }
 

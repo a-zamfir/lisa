@@ -1,0 +1,132 @@
+{
+  "tools": [
+    {
+      "id": "outlook_get_calendar_events",
+      "name": "Get calendar events",
+      "description": "Get calendar events within a date range.",
+      "friendly_desc": "would like to check your calendar.",
+      "command": "scripts/run.py",
+      "cli_args": ["--tool", "outlook_get_calendar_events"],
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "days_ahead": { "type": "integer" },
+          "days_back": { "type": "integer" },
+          "max_results": { "type": "integer" }
+        }
+      },
+      "read_only": true,
+      "requires_approval": false,
+      "timeout_ms": 20000,
+      "max_output_kb": 256
+    },
+    {
+      "id": "outlook_create_calendar_event",
+      "name": "Create calendar event",
+      "description": "Create a calendar event in Outlook.",
+      "friendly_desc": "would like to create a calendar event.",
+      "command": "scripts/run.py",
+      "cli_args": ["--tool", "outlook_create_calendar_event"],
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "subject": { "type": "string" },
+          "start": { "type": "string" },
+          "end": { "type": "string" },
+          "location": { "type": "string" },
+          "body": { "type": "string" },
+          "attendees": { "type": "string" }
+        }
+      },
+      "read_only": false,
+      "requires_approval": true,
+      "timeout_ms": 20000,
+      "max_output_kb": 256
+    },
+    {
+      "id": "outlook_get_contacts",
+      "name": "Get contacts",
+      "description": "Get Outlook contacts with optional search.",
+      "friendly_desc": "would like to look up your contacts.",
+      "command": "scripts/run.py",
+      "cli_args": ["--tool", "outlook_get_contacts"],
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "search": { "type": "string" },
+          "max_results": { "type": "integer" }
+        }
+      },
+      "read_only": true,
+      "requires_approval": false,
+      "timeout_ms": 20000,
+      "max_output_kb": 256
+    },
+    {
+      "id": "outlook_get_emails",
+      "name": "Get emails",
+      "description": "Get Outlook emails with optional filters.",
+      "friendly_desc": "would like to check your emails.",
+      "command": "scripts/run.py",
+      "cli_args": ["--tool", "outlook_get_emails"],
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "folder": { "type": "string" },
+          "max_results": { "type": "integer" },
+          "sender": { "type": "string" },
+          "subject_contains": { "type": "string" },
+          "days_back": { "type": "integer" },
+          "unread_only": { "type": "boolean" }
+        }
+      },
+      "read_only": true,
+      "requires_approval": false,
+      "timeout_ms": 20000,
+      "max_output_kb": 256
+    },
+    {
+      "id": "outlook_send_email",
+      "name": "Send email",
+      "description": "Send an email via Outlook.",
+      "friendly_desc": "would like to send an email.",
+      "command": "scripts/run.py",
+      "cli_args": ["--tool", "outlook_send_email"],
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "to": { "type": "string" },
+          "subject": { "type": "string" },
+          "body": { "type": "string" },
+          "cc": { "type": "string" },
+          "bcc": { "type": "string" },
+          "importance": { "type": "string" }
+        }
+      },
+      "read_only": false,
+      "requires_approval": true,
+      "timeout_ms": 20000,
+      "max_output_kb": 256
+    },
+    {
+      "id": "outlook_search_emails",
+      "name": "Search emails",
+      "description": "Search Outlook emails by query.",
+      "friendly_desc": "would like to search your emails.",
+      "command": "scripts/run.py",
+      "cli_args": ["--tool", "outlook_search_emails"],
+      "args_schema": {
+        "type": "object",
+        "properties": {
+          "query": { "type": "string" },
+          "max_results": { "type": "integer" },
+          "folder": { "type": "string" }
+        }
+      },
+      "read_only": true,
+      "requires_approval": false,
+      "timeout_ms": 20000,
+      "max_output_kb": 256
+    }
+  ]
+}

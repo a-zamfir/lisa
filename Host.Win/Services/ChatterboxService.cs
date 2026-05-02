@@ -15,6 +15,7 @@ namespace Host.Win.Services
     /// </summary>
     public sealed class ChatterboxService : IDisposable
     {
+        private const string Prefix = "[TTS/chatterbox]";
         private static readonly TimeSpan ModelLoadTimeout = TimeSpan.FromMinutes(5);
         private static readonly TimeSpan GenerationTimeout = TimeSpan.FromSeconds(60);
         private static readonly TimeSpan WavPollInterval = TimeSpan.FromMilliseconds(100);
@@ -81,20 +82,20 @@ namespace Host.Win.Services
             {
                 try
                 {
-                    Trace.WriteLine("[Chatterbox] Pre-warming model...");
+                    Trace.WriteLine($"{Prefix} pre-warming model");
                     var success = await EnsureRunningAsync(settings).ConfigureAwait(false);
                     if (success)
                     {
-                        Trace.WriteLine("[Chatterbox] Model pre-warmed and ready.");
+                        Trace.WriteLine($"{Prefix} model ready");
                     }
                     else
                     {
-                        Trace.TraceWarning("[Chatterbox] Pre-warm failed.");
+                        Trace.TraceWarning($"{Prefix} pre-warm failed");
                     }
                 }
                 catch (Exception ex)
                 {
-                    Trace.TraceError($"[Chatterbox] Pre-warm error: {ex.Message}");
+                    Trace.TraceError($"{Prefix} pre-warm error: {ex.Message}");
                 }
             });
         }
@@ -108,7 +109,7 @@ namespace Host.Win.Services
 
             if (!await EnsureRunningAsync(settings, cancellationToken).ConfigureAwait(false))
             {
-                Trace.TraceWarning("[Chatterbox] Process not running, cannot generate.");
+                Trace.TraceWarning($"{Prefix} process not running; cannot generate");
                 return null;
             }
 
@@ -119,7 +120,7 @@ namespace Host.Win.Services
             {
                 if (_process == null || _process.HasExited || string.IsNullOrEmpty(_outputPath))
                 {
-                    Trace.TraceWarning("[Chatterbox] Process not ready for generation.");
+                    Trace.TraceWarning($"{Prefix} process not ready for generation");
                     return null;
                 }
 
@@ -144,7 +145,7 @@ namespace Host.Win.Services
 
                 if (settings?.VerboseLogging == true)
                 {
-                    Trace.WriteLine($"[Chatterbox] Sent text: {text.Substring(0, Math.Min(50, text.Length))}...");
+                    Trace.WriteLine($"{Prefix} sent text preview: {text.Substring(0, Math.Min(50, text.Length))}...");
                 }
 
                 // Wait for WAV file to be created and stabilize
@@ -175,7 +176,7 @@ namespace Host.Win.Services
                             var elapsed = DateTime.UtcNow - startTime;
                             if (settings?.VerboseLogging == true)
                             {
-                                Trace.WriteLine($"[Chatterbox] Generated audio in {elapsed.TotalSeconds:F2}s, size: {currentSize} bytes");
+                                Trace.WriteLine($"{Prefix} generated audio in {elapsed.TotalSeconds:F2}s size={currentSize} bytes");
                             }
 
                             return await File.ReadAllBytesAsync(outputPath, cancellationToken).ConfigureAwait(false);
@@ -188,17 +189,17 @@ namespace Host.Win.Services
                     }
                 }
 
-                Trace.TraceWarning("[Chatterbox] Generation timed out.");
+                Trace.TraceWarning($"{Prefix} generation timed out");
                 return null;
             }
             catch (OperationCanceledException)
             {
-                Trace.WriteLine("[Chatterbox] Generation cancelled.");
+                Trace.WriteLine($"{Prefix} generation cancelled");
                 return null;
             }
             catch (Exception ex)
             {
-                Trace.TraceError($"[Chatterbox] Generation failed: {ex.Message}");
+                Trace.TraceError($"{Prefix} generation failed: {ex.Message}");
                 return null;
             }
         }
@@ -213,27 +214,27 @@ namespace Host.Win.Services
 
             if (string.IsNullOrWhiteSpace(pythonPath))
             {
-                Trace.TraceError("[Chatterbox] Python path not configured.");
+                Trace.TraceError($"{Prefix} python path not configured");
                 return false;
             }
 
             if (string.IsNullOrWhiteSpace(workingDir) || !Directory.Exists(workingDir))
             {
-                Trace.TraceError($"[Chatterbox] Working directory not found: {workingDir}");
+                Trace.TraceError($"{Prefix} working directory not found: {workingDir}");
                 return false;
             }
 
             var appPy = Path.Combine(workingDir, "app.py");
             if (!File.Exists(appPy))
             {
-                Trace.TraceError($"[Chatterbox] app.py not found in: {workingDir}");
+                Trace.TraceError($"{Prefix} app.py not found: {workingDir}");
                 return false;
             }
 
             var refAudioPath = Path.IsPathRooted(refAudio) ? refAudio : Path.Combine(workingDir, refAudio);
             if (!File.Exists(refAudioPath))
             {
-                Trace.TraceError($"[Chatterbox] Reference audio not found: {refAudioPath}");
+                Trace.TraceError($"{Prefix} reference audio not found: {refAudioPath}");
                 return false;
             }
 
@@ -257,8 +258,8 @@ namespace Host.Win.Services
 
             if (settings?.VerboseLogging == true)
             {
-                Trace.WriteLine($"[Chatterbox] Starting: {pythonPath} {args}");
-                Trace.WriteLine($"[Chatterbox] Working dir: {workingDir}");
+                Trace.WriteLine($"{Prefix} starting python={pythonPath}");
+                Trace.WriteLine($"{Prefix} working_dir={workingDir}");
             }
 
             try
@@ -266,19 +267,22 @@ namespace Host.Win.Services
                 var process = new Process { StartInfo = startInfo };
 
                 var readyTcs = new TaskCompletionSource<bool>();
-                var outputBuffer = new StringBuilder();
+                var stdoutBuffer = new StringBuilder();
+                var stderrBuffer = new StringBuilder();
 
                 process.OutputDataReceived += (sender, e) =>
                 {
                     if (e.Data == null) return;
 
-                    Trace.WriteLine($"[Chatterbox] stdout: {e.Data}");
-                    outputBuffer.AppendLine(e.Data);
+                    stdoutBuffer.AppendLine(e.Data);
 
                     // Check for ready signal - "Enter text" appears after model is loaded
                     if (e.Data.Contains("Enter text to synthesize"))
                     {
-                        Trace.WriteLine("[Chatterbox] Ready signal received.");
+                        if (settings?.VerboseLogging == true)
+                        {
+                            Trace.WriteLine($"{Prefix} ready signal received");
+                        }
                         readyTcs.TrySetResult(true);
                     }
                 };
@@ -286,25 +290,20 @@ namespace Host.Win.Services
                 process.ErrorDataReceived += (sender, e) =>
                 {
                     if (e.Data == null) return;
-
-                    // Only log non-progress stderr (skip tqdm progress bars)
-                    if (!e.Data.Contains("it/s") && !e.Data.Contains("00:00"))
-                    {
-                        Trace.WriteLine($"[Chatterbox] stderr: {e.Data}");
-                    }
+                    stderrBuffer.AppendLine(e.Data);
                 };
 
                 // Handle process exit
                 process.Exited += (sender, e) =>
                 {
-                    Trace.TraceWarning($"[Chatterbox] Process exited unexpectedly.");
+                    Trace.TraceWarning($"{Prefix} process exited unexpectedly");
                     readyTcs.TrySetResult(false);
                 };
                 process.EnableRaisingEvents = true;
 
                 if (!process.Start())
                 {
-                    Trace.TraceError("[Chatterbox] Failed to start process.");
+                    Trace.TraceError($"{Prefix} failed to start process");
                     return false;
                 }
 
@@ -322,7 +321,13 @@ namespace Host.Win.Services
 
                 if (completedTask == timeoutTask)
                 {
-                    Trace.TraceError("[Chatterbox] Timeout waiting for model to load.");
+                    if (settings?.VerboseLogging == true)
+                    {
+                        TraceLogUtil.AppendVerboseDetail(
+                            "TTS/chatterbox",
+                            $"startup timeout\ncmd={pythonPath} {args}\nstdout:\n{stdoutBuffer}\n\nstderr:\n{stderrBuffer}");
+                    }
+                    Trace.TraceError($"{Prefix} startup timed out while waiting for ready signal");
                     try
                     {
                         process.Kill(true);
@@ -336,7 +341,18 @@ namespace Host.Win.Services
                 var isReady = await readyTask.ConfigureAwait(false);
                 if (!isReady)
                 {
-                    Trace.TraceError("[Chatterbox] Process exited before becoming ready.");
+                    if (settings?.VerboseLogging == true)
+                    {
+                        TraceLogUtil.AppendVerboseDetail(
+                            "TTS/chatterbox",
+                            $"startup failed\ncmd={pythonPath} {args}\nstdout:\n{stdoutBuffer}\n\nstderr:\n{stderrBuffer}");
+                    }
+                    var failureSummary = TraceLogUtil.SummarizeText(stderrBuffer.Length > 0 ? stderrBuffer.ToString() : stdoutBuffer.ToString());
+                    if (string.IsNullOrWhiteSpace(failureSummary))
+                    {
+                        failureSummary = "process exited before reporting readiness";
+                    }
+                    Trace.TraceError($"{Prefix} startup failed: {failureSummary}");
                     process.Dispose();
                     return false;
                 }
@@ -349,12 +365,19 @@ namespace Host.Win.Services
                     _currentSettings = settings;
                 }
 
-                Trace.WriteLine("[Chatterbox] Process started and model loaded successfully.");
+                if (settings?.VerboseLogging == true && (stdoutBuffer.Length > 0 || stderrBuffer.Length > 0))
+                {
+                    TraceLogUtil.AppendVerboseDetail(
+                        "TTS/chatterbox",
+                        $"startup ready\ncmd={pythonPath} {args}\nstdout:\n{stdoutBuffer}\n\nstderr:\n{stderrBuffer}");
+                }
+
+                Trace.WriteLine($"{Prefix} process ready");
                 return true;
             }
             catch (Exception ex)
             {
-                Trace.TraceError($"[Chatterbox] Failed to start: {ex.Message}");
+                Trace.TraceError($"{Prefix} failed to start: {ex.Message}");
                 return false;
             }
         }
@@ -476,14 +499,14 @@ namespace Host.Win.Services
             }
             catch (Exception ex)
             {
-                Trace.TraceWarning($"[Chatterbox] Shutdown error: {ex.Message}");
+                Trace.TraceWarning($"{Prefix} shutdown error: {ex.Message}");
             }
             finally
             {
                 process.Dispose();
             }
 
-            Trace.WriteLine("[Chatterbox] Process shut down.");
+            Trace.WriteLine($"{Prefix} process shut down");
         }
 
         public void Dispose()

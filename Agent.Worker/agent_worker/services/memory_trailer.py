@@ -83,11 +83,10 @@ class StreamTrailerFilter:
             self._carry = ""
             return tail, None
 
-        combined = self._trailer_buf
-        full_text = self._carry + combined
-        cleaned, payload = extract_memory_trailer(full_text)
+        full_text = self._carry + self._trailer_buf
+        _, payload = extract_memory_trailer(full_text)
         self._carry = ""
         self._trailer_buf = ""
         self._in_trailer = False
-        # Everything after START_TAG is hidden from streaming output; only emit any non-trailer tail.
-        return cleaned, payload
+        # Once the trailer starts, suppress the rest of the streamed output.
+        return "", payload

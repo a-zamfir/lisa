@@ -10,18 +10,17 @@ import uuid
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Header
+from fastapi import APIRouter
 
 from agent_worker.models import AgentMessage, AgentResponse, RetryInput, TextInput, ToolApprovalDecision
 from agent_worker.services.conversations import ConversationStore
 from agent_worker.services.memory_policy import parse_ops, validate_ops
 from agent_worker.services.memory_store import MemoryStore
 from agent_worker.services.memory_trailer import StreamTrailerFilter, extract_memory_trailer
-from agent_worker.services.mcp_client import McpClient
-from agent_worker.services.mcp_client_stdio import StdioMcpClient, get_mcp_client
 from agent_worker.services.provider import call_provider, call_provider_stream, warm_provider_client
 from agent_worker.services.session_state import get_session_nonce, set_session_nonce
 from agent_worker.services.settings import load_settings
+from agent_worker.services.skills_client import SkillsClient
 from agent_worker.services.system_context import collect_system_context
 from agent_worker.services.tool_approval import approval_manager
 from agent_worker.services.visual_context import pop_latest_frame, peek_latest_frame
@@ -31,10 +30,10 @@ router = APIRouter()
 _conversations = ConversationStore()
 _log = logging.getLogger("agent_worker.text")
 
-# Try to use stdio MCP client if configured, fallback to HTTP client
-USE_STDIO = os.environ.get("MCP_USE_STDIO", "1") == "1"
-_mcp_client = get_mcp_client() if USE_STDIO else McpClient()
-_log.info(f"Using {'stdio' if USE_STDIO else 'HTTP'} MCP client")
+_skills_client = SkillsClient()
+_tool_client = _skills_client
+_tool_client_name = "skills"
+_log.info("Using skills tool client")
 
 _memory_store = MemoryStore()
 _tool_context: Optional[str] = None
@@ -61,21 +60,75 @@ async def _get_session_semaphore(session_id: str) -> asyncio.Semaphore:
         return _SESSION_SEMAPHORES[session_id]
 
 
+def _get_cached_tools(active_categories: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
+    return _tool_client.get_cached_tools(active_categories=active_categories)
+
+
+def _normalize_tool_schema(schema: Any) -> Dict[str, Any]:
+    if not isinstance(schema, dict) or not schema:
+        return {"type": "object", "properties": {}, "additionalProperties": True}
+    if "type" not in schema:
+        return {"type": "object", "properties": schema, "additionalProperties": True}
+    normalized = dict(schema)
+    normalized.setdefault("properties", {})
+    normalized.setdefault("additionalProperties", True)
+    return normalized
+
+
+def _sanitize_tool_context_payload(tools_payload: Dict[str, Any]) -> Dict[str, Any]:
+    skills = tools_payload.get("skills", [])
+    sanitized_skills = []
+    for skill in skills:
+        name = skill.get("name")
+        if not name:
+            continue
+        sanitized_skills.append(
+            {
+                "name": name,
+                "description": skill.get("description", ""),
+            }
+        )
+
+    tools = tools_payload.get("tools", [])
+    sanitized = []
+    for tool in tools:
+        name = tool.get("name")
+        if not name:
+            continue
+        entry = {
+            "name": name,
+            "description": tool.get("description", ""),
+        }
+        schema = tool.get("args_schema") or tool.get("input_schema") or {}
+        if isinstance(schema, dict) and schema:
+            entry["args_schema"] = schema
+        category = tool.get("category")
+        if category:
+            entry["category"] = category
+        sanitized.append(entry)
+    payload: Dict[str, Any] = {"tools": sanitized}
+    if sanitized_skills:
+        payload["skills"] = sanitized_skills
+        payload["skill_activation"] = (
+            "If a task clearly matches a skill description, call activate_skill with the skill name "
+            "to load the skill's full instructions before using its tools."
+        )
+    return payload
+
+
 async def init_tool_cache() -> bool:
     global _tool_context, _tool_context_version
 
-    # Initialize stdio MCP client if using stdio
-    if USE_STDIO and hasattr(_mcp_client, 'initialize'):
-        try:
-            _log.info("Initializing stdio MCP client...")
-            await _mcp_client.initialize()
-            _log.info("stdio MCP client initialized successfully")
-        except Exception as ex:
-            _log.error(f"Failed to initialize stdio MCP client: {ex}")
-            return False
+    try:
+        _log.info("Initializing tool client (%s)...", _tool_client_name)
+        await _tool_client.initialize()
+        _log.info("Tool client initialized (%s)", _tool_client_name)
+    except Exception as ex:
+        _log.error("Failed to initialize tool client (%s): %s", _tool_client_name, ex)
+        return False
 
-    tools_payload = await _mcp_client.list_tools(force_refresh=True)
-    await _mcp_client.list_tool_docs(force_refresh=True)
+    tools_payload = await _tool_client.list_tools(force_refresh=True)
+    await _tool_client.list_tool_docs(force_refresh=True)
     if isinstance(tools_payload, dict) and not tools_payload.get("error"):
         _update_tool_context(tools_payload)
         return True
@@ -84,8 +137,8 @@ async def init_tool_cache() -> bool:
 
 async def _retry_tool_cache() -> None:
     while True:
-        tools_payload = await _mcp_client.list_tools(force_refresh=True)
-        await _mcp_client.list_tool_docs(force_refresh=True)
+        tools_payload = await _tool_client.list_tools(force_refresh=True)
+        await _tool_client.list_tool_docs(force_refresh=True)
         if isinstance(tools_payload, dict) and not tools_payload.get("error"):
             _update_tool_context(tools_payload)
             return
@@ -97,13 +150,14 @@ def start_tool_cache_retry() -> None:
 
 
 async def warm_services() -> None:
-    await _mcp_client.warm_client()
+    await _tool_client.warm_client()
     await warm_provider_client()
 
 
 def _update_tool_context(tools_payload: Dict[str, Any]) -> None:
     global _tool_context, _tool_context_version
-    new_context = f"Available tools:\n{orjson.dumps(tools_payload, option=orjson.OPT_INDENT_2).decode('utf-8')}"
+    safe_payload = _sanitize_tool_context_payload(tools_payload)
+    new_context = f"Available tools:\n{orjson.dumps(safe_payload, option=orjson.OPT_INDENT_2).decode('utf-8')}"
     if new_context != _tool_context:
         _tool_context = new_context
         _tool_context_version += 1
@@ -118,17 +172,14 @@ def _build_tools_payload(tools_payload: Optional[Dict[str, Any]]) -> Optional[Li
         name = tool.get("name")
         if not name:
             continue
+        schema = _normalize_tool_schema(tool.get("args_schema") or tool.get("input_schema") or {})
         formatted.append(
             {
                 "type": "function",
                 "function": {
                     "name": name,
                     "description": tool.get("description", ""),
-                    "parameters": {
-                        "type": "object",
-                        "properties": {},
-                        "additionalProperties": True,
-                    },
+                    "parameters": schema,
                 },
             }
         )
@@ -330,10 +381,12 @@ async def _send_tool_auto_approved_callback(
 
 
 async def _await_tool_approval(session_id: str, turn_id: str, tool_name: str, tool_args: Dict[str, Any]) -> bool:
-    meta = _mcp_client.get_tool_meta(tool_name) or {}
-    if not meta:
-        await _mcp_client.list_tool_docs(force_refresh=True)
-        meta = _mcp_client.get_tool_meta(tool_name) or {}
+    meta = _tool_client.get_tool_meta(tool_name) if hasattr(_tool_client, "get_tool_meta") else {}
+    meta = meta or {}
+    if not meta and hasattr(_tool_client, "list_tool_docs"):
+        await _tool_client.list_tool_docs(force_refresh=True)
+        meta = _tool_client.get_tool_meta(tool_name) if hasattr(_tool_client, "get_tool_meta") else {}
+        meta = meta or {}
     friendly_desc = meta.get("friendly_desc") or f"running {tool_name}"
     if meta and not meta.get("approval_required"):
         # Auto-approved - send callback to show label in UI
@@ -485,11 +538,11 @@ def _send_content_callback(session_id: str, turn_id: str, phase: str, delta: Opt
 @router.get("/health")
 async def health():
     """Health check endpoint - no auth required for monitoring."""
-    from datetime import datetime
+    from datetime import UTC, datetime
     cfg = load_settings()
     return {
         "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "service": "agent",
         "provider": f"{cfg.host}:{cfg.port}",
         "model": cfg.model
@@ -499,11 +552,10 @@ async def health():
 @router.get("/ready")
 async def ready():
     """Readiness check - verifies dependencies are available."""
-    from datetime import datetime
+    from datetime import UTC, datetime
     cfg = load_settings()
 
-    # Check MCP client connection
-    mcp_ready = _mcp_client.is_connected() if hasattr(_mcp_client, 'is_connected') else True
+    tool_ready = _tool_client.available
 
     # Check if tools are cached
     tools_cached = _tool_context is not None
@@ -511,13 +563,14 @@ async def ready():
     # Check provider configuration
     provider_configured = bool(cfg.host and cfg.port and cfg.model)
 
-    all_ready = mcp_ready and tools_cached and provider_configured
+    all_ready = tool_ready and tools_cached and provider_configured
 
     return {
         "status": "ready" if all_ready else "not_ready",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "dependencies": {
-            "mcp_client": mcp_ready,
+            "tool_client": tool_ready,
+            "tool_client_type": _tool_client_name,
             "tools_cached": tools_cached,
             "provider_configured": provider_configured
         }
@@ -525,7 +578,7 @@ async def ready():
 
 
 @router.post("/input/text", response_model=AgentResponse)
-async def handle_text(req: TextInput, x_mcp_token: str | None = Header(default=None)):
+async def handle_text(req: TextInput):
     # Rate limiting: acquire global and per-session semaphores
     session_sem = await _get_session_semaphore(req.session_id)
 
@@ -551,12 +604,10 @@ async def handle_text(req: TextInput, x_mcp_token: str | None = Header(default=N
 
     async with session_sem:
         async with _GLOBAL_SEMAPHORE:
-            return await _handle_text_impl(req, x_mcp_token)
+            return await _handle_text_impl(req)
 
 
-async def _handle_text_impl(req: TextInput, x_mcp_token: str | None):
-    if x_mcp_token:
-        os.environ["MCP_AUTH_TOKEN"] = x_mcp_token
+async def _handle_text_impl(req: TextInput):
     provider_cfg = load_settings()
     start_time = time.monotonic()
     text = req.text.strip()
@@ -565,17 +616,17 @@ async def _handle_text_impl(req: TextInput, x_mcp_token: str | None):
 
     history = _conversations.get_history(req.session_id)
 
-    # Get active MCP servers from request (if specified)
-    active_mcps = None
+    # Get active tool categories from request (if specified)
+    active_categories = None
     if req.input_meta:
-        _log.info("input_meta received: active_mcps=%s", req.input_meta.active_mcps)
-        if req.input_meta.active_mcps is not None:  # Explicit None check, empty list is valid
-            active_mcps = req.input_meta.active_mcps
-            _log.info("Filtering tools by active MCPs: %s", active_mcps)
+        _log.info("input_meta received: active_skills_categories=%s", req.input_meta.active_skills_categories)
+        if req.input_meta.active_skills_categories is not None:  # Explicit None check, empty list is valid
+            active_categories = req.input_meta.active_skills_categories
+            _log.info("Filtering tools by active categories: %s", active_categories)
     else:
         _log.info("No input_meta in request")
 
-    tools_payload = _mcp_client.get_cached_tools(active_servers=active_mcps)
+    tools_payload = _get_cached_tools(active_categories)
     if isinstance(tools_payload, dict) and tools_payload.get("error"):
         tools_payload = None
     elif isinstance(tools_payload, dict):
@@ -667,10 +718,10 @@ async def _handle_text_impl(req: TextInput, x_mcp_token: str | None):
             approved_tools.append(tool_name)
             approved_calls.append((tool_name, tool_args))
 
-        if approved_tools:
-            await _send_tool_callback(req.session_id, req.turn_id, "awaiting_tool", approved_tools)
+            if approved_tools:
+                await _send_tool_callback(req.session_id, req.turn_id, "awaiting_tool", approved_tools)
             for tool_name, tool_args in approved_calls:
-                tool_result = await _mcp_client.call_tool(tool_name, tool_args)
+                tool_result = await _tool_client.call_tool(tool_name, tool_args)
                 provider_messages.append(
                     {"role": "tool", "name": tool_name, "content": orjson.dumps(tool_result, option=orjson.OPT_INDENT_2).decode("utf-8")}
                 )
@@ -698,6 +749,8 @@ async def _handle_text_impl(req: TextInput, x_mcp_token: str | None):
             if tail:
                 _send_content_callback(req.session_id, req.turn_id, "content_chunk", tail)
             _send_content_callback(req.session_id, req.turn_id, "content_done")
+        if not follow_streamed["seen"] and not follow.get("content") and not follow.get("error"):
+            follow = await call_provider(provider_messages, tools=provider_tools)
         completion = follow.get("content") or follow.get("error", "")
         await _send_tool_callback(req.session_id, req.turn_id, "tool_complete", used_tools)
 
@@ -745,7 +798,7 @@ async def _handle_text_impl(req: TextInput, x_mcp_token: str | None):
 
 
 @router.post("/input/retry", response_model=AgentResponse)
-async def handle_retry(req: RetryInput, x_mcp_token: str | None = Header(default=None)):
+async def handle_retry(req: RetryInput):
     # Rate limiting: acquire global and per-session semaphores
     session_sem = await _get_session_semaphore(req.session_id)
 
@@ -767,12 +820,10 @@ async def handle_retry(req: RetryInput, x_mcp_token: str | None = Header(default
 
     async with session_sem:
         async with _GLOBAL_SEMAPHORE:
-            return await _handle_retry_impl(req, x_mcp_token)
+            return await _handle_retry_impl(req)
 
 
-async def _handle_retry_impl(req: RetryInput, x_mcp_token: str | None):
-    if x_mcp_token:
-        os.environ["MCP_AUTH_TOKEN"] = x_mcp_token
+async def _handle_retry_impl(req: RetryInput):
     start_time = time.monotonic()
     history = _conversations.get_history(req.session_id)
     if not history:
@@ -794,7 +845,7 @@ async def _handle_retry_impl(req: RetryInput, x_mcp_token: str | None):
             messages=[AgentMessage(role="assistant", content="(no prior message to retry)")],
         )
 
-    tools_payload = _mcp_client.get_cached_tools()
+    tools_payload = _get_cached_tools()
     if isinstance(tools_payload, dict) and tools_payload.get("error"):
         tools_payload = None
     elif isinstance(tools_payload, dict):

@@ -19,6 +19,8 @@
         FontSize="14"
         ShowActivated="False">
     <Window.Resources>
+        <CornerRadius x:Key="OverlayCornerRadius">16</CornerRadius>
+        <sys:Double x:Key="OverlayWindowRegionRadiusDip">16</sys:Double>
         <QuadraticEase x:Key="QuadraticEaseOut" EasingMode="EaseOut"/>
         <QuadraticEase x:Key="QuadraticEaseIn" EasingMode="EaseIn"/>
         <SineEase x:Key="SineEaseInOut" EasingMode="EaseInOut"/>
@@ -613,7 +615,7 @@
             </Setter>
         </Style>
         <Style TargetType="ScrollBar">
-            <Setter Property="Width" Value="10"/>
+            <Setter Property="Width" Value="5"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ScrollBar">
@@ -824,67 +826,6 @@
                                             </StackPanel>
                                         </ToggleButton>
 
-                                        <!-- MCP Server Selector -->
-                                        <ToggleButton x:Name="McpToggle"
-                                                      Style="{StaticResource InputBarIconButtonStyle}"
-                                                      Margin="8 0 0 0"
-                                                      ToolTip="Select MCP Servers">
-                                            <TextBlock Text="&#xE756;" FontFamily="Segoe MDL2 Assets" FontSize="18"/>
-                                        </ToggleButton>
-
-                                        <Popup PlacementTarget="{Binding ElementName=McpToggle}"
-                                               IsOpen="{Binding IsChecked, ElementName=McpToggle}"
-                                               Placement="Top"
-                                               StaysOpen="False"
-                                               AllowsTransparency="True">
-                                            <Border Background="{DynamicResource PopupBackground}"
-                                                    BorderBrush="{DynamicResource PopupBorder}"
-                                                    BorderThickness="1"
-                                                    CornerRadius="10"
-                                                    Padding="6"
-                                                    MinWidth="180"
-                                                    MaxHeight="180">
-                                                <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                                              HorizontalScrollBarVisibility="Disabled">
-                                                    <ItemsControl ItemsSource="{Binding McpServers}">
-                                                        <ItemsControl.ItemTemplate>
-                                                            <DataTemplate>
-                                                                <Button Style="{StaticResource PopupMenuButtonStyle}"
-                                                                        Command="{Binding DataContext.ToggleMcpServerCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                        CommandParameter="{Binding}">
-                                                                    <StackPanel Orientation="Horizontal">
-                                                                        <TextBlock Text="&#xE73E;"
-                                                                                   FontFamily="Segoe MDL2 Assets"
-                                                                                   FontSize="14"
-                                                                                   Margin="0 0 10 0"
-                                                                                   VerticalAlignment="Center"
-                                                                                   Visibility="{Binding IsActive, Converter={StaticResource BoolToVisibilityConverter}}"
-                                                                                   Foreground="{DynamicResource StatusReadyBrush}"/>
-                                                                        <TextBlock Text="&#xE73E;"
-                                                                                   FontFamily="Segoe MDL2 Assets"
-                                                                                   FontSize="14"
-                                                                                   Margin="0 0 10 0"
-                                                                                   VerticalAlignment="Center"
-                                                                                   Visibility="{Binding IsActive, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}"
-                                                                                   Opacity="0"/>
-                                                                        <StackPanel Orientation="Vertical" VerticalAlignment="Center">
-                                                                            <TextBlock Text="{Binding DisplayName}"
-                                                                                       FontWeight="SemiBold"/>
-                                                                            <TextBlock Text="{Binding Description}"
-                                                                                       FontSize="10"
-                                                                                       Opacity="0.6"
-                                                                                       TextTrimming="CharacterEllipsis"
-                                                                                       MaxWidth="160"/>
-                                                                        </StackPanel>
-                                                                    </StackPanel>
-                                                                </Button>
-                                                            </DataTemplate>
-                                                        </ItemsControl.ItemTemplate>
-                                                    </ItemsControl>
-                                                </ScrollViewer>
-                                            </Border>
-                                        </Popup>
-
                                         <ToggleButton x:Name="MoreToggle"
                                                       Style="{StaticResource InputBarIconButtonStyle}"
                                                       Margin="8 0 0 0"
@@ -991,20 +932,12 @@
         <Grid.RenderTransform>
             <TranslateTransform x:Name="RootTranslate" Y="12"/>
         </Grid.RenderTransform>
-        <!-- Subtle shadow layer for Windows 11 style depth -->
-        <Rectangle RadiusX="12"
-                   RadiusY="12"
-                   Fill="{DynamicResource OverlayBackground}"
-                   IsHitTestVisible="False">
-            <Rectangle.Effect>
-                <DropShadowEffect BlurRadius="24" ShadowDepth="0" Opacity="0.32" Color="#000000"/>
-            </Rectangle.Effect>
-        </Rectangle>
         <Border x:Name="RootBorder"
-                Background="Transparent"
+                Background="{DynamicResource OverlayBackground}"
                 Padding="16"
-                BorderBrush="{DynamicResource OverlayBorder}"
+                BorderBrush="DarkGray"
                 BorderThickness="1"
+                CornerRadius="{DynamicResource OverlayCornerRadius}"
                 ClipToBounds="True">
             <Grid>
             <Grid x:Name="ExpandedLayout">
@@ -1059,8 +992,8 @@
                             <!-- Status indicators - Windows 11 minimal style -->
                             <Border Background="{DynamicResource ButtonBackground}" CornerRadius="6" Padding="8 4" Margin="0 0 6 0">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Ellipse Width="6" Height="6" Fill="{Binding McpStatusBrush}" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{Binding McpStatusText}"
+                                    <Ellipse Width="6" Height="6" Fill="{Binding ToolStatusBrush}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding ToolStatusText}"
                                                FontSize="11"
                                                Foreground="{DynamicResource SubtleText}"
                                                Margin="6 0 0 0"
@@ -1136,7 +1069,8 @@
             </Grid>
 
             <!-- Mode buttons + content - Windows 11 clean panel -->
-            <Border Grid.Row="1" Background="{DynamicResource PanelBackground}" Padding="12" CornerRadius="8">
+            <Border Grid.Row="1" Background="{DynamicResource PanelBackground}" Padding="12" CornerRadius="8"
+                    BorderBrush="{DynamicResource OverlayBorder}" BorderThickness="1">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -1341,7 +1275,14 @@
                                               HorizontalScrollBarVisibility="Disabled"
                                               Margin="0 0 0 12"
                                               Padding="0 0 12 0">
-                                <ItemsControl ItemsSource="{Binding ChatMessages}" HorizontalContentAlignment="Stretch">
+                                    <ScrollViewer.OpacityMask>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                            <GradientStop Color="Transparent" Offset="0"/>
+                                            <GradientStop Color="White" Offset="0.06"/>
+                                            <GradientStop Color="White" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </ScrollViewer.OpacityMask>
+                                <ItemsControl ItemsSource="{Binding ChatMessages}" HorizontalContentAlignment="Stretch" Margin="0 6 0 0">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <Grid>
@@ -1356,8 +1297,8 @@
 
                                                         <Border x:Name="Bubble"
                                                         Padding="10"
-                                                        Margin="0 6 0 6"
-                                                        Background="{DynamicResource ButtonBackground}"
+                                                        Margin="0 0 0 6"
+                                                        Background="Transparent"
                                                         BorderBrush="Transparent"
                                                         BorderThickness="0"
                                                         CornerRadius="12"
@@ -1801,8 +1742,8 @@
                                                 <DataTrigger Binding="{Binding IsAssistant}" Value="False">
                                                     <Setter TargetName="Bubble" Property="HorizontalAlignment" Value="Stretch"/>
                                                     <Setter TargetName="Bubble" Property="Background" Value="{DynamicResource UserBubbleBackground}"/>
-                                                    <Setter TargetName="Bubble" Property="BorderThickness" Value="0"/>
-                                                    <Setter TargetName="Bubble" Property="BorderBrush" Value="Transparent"/>
+                                                    <Setter TargetName="Bubble" Property="BorderThickness" Value="1"/>
+                                                    <Setter TargetName="Bubble" Property="BorderBrush" Value="{DynamicResource UserBubbleBorder}"/>
                                                     <Setter TargetName="MessageText" Property="Foreground" Value="{DynamicResource UserBubbleForeground}"/>
                                                     <Setter TargetName="SenderText" Property="Foreground" Value="{DynamicResource UserBubbleForeground}"/>
                                                 </DataTrigger>
@@ -2530,24 +2471,6 @@
                                     </StackPanel>
                                 </StackPanel>
 
-                                <Border Height="1" Background="{DynamicResource ButtonBorder}" Margin="0 14 0 14"/>
-
-                                <TextBlock Text="MCP" Foreground="{DynamicResource OverlayForeground}" FontWeight="SemiBold" FontSize="13"/>
-                                <StackPanel Orientation="Horizontal" Margin="0 10 0 0">
-                                    <TextBlock Text="MCP Endpoint" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
-                                    <TextBox Width="210"
-                                             FontSize="13"
-                                             Margin="0 0 10 0"
-                                             Text="{Binding Settings.McpHost, UpdateSourceTrigger=PropertyChanged}"
-                                             Style="{StaticResource RoundedTextBoxStyle}"/>
-                                    <TextBox Width="90"
-                                             FontSize="13"
-                                             Text="{Binding Settings.McpPort, UpdateSourceTrigger=PropertyChanged}"
-                                             Style="{StaticResource RoundedTextBoxStyle}"/>
-                                </StackPanel>
-
-                                <Border Height="1" Background="{DynamicResource ButtonBorder}" Margin="0 14 0 14"/>
-
                                  <TextBlock Text="Voice" Foreground="{DynamicResource OverlayForeground}" FontWeight="SemiBold" FontSize="13"/>
                                  <StackPanel Orientation="Horizontal" Margin="0 10 0 0">
                                      <TextBlock Text="TTS Volume (%)" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
@@ -2588,6 +2511,14 @@
                                   <StackPanel Orientation="Horizontal" Margin="0 10 0 0" VerticalAlignment="Center">
                                       <TextBlock Text="Enable auto memory" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
                                       <CheckBox IsChecked="{Binding Settings.MemoryEnabled}"/>
+                                  </StackPanel>
+                                  <StackPanel Orientation="Horizontal" Margin="0 8 0 0" VerticalAlignment="Center">
+                                      <TextBlock Text="Reset memory database" Foreground="{DynamicResource SubtleText}" FontSize="12" Margin="0 0 10 0" VerticalAlignment="Center"/>
+                                      <Button Content="Clear"
+                                              Width="90"
+                                              Height="34"
+                                              Command="{Binding ClearMemoryCommand}"
+                                              Style="{StaticResource ModeButtonStyle}"/>
                                   </StackPanel>
 
                                   <Button Content="Save Settings"
@@ -2650,7 +2581,7 @@
                     <TextBlock Text="{Binding AppName}" Style="{DynamicResource TitleLargeTextBlockStyle}"/>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="STATUS" FontSize="12" Foreground="{DynamicResource SubtleText}" Margin="0 0 8 0" VerticalAlignment="Center"/>
-                        <Ellipse Width="8" Height="8" Fill="{Binding McpStatusBrush}" VerticalAlignment="Center" Margin="0 0 6 0"/>
+                        <Ellipse Width="8" Height="8" Fill="{Binding ToolStatusBrush}" VerticalAlignment="Center" Margin="0 0 6 0"/>
                         <Ellipse Width="8" Height="8" Fill="{Binding AgentStatusBrush}" VerticalAlignment="Center" Margin="0 0 6 0"/>
                         <Ellipse Width="8" Height="8" Fill="{Binding ProviderStatusBrush}" VerticalAlignment="Center" Margin="0 0 10 0"/>
                         <Button Command="{Binding ToggleCollapseCommand}"

@@ -11,13 +11,18 @@ from agent_worker.services.memory_store import MemoryStore
 
 
 @pytest.fixture()
-def app(tmp_path: Path):
+def temp_dir(workspace_temp_dir: Path):
+    yield workspace_temp_dir
+
+
+@pytest.fixture()
+def app(temp_dir: Path):
     app = FastAPI()
     app.include_router(text_router.router)
     text_router._conversations = ConversationStore()
     text_router._tool_context = None
     text_router._tool_context_version = 0
-    text_router._memory_store = MemoryStore(str(tmp_path / "memory.db"))
+    text_router._memory_store = MemoryStore(str(temp_dir / "memory.db"))
     return app
 
 
@@ -26,7 +31,9 @@ def client(app):
     return TestClient(app)
 
 
-def test_memory_trailer_is_stripped_and_saved(client, monkeypatch, tmp_path: Path):
+def test_memory_trailer_is_stripped_and_saved(client, monkeypatch, temp_dir: Path):
+    scheduled = []
+
     async def fake_stream(messages, tools=None, on_thinking_chunk=None, on_content_chunk=None):
         content = (
             "Hello there.\n"
@@ -39,7 +46,7 @@ def test_memory_trailer_is_stripped_and_saved(client, monkeypatch, tmp_path: Pat
 
     monkeypatch.setattr(text_router, "call_provider_stream", fake_stream)
     monkeypatch.setattr(text_router, "call_provider", fake_call)
-    monkeypatch.setattr(text_router._mcp_client, "get_cached_tools", lambda: {"tools": []})
+    monkeypatch.setattr(text_router._tool_client, "get_cached_tools", lambda active_categories=None: {"tools": []})
 
     cfg = type(
         "Cfg",
@@ -50,7 +57,7 @@ def test_memory_trailer_is_stripped_and_saved(client, monkeypatch, tmp_path: Pat
             "port": 1234,
             "model": "test",
             "memory_enabled": True,
-            "memory_path": str(tmp_path / "memory.db"),
+            "memory_path": str(temp_dir / "memory.db"),
         },
     )()
     monkeypatch.setattr(text_router, "load_settings", lambda: cfg)
@@ -61,16 +68,35 @@ def test_memory_trailer_is_stripped_and_saved(client, monkeypatch, tmp_path: Pat
 
     monkeypatch.setattr(text_router, "_send_memory_callback", noop)
 
+    def capture_task(coro):
+        scheduled.append(coro)
+
+        class _DummyTask:
+            def cancel(self):
+                return False
+
+            def done(self):
+                return True
+
+        return _DummyTask()
+
+    monkeypatch.setattr(text_router.asyncio, "create_task", capture_task)
+
     payload = {"session_id": "s-mem", "turn_id": "t-mem", "text": "hi", "input_meta": {}}
     resp = client.post("/input/text", json=payload)
     assert resp.status_code == 200
     data = resp.json()
     assert "<lisa_memory>" not in data["messages"][0]["content"]
     assert data["messages"][0]["content"].strip() == "Hello there."
+    assert scheduled, "memory update should have been scheduled"
 
-    # Wait for background task to apply.
-    time.sleep(0.1)
-    store = MemoryStore(str(tmp_path / "memory.db"))
+    for coro in scheduled:
+        time.sleep(0)
+        import asyncio
+
+        asyncio.run(coro)
+
+    store = MemoryStore(str(temp_dir / "memory.db"))
     items = store.search("Andrei", limit=10)
     assert any(item.key == "user.name" and item.value == "Andrei" for item in items)
 
@@ -83,7 +109,7 @@ def test_stream_filter_hides_trailer_from_callbacks(client, monkeypatch):
             seen_chunks.append(delta)
 
     monkeypatch.setattr(text_router, "_send_content_callback", capture_content)
-    monkeypatch.setattr(text_router._mcp_client, "get_cached_tools", lambda: {"tools": []})
+    monkeypatch.setattr(text_router._tool_client, "get_cached_tools", lambda active_categories=None: {"tools": []})
 
     async def fake_stream(messages, tools=None, on_thinking_chunk=None, on_content_chunk=None):
         if on_content_chunk:

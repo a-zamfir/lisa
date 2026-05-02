@@ -1,0 +1,10 @@
+{
+  "name": "lisa-agent-browser-skill",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Repo-pinned local dependency for LISA's agent-browser skill",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "agent-browser": "0.24.0"
+  }
+}

@@ -18,16 +18,17 @@ namespace Host.Win.Services
     public sealed class AgentClient : IDisposable
     {
         private static readonly HttpClient SharedClient = CreateClient();
+        private readonly HttpClient _httpClient;
         private Uri _baseUri;
         private string? _providerApiKey;
-        private string? _mcpAuthToken;
         private readonly DateTime _createdAt = DateTime.UtcNow;
         private readonly TimeSpan _healthErrorGrace = TimeSpan.FromSeconds(5);
         private const int HealthCheckTimeoutMs = 5000; // 5 seconds for health checks
 
-        public AgentClient(Uri baseUri)
+        public AgentClient(Uri baseUri, HttpClient? httpClient = null)
         {
             _baseUri = baseUri;
+            _httpClient = httpClient ?? SharedClient;
         }
 
         public void UpdateBaseUri(Uri baseUri)
@@ -40,18 +41,13 @@ namespace Host.Win.Services
             _providerApiKey = string.IsNullOrWhiteSpace(apiKey) ? null : apiKey;
         }
 
-        public void SetMcpAuthToken(string? token)
-        {
-            _mcpAuthToken = string.IsNullOrWhiteSpace(token) ? null : token;
-        }
-
         public async Task<bool> CheckHealthAsync(CancellationToken cancellationToken = default)
         {
             try
             {
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 cts.CancelAfter(HealthCheckTimeoutMs);
-                var response = await SharedClient.GetAsync(new Uri(_baseUri, "/health"), cts.Token).ConfigureAwait(false);
+                var response = await _httpClient.GetAsync(new Uri(_baseUri, "/health"), cts.Token).ConfigureAwait(false);
                 return response.IsSuccessStatusCode;
             }
             catch (Exception ex)
@@ -64,7 +60,7 @@ namespace Host.Win.Services
             }
         }
 
-        public async Task<AgentResponse> SendTextAsync(TextInputRequest request, CancellationToken cancellationToken = default)
+        public async Task<AgentResponse?> SendTextAsync(TextInputRequest request, CancellationToken cancellationToken = default)
         {
             try
             {
@@ -77,12 +73,7 @@ namespace Host.Win.Services
                 {
                     message.Headers.Add("X-Provider-Api-Key", _providerApiKey);
                 }
-                if (!string.IsNullOrWhiteSpace(_mcpAuthToken))
-                {
-                    message.Headers.Add("X-Mcp-Token", _mcpAuthToken);
-                }
-
-                var response = await SharedClient.SendAsync(message, cancellationToken).ConfigureAwait(false);
+                var response = await _httpClient.SendAsync(message, cancellationToken).ConfigureAwait(false);
                 response.EnsureSuccessStatusCode();
                 var payload = await response.Content.ReadFromJsonAsync<AgentResponse>(cancellationToken: cancellationToken).ConfigureAwait(false);
                 if (payload != null)
@@ -91,12 +82,17 @@ namespace Host.Win.Services
                     return payload;
                 }
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                Trace.WriteLine($"Text send canceled turn_id={request.TurnId}, session_id={request.SessionId}");
+                return null;
+            }
             catch (Exception ex)
             {
                 Trace.TraceWarning($"Text send failed, returning mock response: {ex.Message}");
             }
 
-            await Task.Delay(300, cancellationToken).ConfigureAwait(false);
+            await Task.Delay(300).ConfigureAwait(false);
             return CreateMockResponse(request);
         }
 
@@ -112,7 +108,7 @@ namespace Host.Win.Services
                 var metaJson = JsonSerializer.Serialize(meta);
                 content.Add(new StringContent(metaJson, Encoding.UTF8, "application/json"), "meta");
 
-                var response = await SharedClient.PostAsync(new Uri(_baseUri, "/input/audio"), content, cancellationToken).ConfigureAwait(false);
+                var response = await _httpClient.PostAsync(new Uri(_baseUri, "/input/audio"), content, cancellationToken).ConfigureAwait(false);
                 response.EnsureSuccessStatusCode();
                 return await response.Content.ReadFromJsonAsync<AudioInputResponse>(cancellationToken: cancellationToken).ConfigureAwait(false);
             }
@@ -128,7 +124,7 @@ namespace Host.Win.Services
             try
             {
                 Trace.WriteLine($"Sending retry turn_id={request.TurnId}, session_id={request.SessionId}");
-                var response = await SharedClient.PostAsJsonAsync(new Uri(_baseUri, "/input/retry"), request, cancellationToken).ConfigureAwait(false);
+                var response = await _httpClient.PostAsJsonAsync(new Uri(_baseUri, "/input/retry"), request, cancellationToken).ConfigureAwait(false);
                 response.EnsureSuccessStatusCode();
                 var payload = await response.Content.ReadFromJsonAsync<AgentResponse>(cancellationToken: cancellationToken).ConfigureAwait(false);
                 if (payload != null)
@@ -136,6 +132,11 @@ namespace Host.Win.Services
                     Trace.WriteLine($"Received retry response turn_id={payload.TurnId}, session_id={payload.SessionId}");
                     return payload;
                 }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                Trace.WriteLine($"Retry send canceled turn_id={request.TurnId}, session_id={request.SessionId}");
+                return null;
             }
             catch (Exception ex)
             {
@@ -148,7 +149,7 @@ namespace Host.Win.Services
         {
             try
             {
-                var response = await SharedClient.PostAsJsonAsync(new Uri(_baseUri, "/intent"), request, cancellationToken).ConfigureAwait(false);
+                var response = await _httpClient.PostAsJsonAsync(new Uri(_baseUri, "/intent"), request, cancellationToken).ConfigureAwait(false);
                 response.EnsureSuccessStatusCode();
                 return await response.Content.ReadFromJsonAsync<IntentResponse>(cancellationToken: cancellationToken).ConfigureAwait(false);
             }
@@ -163,7 +164,7 @@ namespace Host.Win.Services
         {
             try
             {
-                var response = await SharedClient.PostAsJsonAsync(new Uri(_baseUri, "/tool/approval"), request, cancellationToken).ConfigureAwait(false);
+                var response = await _httpClient.PostAsJsonAsync(new Uri(_baseUri, "/tool/approval"), request, cancellationToken).ConfigureAwait(false);
                 response.EnsureSuccessStatusCode();
                 return true;
             }
@@ -171,6 +172,27 @@ namespace Host.Win.Services
             {
                 Trace.TraceWarning($"Tool approval send failed: {ex.Message}");
                 return false;
+            }
+        }
+
+        public async Task<MemoryClearResponse?> ClearMemoryAsync(CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                using var message = new HttpRequestMessage(HttpMethod.Post, new Uri(_baseUri, "/memory/clear"));
+                if (!string.IsNullOrWhiteSpace(_providerApiKey))
+                {
+                    message.Headers.Add("X-Provider-Api-Key", _providerApiKey);
+                }
+
+                var response = await _httpClient.SendAsync(message, cancellationToken).ConfigureAwait(false);
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadFromJsonAsync<MemoryClearResponse>(cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning($"Memory clear failed: {ex.Message}");
+                return null;
             }
         }
 
@@ -195,12 +217,7 @@ namespace Host.Win.Services
                 {
                     message.Headers.Add("X-Provider-Api-Key", _providerApiKey);
                 }
-                if (!string.IsNullOrWhiteSpace(_mcpAuthToken))
-                {
-                    message.Headers.Add("X-Mcp-Token", _mcpAuthToken);
-                }
-
-                var response = await SharedClient.SendAsync(message, cancellationToken).ConfigureAwait(false);
+                var response = await _httpClient.SendAsync(message, cancellationToken).ConfigureAwait(false);
                 response.EnsureSuccessStatusCode();
                 return true;
             }
