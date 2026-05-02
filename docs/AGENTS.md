@@ -40,44 +40,25 @@ The active tooling model is skills-first.
 - execution is CLI-based
 - v1 uses Python entrypoints only
 
-Agents should reason in terms of skills and tools only.
+## State & Memory
 
-## Performance Rules
-
-- keep prompts bounded
-- avoid repeated registry/context bloat
-- stream whenever possible
-- do not reload heavy dependencies per request
-- prefer deterministic tool flows over speculative retries
-
-## Memory Rules
-
-Long-term memory must stay:
-
-- local
-- inspectable
-- bounded
-- opt-in
-
-If relevant memory is not found, the agent should ask instead of guessing.
+- Conversation state lives in the agent.
+- The host only keeps short-term UI cache.
 
 ## Failure Rules
 
 Agents must not:
 
-- silently ignore a required skill/tool call
-- guess tool results
-- hide failed tool execution
-- block for long periods without progress signals
+## Standards & Engineering Practices
 
-If a tool cannot run, the agent should surface that clearly and continue safely.
+- Prefer industry-standard libraries and protocols.
+- Avoid bespoke formats unless justified.
+- Favor readability and debuggability over cleverness.
+- Deterministic behavior > creative behavior for automation.
 
-## Engineering Rules
+Agent logic should be testable in isolation.
 
-- prefer standard formats and predictable contracts
-- keep runtime boundaries explicit
-- keep tool execution testable in isolation
-- document technical debt instead of normalizing it
+---
 
 ## Related Documents
 

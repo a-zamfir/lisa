@@ -34,10 +34,13 @@ Current skill categories:
 - `windows-os`
 - `outlook`
 
-## Speech
+### Phase 4 (Done)
+- Memory: opt-in local storage (SQLite + FTS when available) with key/value strings, updated asynchronously.
 
-- STT: `whisper.cpp` is supported and preferred when configured; faster-whisper remains as fallback where available
-- TTS: host playback supports the current local TTS pipeline, including Chatterbox/Piper-based flows depending on local setup
+### Phase 5 (Current)
+- Installer and polish: UX refinement, reliability hardening, and setup smoothness.
+
+---
 
 ## Memory
 
@@ -80,7 +83,15 @@ On launch, LISA lives in the tray. Use the tray menu or `Ctrl+Space` to toggle t
 - Vision not working: use a vision-capable model and arm Share before sending the prompt
 - Talk not working: verify STT/TTS local dependencies are installed for your chosen setup
 
-## Docs
+---
+
+## Roadmap
+
+- Phase 1: Chat + MCP tools (local LLM)
+- Phase 2: Talk mode (local STT + VAD + tools)
+- Phase 3: Share mode (screen context)
+- Phase 4: Local memory (opt-in, on-disk)
+- Phase 5 (current): Installer, polish
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Developer Guide](docs/DEVELOPER.md)
